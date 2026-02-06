@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Env
+.env
+
+# Test
+.pytest_cache/
+
+# IDE
+.vscode/
+
+# Docker volumes
+data/
