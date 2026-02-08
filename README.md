@@ -1,48 +1,123 @@
-# Finance AI Monolith (FastAPI + PostgreSQL)
+# Finance AI System
 
-## Cấu trúc thư mục
-```
+Backend monolith for Personal Finance management, built with FastAPI + PostgreSQL.
+The stack also includes n8n for workflow automation.
+
+## Current Status
+
+- Auth is implemented with JWT (`register`, `login`, `me`).
+- Finance module is implemented with user-scoped data:
+  - Categories CRUD (create, list)
+  - Transactions CRUD (create, list, update, delete)
+  - Reports (`summary`, `category-breakdown`)
+- Dockerized runtime is ready (`api`, `postgres`, `n8n`).
+- Swagger login works with both:
+  - JSON body (`email`, `password`) for app clients
+  - OAuth2 form (`username`, `password`) for Swagger Authorize popup
+
+## Tech Stack
+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- JWT (`python-jose`)
+- Password hashing (`passlib`, `pbkdf2_sha256`)
+- Docker Compose
+- n8n
+
+## Project Structure
+
+```text
 finance-ai-system/
-├── app/
-│   ├── main.py
-│   ├── database.py
-│   ├── core/
-│   │   └── config.py
-│   ├── auth/
-│   │   ├── router.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   └── service.py
-│   ├── finance/
-│   │   ├── router.py
-│   │   ├── models.py
-│   │   ├── schemas.py
-│   │   └── service.py
-│   ├── ai_agent/
-│   │   └── service.py
-│   └── workflows/
-│       └── triggers.py
-└── requirements.txt
+|-- app/
+|   |-- main.py
+|   |-- database.py
+|   |-- core/
+|   |   `-- config.py
+|   |-- auth/
+|   |   |-- models.py
+|   |   |-- router.py
+|   |   |-- schemas.py
+|   |   |-- security.py
+|   |   `-- service.py
+|   |-- finance/
+|   |   |-- models.py
+|   |   |-- router.py
+|   |   |-- schemas.py
+|   |   `-- service.py
+|   |-- ai_agent/
+|   `-- workflows/
+|-- docker-compose.yml
+|-- Dockerfile
+|-- requirements.txt
+|-- .env.example
+`-- DOCKER.md
 ```
 
-## Thiết lập môi trường (VS Code, Windows)
-1) `py -m venv .venv`
-2) `.\.venv\Scripts\activate`
-3) `python -m pip install --upgrade pip`
-4) `pip install -r requirements.txt`
-5) Tạo `.env` từ `.env.example`, chỉnh `DB_URL=postgresql://user:pass@localhost:5432/finance_db`
-6) VS Code: `Ctrl+Shift+P` → `Python: Select Interpreter` → chọn `.venv`
-7) Chạy: `uvicorn app.main:app --reload`
-8) Swagger: http://127.0.0.1:8000/docs
+## Run with Docker (Recommended)
 
-## Nguyên tắc refactor sang microservices
-- Domain tách thư mục riêng (auth, finance, ai_agent, workflows); giữ router/service/schema cục bộ.
-- Cross-cutting để tại `core/`, `database.py`; không nhúng logic domain.
-- API version `/api/v1/<domain>` để copy module ra service riêng không đổi contract.
-- Dùng DI qua FastAPI (`Depends`) thay cho global state; dễ thay repository bằng client service.
-
-## Chạy nhanh kiểm tra
+```powershell
+cd C:\Users\NHU\finance-ai-system
+docker compose up -d --build
 ```
+
+Services:
+- API: `http://localhost:8000`
+- Swagger: `http://localhost:8000/docs`
+- n8n: `http://localhost:5678`
+- PostgreSQL: `localhost:5432`
+
+## Run without Docker
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
 uvicorn app.main:app --reload
-curl http://127.0.0.1:8000/health
 ```
+
+## Environment Variables
+
+From `.env.example`:
+
+- `DB_URL`
+- `SECRET_KEY`
+- `ALGORITHM`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+
+## API Overview
+
+Base URL: `/api/v1`
+
+Auth:
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+
+Finance:
+- `POST /finance/categories`
+- `GET /finance/categories`
+- `POST /finance/transactions`
+- `GET /finance/transactions`
+- `PUT /finance/transactions/{transaction_id}`
+- `DELETE /finance/transactions/{transaction_id}`
+- `GET /finance/reports/summary`
+- `GET /finance/reports/category-breakdown`
+
+## Quick Test Flow in Swagger
+
+1. `POST /api/v1/auth/register`
+2. `POST /api/v1/auth/login` to get token
+3. Click `Authorize` in Swagger:
+   - `username` = your email
+   - `password` = your password
+4. `GET /api/v1/auth/me`
+5. Create category and transactions
+6. Check summary and category breakdown reports
+
+## Notes
+
+- Tables are created on app startup with `Base.metadata.create_all()`.
+- Data is persisted in Docker volume `postgres_data`.
+- n8n is included for next step integration (agentic workflows / automations).
