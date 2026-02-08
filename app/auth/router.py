@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth import schemas, service
@@ -14,7 +14,23 @@ def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=schemas.Token)
-def login(payload: schemas.UserLogin, db: Session = Depends(get_db)):
+async def login(request: Request, db: Session = Depends(get_db)):
+    content_type = request.headers.get("content-type", "")
+
+    # Swagger UI "Authorize" uses OAuth2 password flow and sends form fields:
+    # username=<email> & password=<password>
+    if content_type.startswith("application/x-www-form-urlencoded") or content_type.startswith(
+        "multipart/form-data"
+    ):
+        form = await request.form()
+        email = form.get("username")
+        password = form.get("password")
+        payload = schemas.UserLogin(email=email, password=password)
+        return service.authenticate_user(db, payload)
+
+    # Support JSON login for React clients.
+    data = await request.json()
+    payload = schemas.UserLogin.model_validate(data)
     return service.authenticate_user(db, payload)
 
 
