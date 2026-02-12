@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import models as auth_models
 from app.auth.router import router as auth_router
+from app.core.config import settings
 from app.database import Base, engine
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
@@ -11,10 +12,8 @@ app = FastAPI(title="Finance AI Monolith")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
