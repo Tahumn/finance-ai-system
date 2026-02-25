@@ -8,9 +8,25 @@ from app.database import get_db
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED)
-def register(payload: schemas.UserCreate, db: Session = Depends(get_db)):
-    return service.register_user(db, payload)
+@router.post(
+    "/register",
+    response_model=schemas.RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register(payload: schemas.RegisterStartRequest, db: Session = Depends(get_db)):
+    # Backward-compatible alias for register start.
+    dev_code = service.start_register(db, payload)
+    return schemas.RegisterResponse(code=dev_code)
+
+
+@router.post(
+    "/register/start",
+    response_model=schemas.RegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_start(payload: schemas.RegisterStartRequest, db: Session = Depends(get_db)):
+    dev_code = service.start_register(db, payload)
+    return schemas.RegisterResponse(code=dev_code)
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -32,6 +48,21 @@ async def login(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
     payload = schemas.UserLogin.model_validate(data)
     return service.authenticate_user(db, payload)
+
+
+@router.post("/verify-otp")
+def verify_otp(payload: schemas.VerifyOtpRequest, db: Session = Depends(get_db)):
+    return service.verify_email_otp(db, payload)
+
+
+@router.post("/set-password")
+def set_password(payload: schemas.SetPasswordRequest, db: Session = Depends(get_db)):
+    return service.set_password(db, payload)
+
+
+@router.post("/resend-otp")
+def resend_otp(payload: schemas.ResendOtpRequest, db: Session = Depends(get_db)):
+    return service.resend_email_otp(db, payload)
 
 
 @router.get("/me", response_model=schemas.UserRead)
