@@ -1,9 +1,9 @@
-﻿const views = [
+const views = [
   { key: "dashboard", label: "Tổng quan" },
-  { key: "transactions", label: "Giao dịch" },
-  { key: "categories", label: "Danh mục" },
+  { key: "transactions", label: "Thêm GD" },
+  { key: "chat", label: "Chat" },
   { key: "reports", label: "Báo cáo" },
-  { key: "chat", label: "Chat AI" }
+  { key: "settings", label: "Hồ sơ" }
 ];
 
 export default function BottomNav({ active, onChange }) {
@@ -14,6 +14,7 @@ export default function BottomNav({ active, onChange }) {
           key={item.key}
           className={active === item.key ? "active" : ""}
           onClick={() => onChange(item.key)}
+          type="button"
         >
           {item.label}
         </button>

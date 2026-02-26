@@ -19,6 +19,7 @@ import {
   updateTransaction
 } from "./api/finance.js";
 import BottomNav from "./components/BottomNav.jsx";
+import SideMenu from "./components/SideMenu.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
 import StatusBanner from "./components/StatusBanner.jsx";
 import AuthScreen from "./features/auth/AuthScreen.jsx";
@@ -27,6 +28,11 @@ import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
+import OcrScreen from "./features/ocr/OcrScreen.jsx";
+import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
+import TagsScreen from "./features/tags/TagsScreen.jsx";
+import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
+import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 
 const buildMonthlySeries = (transactions) => {
@@ -46,21 +52,36 @@ const buildMonthlySeries = (transactions) => {
     .slice(-6);
 };
 
-const defaultFilters = () => {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
-  return {
-    start: toInputDate(start),
-    end: toInputDate(today),
-    type: "",
-    categoryId: ""
-  };
+const getRangeFromPreset = (preset) => {
+  const now = new Date();
+  if (preset === "today") {
+    const today = toInputDate(now);
+    return { start: today, end: today };
+  }
+  if (preset === "week") {
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - 6);
+    return { start: toInputDate(weekStart), end: toInputDate(now) };
+  }
+  if (preset === "year") {
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    return { start: toInputDate(yearStart), end: toInputDate(now) };
+  }
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  return { start: toInputDate(monthStart), end: toInputDate(now) };
 };
+
+const defaultFilters = () => ({
+  ...getRangeFromPreset("month"),
+  type: "",
+  categoryId: ""
+});
 
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authState, setAuthState] = useState({ status: "checking", user: null });
   const [view, setView] = useState("dashboard");
+  const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
@@ -226,7 +247,7 @@ export default function App() {
       try {
         const user = await me();
         setAuthState({ status: "authed", user });
-      } catch (err) {
+      } catch {
         clearToken();
         setAuthState({ status: "guest", user: null });
       }
@@ -248,6 +269,7 @@ export default function App() {
       await loadFinanceData();
     } catch (err) {
       setError(err.message || "Không thể tạo giao dịch.");
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -292,6 +314,14 @@ export default function App() {
     }
   };
 
+  const selectRangePreset = (preset) => {
+    setRangePreset(preset);
+    const nextRange = getRangeFromPreset(preset);
+    setFilters((current) => ({ ...current, ...nextRange }));
+  };
+
+  const showDateFilters = ["dashboard", "transactions", "reports"].includes(view);
+
   if (authState.status !== "authed") {
     return (
       <div className="app">
@@ -311,7 +341,9 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app app-workspace">
+      <SideMenu active={view} onChange={setView} onLogout={handleLogout} />
+
       <main className="app-shell">
         <header className="app-header">
           <div>
@@ -340,11 +372,16 @@ export default function App() {
           </div>
         </section>
 
-        <DateRangeFilters
-          start={filters.start}
-          end={filters.end}
-          onChange={(next) => setFilters({ ...filters, ...next })}
-        />
+        {showDateFilters && (
+          <DateRangeFilters
+            start={filters.start}
+            end={filters.end}
+            onChange={(next) => {
+              setRangePreset("custom");
+              setFilters((current) => ({ ...current, ...next }));
+            }}
+          />
+        )}
 
         <StatusBanner loading={loading} error={error} />
 
@@ -355,6 +392,12 @@ export default function App() {
             transactions={transactionsWithLabels}
             monthlySeries={monthlySeries}
             onViewTransactions={() => setView("transactions")}
+            onGoOcr={() => setView("ocr")}
+            onGoChat={() => setView("chat")}
+            onGoAddTransaction={() => setView("transactions")}
+            onGoReports={() => setView("reports")}
+            rangePreset={rangePreset}
+            onSelectPreset={selectRangePreset}
           />
         )}
 
@@ -381,6 +424,8 @@ export default function App() {
           />
         )}
 
+        {view === "tags" && <TagsScreen userEmail={authState.user?.email} />}
+
         {view === "reports" && (
           <ReportsScreen
             summary={summary}
@@ -388,6 +433,26 @@ export default function App() {
             onBack={() => setView("dashboard")}
           />
         )}
+
+        {view === "budgets" && (
+          <BudgetsScreen
+            categories={categories}
+            transactions={transactions}
+            userEmail={authState.user?.email}
+          />
+        )}
+
+        {view === "ocr" && (
+          <OcrScreen
+            categories={categories}
+            onCreateTransaction={handleCreateTransaction}
+            loading={loading}
+          />
+        )}
+
+        {view === "accounts" && <AccountsScreen userEmail={authState.user?.email} />}
+
+        {view === "settings" && <SettingsScreen user={authState.user} />}
 
         {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
 
