@@ -4,7 +4,7 @@ const storageKey = (email) => `finance_local_tags:${email || "guest"}`;
 
 const emptyTag = { name: "", color: "#1565c0" };
 
-export default function TagsScreen({ userEmail }) {
+export default function TagsScreen({ userEmail, embedded = false }) {
   const [tags, setTags] = useState([]);
   const [tagForm, setTagForm] = useState(emptyTag);
   const [editingTagId, setEditingTagId] = useState(null);
@@ -60,7 +60,7 @@ export default function TagsScreen({ userEmail }) {
   };
 
   return (
-    <section className="panel">
+    <section className={`panel ${embedded ? "embedded-panel" : ""}`}>
       <div className="panel-header">
         <h3>Nhãn (Tags)</h3>
         <span className="badge">UI local</span>

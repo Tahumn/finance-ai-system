@@ -1,6 +1,12 @@
 import { colorFor } from "../../utils/colors.js";
 
-export default function CategoriesScreen({ categories, onCreate, onBack, loading }) {
+export default function CategoriesScreen({
+  categories,
+  onCreate,
+  onBack,
+  loading,
+  embedded = false
+}) {
   const handleCreate = (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -11,12 +17,14 @@ export default function CategoriesScreen({ categories, onCreate, onBack, loading
   };
 
   return (
-    <section className="panel">
+    <section className={`panel ${embedded ? "embedded-panel" : ""}`}>
       <div className="panel-header">
         <h3>Danh mục</h3>
-        <button className="ghost" onClick={onBack} type="button">
-          Quay lại
-        </button>
+        {onBack && (
+          <button className="ghost" onClick={onBack} type="button">
+            Quay lại
+          </button>
+        )}
       </div>
       <form className="form" onSubmit={handleCreate}>
         <div className="row">

@@ -3,15 +3,7 @@ const primaryViews = [
   { key: "transactions", label: "Transactions" },
   { key: "reports", label: "Reports" },
   { key: "budgets", label: "Budgets" },
-  { key: "chat", label: "Chat" },
-  { key: "settings", label: "Settings" }
-];
-
-const toolViews = [
-  { key: "ocr", label: "OCR" },
-  { key: "dashboard", label: "AI Insights" },
-  { key: "categories", label: "Categories" },
-  { key: "tags", label: "Tags" }
+  { key: "chat", label: "Chat" }
 ];
 
 const getInitial = (user) => {
@@ -20,12 +12,23 @@ const getInitial = (user) => {
 };
 
 export default function SideMenu({ active, onChange, onLogout, user }) {
-  const isToolsActive = ["ocr", "categories", "tags"].includes(active);
-  const handleToolClick = (event, key) => {
-    onChange(key);
-    const menu = event.currentTarget.closest("details");
-    if (menu) menu.removeAttribute("open");
-  };
+  const notifications = [
+    {
+      id: "n1",
+      title: "Chi tiêu ăn uống tăng 18%",
+      time: "Hôm nay"
+    },
+    {
+      id: "n2",
+      title: "Hoá đơn OCR đã được tạo giao dịch",
+      time: "Hôm qua"
+    },
+    {
+      id: "n3",
+      title: "Sắp đến hạn ngân sách tháng",
+      time: "2 ngày trước"
+    }
+  ];
 
   return (
     <header className="top-header">
@@ -44,29 +47,53 @@ export default function SideMenu({ active, onChange, onLogout, user }) {
               {item.label}
             </button>
           ))}
-          <details className={`tools-menu ${isToolsActive ? "active" : ""}`}>
-            <summary className="top-nav-item">Tools ▼</summary>
-            <div className="tools-dropdown">
-              {toolViews.map((item) => (
-                <button
-                  key={item.label}
-                  className="tools-item"
-                  type="button"
-                  onClick={(event) => handleToolClick(event, item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </details>
         </nav>
       </div>
 
       <div className="top-header-right">
-        <div className="avatar-chip">
+        <details className="notif-menu">
+          <summary className="icon-btn notif-btn" aria-label="Thông báo">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path
+                d="M12 3a6 6 0 0 0-6 6v3.2l-1.6 2.4a1 1 0 0 0 .84 1.56h13.52a1 1 0 0 0 .84-1.56L18 12.2V9a6 6 0 0 0-6-6Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M9.5 18a2.5 2.5 0 0 0 5 0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </summary>
+          <div className="notif-dropdown">
+            <div className="notif-header">Thông báo</div>
+            {!notifications.length ? (
+              <p className="empty">Chưa có thông báo.</p>
+            ) : (
+              notifications.map((item) => (
+                <div key={item.id} className="notif-item">
+                  <strong>{item.title}</strong>
+                  <small>{item.time}</small>
+                </div>
+              ))
+            )}
+          </div>
+        </details>
+        <button
+          className="avatar-chip avatar-button"
+          type="button"
+          onClick={() => onChange("settings")}
+          title="Tài khoản & bảo mật"
+        >
           <span className="avatar-dot">{getInitial(user)}</span>
-          <span>{user?.email || "User"}</span>
-        </div>
+          <span>{user?.username || user?.email || "User"}</span>
+        </button>
         <button className="ghost top-logout" type="button" onClick={onLogout}>
           Logout
         </button>

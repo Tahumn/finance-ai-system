@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import TransactionRow from "../../components/TransactionRow.jsx";
-import { currency, toInputDate } from "../../utils/format.js";
+import CategoriesScreen from "../categories/CategoriesScreen.jsx";
+import TagsScreen from "../tags/TagsScreen.jsx";
+import OcrScreen from "../ocr/OcrScreen.jsx";
+import { toInputDate } from "../../utils/format.js";
 
 const parseMonthFromNL = (text) => {
   const match = text.toLowerCase().match(/thang\s*(\d{1,2})/);
@@ -27,12 +30,6 @@ const toCsvRow = (item) =>
     .map((value) => `"${String(value).replace(/"/g, '""')}"`)
     .join(",");
 
-const tabs = [
-  { key: "all", label: "All" },
-  { key: "categories", label: "Categories" },
-  { key: "tags", label: "Tags" }
-];
-
 const extractTags = (description) => {
   const matches = (description || "").match(/#[a-zA-Z0-9_]+/g);
   if (!matches) return [];
@@ -47,6 +44,9 @@ export default function TransactionsScreen({
   onCreate,
   onUpdate,
   onDelete,
+  onCreateCategory,
+  onCreateTransaction,
+  userEmail,
   onBack,
   loading
 }) {
@@ -57,7 +57,9 @@ export default function TransactionsScreen({
   const [nlQuery, setNlQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [activeTab, setActiveTab] = useState("all");
+  const [showOcr, setShowOcr] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(true);
+  const [selectedTx, setSelectedTx] = useState(null);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((item) => {
@@ -75,33 +77,9 @@ export default function TransactionsScreen({
 
   const visibleTransactions = filteredTransactions.slice(0, visibleCount);
 
-  const categorySummary = useMemo(() => {
-    const grouped = filteredTransactions.reduce((acc, item) => {
-      const key = item.categoryLabel || "Uncategorized";
-      if (!acc[key]) {
-        acc[key] = { name: key, amount: 0, count: 0 };
-      }
-      acc[key].amount += Number(item.amount || 0);
-      acc[key].count += 1;
-      return acc;
-    }, {});
-    return Object.values(grouped).sort((a, b) => b.amount - a.amount);
-  }, [filteredTransactions]);
-
-  const tagsSummary = useMemo(() => {
-    const grouped = filteredTransactions.reduce((acc, item) => {
-      const tags = extractTags(item.description);
-      tags.forEach((tag) => {
-        if (!acc[tag]) {
-          acc[tag] = { name: tag, amount: 0, count: 0 };
-        }
-        acc[tag].amount += Number(item.amount || 0);
-        acc[tag].count += 1;
-      });
-      return acc;
-    }, {});
-    return Object.values(grouped).sort((a, b) => b.count - a.count);
-  }, [filteredTransactions]);
+  useMemo(() => extractTags(filteredTransactions.map((item) => item.description).join(" ")), [
+    filteredTransactions
+  ]);
 
   const handleCreate = (event) => {
     event.preventDefault();
@@ -175,29 +153,49 @@ export default function TransactionsScreen({
           <p className="eyebrow">Finance Workspace</p>
           <h2>Transactions</h2>
         </div>
-        <button className="ghost" onClick={onBack} type="button">
-          Quay lại
-        </button>
+        <div className="transactions-actions">
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => setShowOcr((current) => !current)}
+          >
+            {showOcr ? "Ẩn OCR" : "Nhập hóa đơn (OCR)"}
+          </button>
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => setShowAddForm((current) => !current)}
+          >
+            {showAddForm ? "Ẩn form giao dịch" : "Thêm giao dịch mới"}
+          </button>
+          <button className="ghost" onClick={onBack} type="button">
+            Quay lại
+          </button>
+        </div>
       </header>
 
-      <div className="transactions-tabs" role="tablist" aria-label="Transactions subview tabs">
-        {tabs.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === item.key}
-            className={`transactions-tab ${activeTab === item.key ? "active" : ""}`}
-            onClick={() => setActiveTab(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="transactions-crud-grid">
+        <CategoriesScreen
+          categories={categories}
+          onCreate={onCreateCategory}
+          loading={loading}
+          embedded
+        />
+        <TagsScreen userEmail={userEmail} embedded />
       </div>
 
+      {showOcr && (
+        <div className="transactions-content-card">
+          <OcrScreen
+            categories={categories}
+            onCreateTransaction={onCreateTransaction}
+            loading={loading}
+          />
+        </div>
+      )}
+
       <div className="transactions-content-card">
-        {activeTab === "all" && (
-          <>
+        <>
             <div className="filters compact">
               <div className="field">
                 <label>Loại</label>
@@ -269,30 +267,32 @@ export default function TransactionsScreen({
               </button>
             </div>
 
-            <form className="form" onSubmit={handleCreate}>
-              <input name="description" type="text" placeholder="Mô tả" required />
-              <div className="row">
-                <select name="transaction_type" defaultValue="expense">
-                  <option value="expense">Chi tiêu</option>
-                  <option value="income">Thu nhập</option>
-                </select>
-                <select name="category_id" defaultValue="">
-                  <option value="">Không có danh mục</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="row">
-                <input name="amount" type="number" placeholder="Số tiền" required />
-                <input name="date" type="date" required />
-              </div>
-              <button className="primary" type="submit" disabled={loading}>
-                Thêm giao dịch
-              </button>
-            </form>
+            {showAddForm && (
+              <form className="form" onSubmit={handleCreate}>
+                <input name="description" type="text" placeholder="Mô tả" required />
+                <div className="row">
+                  <select name="transaction_type" defaultValue="expense">
+                    <option value="expense">Chi tiêu</option>
+                    <option value="income">Thu nhập</option>
+                  </select>
+                  <select name="category_id" defaultValue="">
+                    <option value="">Không có danh mục</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="row">
+                  <input name="amount" type="number" placeholder="Số tiền" required />
+                  <input name="date" type="date" required />
+                </div>
+                <button className="primary" type="submit" disabled={loading}>
+                  Thêm giao dịch
+                </button>
+              </form>
+            )}
 
             <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 8 }}>
               <div>
@@ -326,6 +326,9 @@ export default function TransactionsScreen({
                     </label>
                     <TransactionRow item={item} categoryLabel={item.categoryLabel} />
                     <div className="row-actions">
+                      <button className="ghost" type="button" onClick={() => setSelectedTx(item)}>
+                        Chi tiết
+                      </button>
                       <button className="ghost" onClick={() => setEditingTx(item)} type="button">
                         Sửa
                       </button>
@@ -354,49 +357,6 @@ export default function TransactionsScreen({
               </div>
             )}
           </>
-        )}
-
-        {activeTab === "categories" && (
-          <>
-            <p className="transactions-helper-text">
-              Category subview hiển thị tổng hợp dựa trên giao dịch hiện tại.
-            </p>
-            <div className="transactions-summary-row">
-              {!categorySummary.length ? (
-                <p className="empty">Không có dữ liệu category trong bộ lọc hiện tại.</p>
-              ) : (
-                categorySummary.map((item) => (
-                  <article key={item.name} className="transactions-summary-card">
-                    <p>{item.name}</p>
-                    <strong>{currency(item.amount)}</strong>
-                    <small>{item.count} giao dịch</small>
-                  </article>
-                ))
-              )}
-            </div>
-          </>
-        )}
-
-        {activeTab === "tags" && (
-          <>
-            <p className="transactions-helper-text">
-              Tags subview dùng hashtag trong mô tả (ví dụ: #coffee, #work).
-            </p>
-            <div className="transactions-summary-row">
-              {!tagsSummary.length ? (
-                <p className="empty">Chưa có tag nào trong mô tả giao dịch.</p>
-              ) : (
-                tagsSummary.map((item) => (
-                  <article key={item.name} className="transactions-summary-card">
-                    <p>{item.name}</p>
-                    <strong>{currency(item.amount)}</strong>
-                    <small>{item.count} lần xuất hiện</small>
-                  </article>
-                ))
-              )}
-            </div>
-          </>
-        )}
       </div>
 
       {editingTx && (
@@ -437,6 +397,65 @@ export default function TransactionsScreen({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {selectedTx && (
+        <div className="sheet">
+          <div className="sheet-body">
+            <h3>Chi tiết giao dịch</h3>
+            <div className="detail-grid">
+              <div>
+                <p className="eyebrow">Mô tả</p>
+                <strong>{selectedTx.description}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Ngày</p>
+                <strong>{selectedTx.date}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Loại</p>
+                <strong>{selectedTx.transaction_type}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Danh mục</p>
+                <strong>{selectedTx.categoryLabel || "Không có"}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Số tiền</p>
+                <strong>{selectedTx.amount}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Tags</p>
+                <div className="tag-row">
+                  {extractTags(selectedTx.description).length ? (
+                    extractTags(selectedTx.description).map((tag) => (
+                      <span key={tag} className="tag-chip">
+                        {tag}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="muted">Không có</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="row-actions">
+              <button className="ghost" type="button" onClick={() => setSelectedTx(null)}>
+                Đóng
+              </button>
+              <button
+                className="primary"
+                type="button"
+                onClick={() => {
+                  setEditingTx(selectedTx);
+                  setSelectedTx(null);
+                }}
+              >
+                Sửa giao dịch
+              </button>
+            </div>
           </div>
         </div>
       )}

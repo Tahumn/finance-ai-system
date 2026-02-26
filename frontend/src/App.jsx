@@ -37,6 +37,7 @@ import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import { currency, toInputDate } from "./utils/format.js";
+import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
 
 const buildMonthlySeries = (transactions) => {
   const buckets = {};
@@ -83,6 +84,7 @@ const defaultFilters = () => ({
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authState, setAuthState] = useState({ status: "checking", user: null });
+  const [uiPrefs, setUiPrefs] = useState(() => getUiPrefs());
   const [view, setView] = useState("dashboard");
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
@@ -98,6 +100,25 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const prefs = getUiPrefs(authState.user?.email);
+    setUiPrefs(prefs);
+    applyUiPrefs(prefs);
+  }, [authState.user?.email]);
+
+  useEffect(() => {
+    const handlePrefs = (event) => {
+      if (!event?.detail) return;
+      const currentEmail = authState.user?.email || "guest";
+      if ((event.detail.email || "guest") !== currentEmail) return;
+      const nextPrefs = event.detail.prefs || getUiPrefs(currentEmail);
+      setUiPrefs(nextPrefs);
+      applyUiPrefs(nextPrefs);
+    };
+    window.addEventListener("finance:ui-prefs", handlePrefs);
+    return () => window.removeEventListener("finance:ui-prefs", handlePrefs);
+  }, [authState.user?.email]);
 
   const categoryMap = useMemo(() => {
     const map = {};
@@ -411,29 +432,33 @@ export default function App() {
       />
 
       <main className="app-shell app-shell-topnav">
-        <header className="app-header">
-          <div>
-            <p className="eyebrow">Xin chào</p>
-            <h1>{authState.user?.email || "Người dùng"}</h1>
-          </div>
-        </header>
+        {view === "dashboard" && (
+          <>
+            <header className="app-header">
+              <div>
+                <p className="eyebrow">Xin chào</p>
+                <h1>{authState.user?.username || authState.user?.email || "Người dùng"}</h1>
+              </div>
+            </header>
 
-        <section className="balance-card">
-          <div>
-            <p className="label">Số dư hiện tại</p>
-            <h2>{currency(summary.balance)}</h2>
-          </div>
-          <div className="balance-meta">
-            <div>
-              <p>Thu</p>
-              <strong>{currency(summary.total_income)}</strong>
-            </div>
-            <div>
-              <p>Chi</p>
-              <strong>{currency(summary.total_expense)}</strong>
-            </div>
-          </div>
-        </section>
+            <section className="balance-card">
+              <div>
+                <p className="label">Số dư hiện tại</p>
+                <h2>{currency(summary.balance)}</h2>
+              </div>
+              <div className="balance-meta">
+                <div>
+                  <p>Thu</p>
+                  <strong>{currency(summary.total_income)}</strong>
+                </div>
+                <div>
+                  <p>Chi</p>
+                  <strong>{currency(summary.total_expense)}</strong>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
 
         {showDateFilters && (
           <DateRangeFilters
@@ -473,6 +498,9 @@ export default function App() {
             onCreate={handleCreateTransaction}
             onUpdate={handleUpdateTransaction}
             onDelete={handleDeleteTransaction}
+            onCreateCategory={handleCreateCategory}
+            userEmail={authState.user?.email}
+            onCreateTransaction={handleCreateTransaction}
             onBack={() => setView("dashboard")}
             loading={loading}
           />
@@ -494,6 +522,7 @@ export default function App() {
             summary={summary}
             monthlySeries={monthlySeries}
             onBack={() => setView("dashboard")}
+            reportLayout={uiPrefs.reportLayout}
           />
         )}
 

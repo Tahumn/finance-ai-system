@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { applyUiPrefs, getUiPrefs, saveUiPrefs, UI_TEMPLATES } from "../../utils/uiPrefs.js";
 
 const settingsKey = (email) => `finance_local_settings:${email || "guest"}`;
 
@@ -22,6 +23,8 @@ const safeParse = (value, fallback) => {
 };
 
 export default function SettingsScreen({ user }) {
+  const email = user?.email || "guest";
+  const emailRef = useRef(email);
   const [settings, setSettings] = useState(defaultSettings);
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -29,16 +32,25 @@ export default function SettingsScreen({ user }) {
     confirmPassword: ""
   });
   const [notice, setNotice] = useState("");
-
-  const email = user?.email || "guest";
+  const [uiPrefs, setUiPrefs] = useState(() => getUiPrefs(email));
 
   useEffect(() => {
+    emailRef.current = email;
     setSettings(safeParse(localStorage.getItem(settingsKey(email)), defaultSettings));
   }, [email]);
 
   useEffect(() => {
     localStorage.setItem(settingsKey(email), JSON.stringify(settings));
   }, [settings, email]);
+
+  useEffect(() => {
+    setUiPrefs(getUiPrefs(email));
+  }, [email]);
+
+  useEffect(() => {
+    saveUiPrefs(emailRef.current, uiPrefs);
+    applyUiPrefs(uiPrefs);
+  }, [uiPrefs]);
 
   const activityLogs = useMemo(() => {
     const now = new Date().toLocaleString();
@@ -112,7 +124,6 @@ export default function SettingsScreen({ user }) {
     <section className="panel settings-panel">
       <div className="panel-header">
         <h3>Cài đặt & Hồ sơ</h3>
-        <span className="badge">UI local + read-only profile</span>
       </div>
 
       <section className="settings-section">
@@ -171,6 +182,118 @@ export default function SettingsScreen({ user }) {
       </section>
 
       <section className="settings-section">
+        <h4>Đồng bộ đa nền tảng</h4>
+        <div className="switch-grid">
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.cloudSync}
+              onChange={(event) =>
+                setSettings((current) => ({ ...current, cloudSync: event.target.checked }))
+              }
+            />
+            Bật đồng bộ cloud
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.thresholdAlerts}
+              onChange={(event) =>
+                setSettings((current) => ({ ...current, thresholdAlerts: event.target.checked }))
+              }
+            />
+            Cảnh báo vượt ngưỡng chi tiêu
+          </label>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h4>Tùy chỉnh giao diện / báo cáo</h4>
+        <div className="row">
+          <label className="field">
+            <span>Theme</span>
+            <select
+              value={uiPrefs.theme}
+              onChange={(event) =>
+                setUiPrefs((current) => ({ ...current, theme: event.target.value }))
+              }
+            >
+              <option value="light">Sáng</option>
+              <option value="dark">Tối</option>
+              <option value="system">Theo hệ thống</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Layout báo cáo</span>
+            <select
+              value={uiPrefs.reportLayout}
+              onChange={(event) =>
+                setUiPrefs((current) => ({ ...current, reportLayout: event.target.value }))
+              }
+            >
+              <option value="cards">Cards</option>
+              <option value="charts">Charts</option>
+              <option value="table">Table</option>
+            </select>
+          </label>
+        </div>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={uiPrefs.compactMode}
+            onChange={(event) =>
+              setUiPrefs((current) => ({ ...current, compactMode: event.target.checked }))
+            }
+          />
+          Compact mode
+        </label>
+
+        <p className="muted" style={{ margin: "10px 0 0" }}>
+          Templates dễ thương
+        </p>
+        <div className="template-grid" style={{ marginTop: 12 }}>
+          {UI_TEMPLATES.map((template) => {
+            const swatches = [
+              template.colors.primary,
+              template.colors.accent,
+              template.colors.grad1,
+              template.colors.grad2
+            ];
+            return (
+              <button
+                key={template.id}
+                type="button"
+                className={`template-card ${
+                  uiPrefs.templateId === template.id ? "active" : ""
+                }`}
+                onClick={() =>
+                  setUiPrefs((current) => ({
+                    ...current,
+                    templateId: template.id,
+                    theme: template.theme
+                  }))
+                }
+              >
+                <strong>{template.name}</strong>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  {template.description}
+                </p>
+                <div className="template-swatches">
+                  {swatches.map((color) => (
+                    <span
+                      key={color}
+                      className="template-swatch"
+                      style={{ background: color }}
+                    />
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="settings-section">
         <h4>Thông báo & Đồng bộ</h4>
         <div className="switch-grid">
           <label>
@@ -202,16 +325,6 @@ export default function SettingsScreen({ user }) {
               }
             />
             Threshold alerts
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.cloudSync}
-              onChange={(event) =>
-                setSettings((current) => ({ ...current, cloudSync: event.target.checked }))
-              }
-            />
-            Cloud sync
           </label>
         </div>
       </section>
