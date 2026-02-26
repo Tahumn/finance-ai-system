@@ -39,14 +39,15 @@ async def login(request: Request, db: Session = Depends(get_db)):
         "multipart/form-data"
     ):
         form = await request.form()
-        email = form.get("username")
+        identifier = form.get("username")
         password = form.get("password")
-        payload = schemas.UserLogin(email=email, password=password)
+        payload = schemas.UserLogin(identifier=identifier, password=password)
         return service.authenticate_user(db, payload)
 
     # Support JSON login for React clients.
     data = await request.json()
-    payload = schemas.UserLogin.model_validate(data)
+    identifier = data.get("identifier") or data.get("email") or data.get("username")
+    payload = schemas.UserLogin(identifier=identifier, password=data.get("password"))
     return service.authenticate_user(db, payload)
 
 
@@ -63,6 +64,27 @@ def set_password(payload: schemas.SetPasswordRequest, db: Session = Depends(get_
 @router.post("/resend-otp")
 def resend_otp(payload: schemas.ResendOtpRequest, db: Session = Depends(get_db)):
     return service.resend_email_otp(db, payload)
+
+
+@router.post("/password/reset/start")
+def password_reset_start(
+    payload: schemas.PasswordResetStartRequest, db: Session = Depends(get_db)
+):
+    return service.password_reset_start(db, payload)
+
+
+@router.post("/password/reset/verify", response_model=schemas.PasswordResetVerifyResponse)
+def password_reset_verify(
+    payload: schemas.PasswordResetVerifyRequest, db: Session = Depends(get_db)
+):
+    return service.password_reset_verify(db, payload)
+
+
+@router.post("/password/reset/confirm")
+def password_reset_confirm(
+    payload: schemas.PasswordResetConfirmRequest, db: Session = Depends(get_db)
+):
+    return service.password_reset_confirm(db, payload)
 
 
 @router.get("/me", response_model=schemas.UserRead)
