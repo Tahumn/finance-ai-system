@@ -688,73 +688,164 @@ textarea {
   color: var(--muted);
 }
 
-.app-workspace {
-  max-width: 1400px;
+.app-shell-topnav {
+  max-width: 1180px;
   margin: 0 auto;
-  min-height: 100vh;
-  padding: 20px 20px 20px 300px;
+  padding: 118px 22px 110px;
 }
 
-.app-workspace .app-shell {
-  max-width: none;
-  margin: 0;
-  padding: 8px 8px 110px;
-}
-
-.side-menu {
-  width: 252px;
-  background: #f8f4ef;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 16px 12px;
+.top-header {
   position: fixed;
-  left: 20px;
-  top: 20px;
-  bottom: 20px;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 78px;
+  background: rgba(254, 252, 249, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  box-shadow: 0 14px 30px rgba(16, 24, 40, 0.08);
 }
 
-.side-menu h2 {
-  margin: 2px 8px 8px;
-  font-size: 18px;
-  font-family: "Playfair Display", serif;
+.top-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 
-.side-menu-nav {
-  display: grid;
+.logo-btn {
+  border: none;
+  background: #173a6d;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  overflow-y: auto;
-  padding-right: 2px;
+  overflow-x: visible;
+  padding-bottom: 2px;
 }
 
-.side-menu-item {
-  border: 1px solid #ece4da;
-  background: #fbf8f4;
+.top-nav-item {
+  border: 1px solid #e8dfd6;
+  background: #f9f4ed;
   color: var(--text);
-  padding: 11px 12px;
-  border-radius: 11px;
-  text-align: left;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
   transition: all 0.2s ease;
-  border-left: 3px solid transparent;
 }
 
-.side-menu-item:hover {
-  background: #f2ebe4;
+.top-nav-item:hover {
+  background: #eee5dc;
 }
 
-.side-menu-item.active {
-  background: #eef4ff;
-  color: #14396b;
-  border-color: #d7e2f4;
-  border-left-color: #1d3f6f;
+.top-nav-item.active {
+  background: #e8f0ff;
+  border-color: #d4deef;
+  color: #173a6d;
 }
 
-.side-menu-logout {
-  margin-top: auto;
-  width: 100%;
+.tools-menu {
+  position: relative;
+}
+
+.tools-menu summary {
+  list-style: none;
+}
+
+.tools-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.tools-menu.active summary {
+  background: #e8f0ff;
+  border-color: #d4deef;
+  color: #173a6d;
+}
+
+.tools-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 170px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(16, 24, 40, 0.12);
+  padding: 8px;
+  display: none;
+  gap: 6px;
+  z-index: 100;
+}
+
+.tools-menu[open] .tools-dropdown {
+  display: grid;
+}
+
+.tools-item {
+  border: 1px solid #efe7de;
+  background: #faf6f1;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.tools-item:hover {
+  background: #eee5dc;
+}
+
+.top-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  border: 1px solid #e8dfd6;
+  background: #fbf8f4;
+  font-size: 12px;
+  max-width: 220px;
+}
+
+.avatar-chip span:last-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avatar-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #173a6d;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.top-logout {
+  white-space: nowrap;
 }
 
 .transactions-page {
@@ -1040,17 +1131,29 @@ textarea {
 }
 
 @media (max-width: 1060px) {
-  .app-workspace {
-    display: block;
-    padding: 0;
+  .top-header {
+    height: 70px;
+    padding: 0 12px;
   }
 
-  .side-menu {
+  .top-header-right {
     display: none;
   }
 
-  .app-workspace .app-shell {
-    padding: 22px 18px 100px;
+  .top-header-left {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .top-nav {
+    flex: 1;
+    justify-content: flex-end;
+    overflow-x: auto;
+  }
+
+  .app-shell-topnav {
+    padding: 98px 18px 100px;
   }
 
   .bottom-nav {
@@ -1071,5 +1174,13 @@ textarea {
 
   .receipt-grid {
     grid-template-columns: 1fr;
+  }
+
+  .transactions-header {
+    align-items: center;
+  }
+
+  .transactions-header h2 {
+    font-size: 26px;
   }
 }

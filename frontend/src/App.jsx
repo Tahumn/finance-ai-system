@@ -402,18 +402,20 @@ export default function App() {
   }
 
   return (
-    <div className="app app-workspace">
-      <SideMenu active={view} onChange={setView} onLogout={handleLogout} />
+    <div className="app">
+      <SideMenu
+        active={view}
+        onChange={setView}
+        onLogout={handleLogout}
+        user={authState.user}
+      />
 
-      <main className="app-shell">
+      <main className="app-shell app-shell-topnav">
         <header className="app-header">
           <div>
             <p className="eyebrow">Xin chào</p>
             <h1>{authState.user?.email || "Người dùng"}</h1>
           </div>
-          <button className="ghost" onClick={handleLogout} type="button">
-            Đăng xuất
-          </button>
         </header>
 
         <section className="balance-card">

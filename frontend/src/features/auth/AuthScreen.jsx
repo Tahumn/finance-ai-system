@@ -12,6 +12,53 @@ const strengthLabel = (score) => {
   return "Mạnh";
 };
 
+function EyeIcon({ open }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+      <path
+        d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      {!open && (
+        <path
+          d="M4 4l16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+function PasswordField({ value, onChange, placeholder, show, onToggle, name }) {
+  return (
+    <div className="input-with-icon">
+      <input
+        name={name}
+        type={show ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+      />
+      <button
+        className="icon-btn"
+        type="button"
+        onClick={onToggle}
+        aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+      >
+        <EyeIcon open={show} />
+      </button>
+    </div>
+  );
+}
+
 export default function AuthScreen({
   mode,
   setMode,
@@ -123,62 +170,6 @@ export default function AuthScreen({
       setTimeout(() => otpRefs.current[0]?.focus(), 0);
     }
   };
-
-  const EyeIcon = ({ open }) => (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      {!open && (
-        <path
-          d="M4 4l16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-      )}
-    </svg>
-  );
-
-  const PasswordField = ({
-    value,
-    onChange,
-    placeholder,
-    show,
-    onToggle,
-    name
-  }) => (
-    <div className="input-with-icon">
-      <input
-        name={name}
-        type={show ? "text" : "password"}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-      />
-      <button
-        className="icon-btn"
-        type="button"
-        onClick={onToggle}
-        aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-      >
-        <EyeIcon open={show} />
-      </button>
-    </div>
-  );
 
   return (
     <main className="auth-shell">
