@@ -27,6 +27,8 @@ def ensure_schema() -> None:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR")
     if "last_name" not in existing:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR")
+    if "username" not in existing:
+        statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR")
     if "phone" not in existing:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR")
     if "email_verified" not in existing:
@@ -43,11 +45,17 @@ def ensure_schema() -> None:
         )
 
     if not statements:
+        # Ensure index for username if column already exists.
+        with engine.begin() as conn:
+            conn.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)")
+            )
         return
 
     with engine.begin() as conn:
         for stmt in statements:
             conn.execute(text(stmt))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
 
 
 def get_db():

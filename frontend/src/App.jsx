@@ -4,6 +4,9 @@ import {
   login,
   me,
   registerWithProfile,
+  resetPasswordConfirm,
+  resetPasswordStart,
+  resetPasswordVerify,
   resendOtp,
   setPassword,
   verifyOtp
@@ -132,11 +135,13 @@ export default function App() {
   };
 
   const handleAuthSubmit = async ({
-    first_name,
-    last_name,
+    full_name,
+    username,
     phone,
     email,
+    identifier,
     password,
+    remember,
     mode
   }) => {
     setAuthLoading(true);
@@ -144,11 +149,16 @@ export default function App() {
     setNotice("");
     try {
       if (mode === "register") {
-        await registerWithProfile({ first_name, last_name, phone, email });
+        await registerWithProfile({
+          full_name,
+          username,
+          phone: phone || null,
+          email
+        });
         return { next: "otp" };
       }
-      const token = await login(email, password);
-      setToken(token.access_token);
+      const token = await login(identifier, password);
+      setToken(token.access_token, remember);
       const user = await me();
       setAuthState({ status: "authed", user });
       return { next: "authed" };
@@ -186,6 +196,54 @@ export default function App() {
       return true;
     } catch (err) {
       setError(err.message || "Không thể tạo mật khẩu.");
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetStart = async (email) => {
+    setAuthLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await resetPasswordStart(email);
+      setNotice("Đã gửi OTP đặt lại mật khẩu.");
+      return true;
+    } catch (err) {
+      setError(err.message || "Không thể gửi OTP.");
+      return false;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetVerify = async (email, code) => {
+    setAuthLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await resetPasswordVerify(email, code);
+      setNotice("OTP hợp lệ. Vui lòng tạo mật khẩu mới.");
+      return result;
+    } catch (err) {
+      setError(err.message || "OTP không hợp lệ.");
+      return null;
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetConfirm = async (resetToken, password) => {
+    setAuthLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      await resetPasswordConfirm(resetToken, password);
+      setNotice("Đã cập nhật mật khẩu. Bạn có thể đăng nhập.");
+      return true;
+    } catch (err) {
+      setError(err.message || "Không thể cập nhật mật khẩu.");
       return false;
     } finally {
       setAuthLoading(false);
@@ -332,6 +390,9 @@ export default function App() {
           onVerifyOtp={handleVerifyOtp}
           onResendOtp={handleResendOtp}
           onSetPassword={handleSetPassword}
+          onResetStart={handleResetStart}
+          onResetVerify={handleResetVerify}
+          onResetConfirm={handleResetConfirm}
           loading={authLoading}
           error={error}
           notice={notice}
