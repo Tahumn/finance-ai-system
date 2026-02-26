@@ -15,3 +15,17 @@ __pycache__/
 
 # Docker volumes
 data/
+# Node
+node_modules/
+npm-debug.log*
+
+# Expo
+.expo/
+.expo-shared/
+
+# Build
+dist/
+build/
+
+# Environment
+.env
