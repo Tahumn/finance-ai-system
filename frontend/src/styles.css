@@ -543,6 +543,7 @@ button:disabled {
   line-height: 0;
   list-style: none;
   margin: 0;
+  transform: none;
 }
 
 .notif-btn::-webkit-details-marker {
