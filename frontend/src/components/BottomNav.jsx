@@ -1,8 +1,9 @@
-const views = [
+﻿const views = [
   { key: "dashboard", label: "Tổng quan" },
   { key: "transactions", label: "Giao dịch" },
   { key: "categories", label: "Danh mục" },
-  { key: "reports", label: "Báo cáo" }
+  { key: "reports", label: "Báo cáo" },
+  { key: "chat", label: "Chat AI" }
 ];
 
 export default function BottomNav({ active, onChange }) {

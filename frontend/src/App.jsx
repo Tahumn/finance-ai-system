@@ -26,6 +26,7 @@ import DashboardScreen from "./features/dashboard/DashboardScreen.jsx";
 import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
+import ChatScreen from "./features/chat/ChatScreen.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 
 const buildMonthlySeries = (transactions) => {
@@ -387,6 +388,8 @@ export default function App() {
             onBack={() => setView("dashboard")}
           />
         )}
+
+        {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
 
         <BottomNav active={view} onChange={setView} />
       </main>

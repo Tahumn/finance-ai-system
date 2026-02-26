@@ -475,7 +475,7 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 999px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 6px;
   box-shadow: var(--shadow);
@@ -493,6 +493,74 @@ button:disabled {
 .bottom-nav .active {
   background: #1d3f6f;
   color: white;
+}
+
+.chat-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.chat-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chat-thread {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.chat-bubble {
+  max-width: 82%;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+  box-shadow: 0 8px 16px rgba(16, 24, 40, 0.08);
+}
+
+.chat-bubble p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.chat-bubble span {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.chat-bubble.is-user {
+  margin-left: auto;
+  background: #1d3f6f;
+  color: #ffffff;
+}
+
+.chat-bubble.is-user span {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chat-bubble.is-bot {
+  background: #f6ede4;
+  color: var(--text);
+}
+
+.chat-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-input input {
+  border-radius: 16px;
 }
 
 .sheet {
