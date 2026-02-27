@@ -35,6 +35,10 @@ class CategoryCreate(BaseModel):
     name: str = Field(..., min_length=1)
 
 
+class CategoryUpdate(BaseModel):
+    name: str = Field(..., min_length=1)
+
+
 class CategoryRead(BaseModel):
     id: int
     name: str
@@ -51,4 +55,11 @@ class FinanceSummary(BaseModel):
 class CategoryBreakdown(BaseModel):
     category: str
     spent: float
+
+
+class CashflowPoint(BaseModel):
+    period: DateType
+    income: float
+    expense: float
+    balance: float
 

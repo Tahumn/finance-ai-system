@@ -9,7 +9,7 @@ The stack also includes n8n for workflow automation.
 - Finance module is implemented with user-scoped data:
   - Categories CRUD (create, list)
   - Transactions CRUD (create, list, update, delete)
-  - Reports (`summary`, `category-breakdown`)
+  - Reports (`summary`, `category-breakdown`, `cashflow`)
 - Dockerized runtime is ready (`api`, `postgres`, `n8n`).
 - Swagger login works with both:
   - JSON body (`email`, `password`) for app clients
@@ -77,6 +77,19 @@ copy .env.example .env
 uvicorn app.main:app --reload
 ```
 
+## Run Frontend (Expo)
+
+```powershell
+cd frontend
+npm install
+npm run start
+```
+
+Notes:
+- Frontend defaults to `http://localhost:8000/api/v1` and auto-detects LAN host from Expo bundle URL.
+- To force a specific API URL, create `frontend/.env` from `frontend/.env.example` and set `EXPO_PUBLIC_API_URL`.
+- If backend runs in Docker, make sure `docker compose up -d` exposes API on port `8000`.
+
 ## Environment Variables
 
 From `.env.example`:
@@ -98,12 +111,15 @@ Auth:
 Finance:
 - `POST /finance/categories`
 - `GET /finance/categories`
+- `PUT /finance/categories/{category_id}`
+- `DELETE /finance/categories/{category_id}`
 - `POST /finance/transactions`
 - `GET /finance/transactions`
 - `PUT /finance/transactions/{transaction_id}`
 - `DELETE /finance/transactions/{transaction_id}`
 - `GET /finance/reports/summary`
 - `GET /finance/reports/category-breakdown`
+- `GET /finance/reports/cashflow`
 
 ## Quick Test Flow in Swagger
 
@@ -113,8 +129,8 @@ Finance:
    - `username` = your email
    - `password` = your password
 4. `GET /api/v1/auth/me`
-5. Create category and transactions
-6. Check summary and category breakdown reports
+5. Create, update, delete transactions
+6. Check summary, category breakdown, and cashflow reports
 
 ## Notes
 

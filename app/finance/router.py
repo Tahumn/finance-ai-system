@@ -28,6 +28,26 @@ def list_categories(
     return service.list_categories(db, current_user)
 
 
+@router.put("/categories/{category_id}", response_model=schemas.CategoryRead)
+def update_category(
+    category_id: int,
+    payload: schemas.CategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.update_category(db, current_user, category_id, payload)
+
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service.delete_category(db, current_user, category_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/transactions", response_model=schemas.TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(
     payload: schemas.TransactionCreate,
@@ -94,4 +114,14 @@ def report_category_breakdown(
     current_user: User = Depends(get_current_user),
 ):
     return service.get_category_breakdown(db, current_user, start_date=start_date, end_date=end_date)
+
+
+@router.get("/reports/cashflow", response_model=list[schemas.CashflowPoint])
+def report_cashflow(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.get_cashflow(db, current_user, start_date=start_date, end_date=end_date)
 

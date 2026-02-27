@@ -1,12 +1,23 @@
 from datetime import date
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.auth.models import User
 from app.finance import schemas
 from app.finance.models import Category, Transaction
+
+
+def _get_user_category(db: Session, current_user: User, category_id: int) -> Category:
+    category = (
+        db.query(Category)
+        .filter(Category.id == category_id, Category.user_id == current_user.id)
+        .first()
+    )
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    return category
 
 
 def create_category(db: Session, current_user: User, payload: schemas.CategoryCreate) -> Category:
@@ -38,16 +49,50 @@ def list_categories(db: Session, current_user: User) -> list[Category]:
     )
 
 
+def update_category(
+    db: Session,
+    current_user: User,
+    category_id: int,
+    payload: schemas.CategoryUpdate,
+) -> Category:
+    category = _get_user_category(db, current_user, category_id)
+    category_name = payload.name.strip()
+    if not category_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category name is required")
+
+    duplicate = (
+        db.query(Category)
+        .filter(
+            Category.user_id == current_user.id,
+            Category.name == category_name,
+            Category.id != category_id,
+        )
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category already exists")
+
+    category.name = category_name
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+def delete_category(db: Session, current_user: User, category_id: int) -> None:
+    category = _get_user_category(db, current_user, category_id)
+    (
+        db.query(Transaction)
+        .filter(Transaction.user_id == current_user.id, Transaction.category_id == category_id)
+        .update({Transaction.category_id: None}, synchronize_session=False)
+    )
+    db.delete(category)
+    db.commit()
+
+
 def _validate_category_ownership(db: Session, current_user: User, category_id: int | None) -> None:
     if category_id is None:
         return
-    category = (
-        db.query(Category)
-        .filter(Category.id == category_id, Category.user_id == current_user.id)
-        .first()
-    )
-    if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    _get_user_category(db, current_user, category_id)
 
 
 def create_transaction(
@@ -199,4 +244,49 @@ def get_category_breakdown(
         label = category_map.get(category_id, "Uncategorized")
         breakdown.append(schemas.CategoryBreakdown(category=label, spent=float(spent or 0.0)))
     return breakdown
+
+
+def get_cashflow(
+    db: Session,
+    current_user: User,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[schemas.CashflowPoint]:
+    query = _base_query(db, current_user, start_date, end_date)
+    rows = (
+        query.with_entities(
+            Transaction.date.label("period"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.transaction_type == "income", Transaction.amount),
+                        else_=0.0,
+                    )
+                ),
+                0.0,
+            ).label("income"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.transaction_type == "expense", Transaction.amount),
+                        else_=0.0,
+                    )
+                ),
+                0.0,
+            ).label("expense"),
+        )
+        .group_by(Transaction.date)
+        .order_by(Transaction.date.asc())
+        .all()
+    )
+
+    return [
+        schemas.CashflowPoint(
+            period=row.period,
+            income=float(row.income or 0.0),
+            expense=float(row.expense or 0.0),
+            balance=float((row.income or 0.0) - (row.expense or 0.0)),
+        )
+        for row in rows
+    ]
 
