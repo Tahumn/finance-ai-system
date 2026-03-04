@@ -79,12 +79,27 @@ uvicorn app.main:app --reload
 
 ## Environment Variables
 
-From `.env.example`:
+From `.env`:
 
 - `DB_URL`
 - `SECRET_KEY`
 - `ALGORITHM`
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
+
+### Dify (LLM) Optional
+
+To enable LLM-backed NLP and chat intent parsing:
+
+- `DIFY_API_BASE` (example: `http://localhost:5001/v1`)
+- `DIFY_API_KEY`
+- `DIFY_FORCE_JSON` (`true` to enforce JSON-only replies)
+- `DIFY_SECRET_KEY` (used by Dify services)
+
+If you run the bundled Dify stack, open:
+- `http://localhost:5002` (Dify web)
+- `http://localhost:5001` (Dify API)
+
+See `docs/LLM_PROMPTS.md` for recommended prompt templates.
 
 ## API Overview
 

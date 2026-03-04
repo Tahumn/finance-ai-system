@@ -6,6 +6,7 @@ from app.auth.router import router as auth_router
 from app.database import Base, engine, ensure_schema
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
+from app.ai_agent.router import router as ai_router
 
 app = FastAPI(title="Finance AI Monolith")
 
@@ -39,3 +40,4 @@ def on_startup() -> None:
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")

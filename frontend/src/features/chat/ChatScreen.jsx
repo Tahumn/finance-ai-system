@@ -1,5 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 
+import { chatWithAi } from "../../api/ai.js";
+
 const seedMessages = [
   {
     id: "seed-hello",
@@ -165,23 +167,38 @@ export default function ChatScreen({ userEmail }) {
     threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages]);
 
-  const handleSend = (event) => {
+  const handleSend = async (event) => {
     event.preventDefault();
     const text = input.trim();
     if (!text) return;
     const now = Date.now();
-    const next = [
-      ...messages,
-      { id: `u-${now}`, role: "user", content: text, created_at: now },
+    setMessages((current) => [
+      ...current,
+      { id: `u-${now}`, role: "user", content: text, created_at: now }
+    ]);
+    setInput("");
+
+    let reply = "";
+    try {
+      const response = await chatWithAi(text);
+      reply = response?.answer || "";
+    } catch {
+      reply = "";
+    }
+
+    if (!reply) {
+      reply = "Khong the tra loi. Vui long thu lai hoac hoi ro hon.";
+    }
+
+    setMessages((current) => [
+      ...current,
       {
         id: `a-${now}`,
         role: "assistant",
-        content: buildMockReply(text),
+        content: reply,
         created_at: now + 1
       }
-    ];
-    setMessages(next);
-    setInput("");
+    ]);
   };
 
   const handleClear = () => {
@@ -197,7 +214,7 @@ export default function ChatScreen({ userEmail }) {
         <div>
           <h3>Chat AI</h3>
           <p className="chat-subtitle">
-            Chế độ demo. Câu trả lời được mô phỏng trên frontend.
+            Tra loi dua tren du lieu giao dich.
           </p>
         </div>
         <button className="ghost" type="button" onClick={handleClear}>

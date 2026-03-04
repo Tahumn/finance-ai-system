@@ -42,6 +42,7 @@ export default function TransactionsScreen({
   filters,
   onFiltersChange,
   onCreate,
+  onCreateFromText,
   onUpdate,
   onDelete,
   onCreateCategory,
@@ -55,6 +56,9 @@ export default function TransactionsScreen({
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [nlQuery, setNlQuery] = useState("");
+  const [nlpText, setNlpText] = useState("");
+  const [nlpNotice, setNlpNotice] = useState("");
+  const [nlpError, setNlpError] = useState("");
   const [visibleCount, setVisibleCount] = useState(20);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showOcr, setShowOcr] = useState(false);
@@ -146,6 +150,21 @@ export default function TransactionsScreen({
     }
   };
 
+  const handleNlpCreate = async (event) => {
+    event.preventDefault();
+    const text = nlpText.trim();
+    if (!text || !onCreateFromText) return;
+    setNlpNotice("");
+    setNlpError("");
+    try {
+      await onCreateFromText(text);
+      setNlpNotice("Created from NLP input.");
+      setNlpText("");
+    } catch (err) {
+      setNlpError(err.message || "Unable to create from NLP input.");
+    }
+  };
+
   return (
     <section className="panel transactions-page">
       <header className="transactions-header">
@@ -196,6 +215,21 @@ export default function TransactionsScreen({
 
       <div className="transactions-content-card">
         <>
+            <form className="form" onSubmit={handleNlpCreate} style={{ marginBottom: 16 }}>
+              <div className="row">
+                <input
+                  type="text"
+                  value={nlpText}
+                  onChange={(event) => setNlpText(event.target.value)}
+                  placeholder="NLP: hom nay chi 50k an sang"
+                />
+                <button className="primary" type="submit" disabled={loading || !nlpText.trim()}>
+                  Create from NLP
+                </button>
+              </div>
+              {nlpNotice && <p className="form-note">{nlpNotice}</p>}
+              {nlpError && <p className="form-error">{nlpError}</p>}
+            </form>
             <div className="filters compact">
               <div className="field">
                 <label>Loại</label>

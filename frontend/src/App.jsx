@@ -21,6 +21,7 @@ import {
   listTransactions,
   updateTransaction
 } from "./api/finance.js";
+import { createTransactionFromText } from "./api/ai.js";
 import BottomNav from "./components/BottomNav.jsx";
 import SideMenu from "./components/SideMenu.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
@@ -354,6 +355,20 @@ export default function App() {
     }
   };
 
+  const handleCreateFromText = async (text) => {
+    setLoading(true);
+    setError("");
+    try {
+      await createTransactionFromText(text);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Unable to create transaction from text.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUpdateTransaction = async (transactionId, payload) => {
     setLoading(true);
     setError("");
@@ -496,6 +511,7 @@ export default function App() {
             filters={filters}
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
+            onCreateFromText={handleCreateFromText}
             onUpdate={handleUpdateTransaction}
             onDelete={handleDeleteTransaction}
             onCreateCategory={handleCreateCategory}
