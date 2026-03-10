@@ -1,4 +1,4 @@
-import { request } from "./client.js";
+import { request, requestForm } from "./client.js";
 
 export const parseTransaction = (text, options = {}) =>
   request("/ai/parse-transaction", {
@@ -25,3 +25,9 @@ export const chatWithAi = (text) =>
     method: "POST",
     body: { text }
   });
+
+export const extractOcr = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestForm("/ai/ocr", formData);
+};

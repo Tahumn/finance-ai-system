@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { currency, toInputDate } from "../../utils/format.js";
+import { extractOcr } from "../../api/ai.js";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
@@ -49,48 +50,46 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
 
   const handleExtract = async () => {
     if (!file) {
-      setError("Vui lòng chọn ảnh hóa đơn trước khi trích xuất.");
+      setError("Please select a receipt image first.");
       return;
     }
     setError("");
     setNotice("");
     setOcrState("running");
-
-    await new Promise((resolve) => setTimeout(resolve, 700));
-
-    const guessedMerchant = sanitizeName(file.name) || "Merchant từ OCR";
-    const guessedTotal = parsed.total || "65000";
-    const guessedVat = parsed.vat || "5200";
-
-    setParsed((current) => ({
-      ...current,
-      merchant: current.merchant || guessedMerchant,
-      total: guessedTotal,
-      vat: guessedVat,
-      note:
-        current.note || `OCR demo: tự động parse từ file ${file.name}`
-    }));
-    setConfidence({
-      date: 0.86,
-      merchant: 0.82,
-      total: 0.92,
-      vat: 0.67
-    });
-    setNotice("Đã trích xuất OCR (demo). Bạn có thể chỉnh sửa trước khi tạo giao dịch.");
-    setOcrState("done");
+    try {
+      const result = await extractOcr(file);
+      setParsed((current) => ({
+        ...current,
+        merchant: result.merchant || current.merchant || sanitizeName(file.name),
+        total: result.total ? String(result.total) : current.total,
+        note: result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note,
+        date: result.date || current.date
+      }));
+      setConfidence({
+        date: result.date ? 0.8 : 0.3,
+        merchant: result.merchant ? 0.8 : 0.3,
+        total: result.total ? 0.9 : 0.3,
+        vat: 0.0
+      });
+      setNotice("OCR done. Review and confirm before creating transaction.");
+      setOcrState("done");
+    } catch (err) {
+      setError(err.message || "OCR failed.");
+      setOcrState("idle");
+    }
   };
 
   const handleCreate = async (event) => {
     event.preventDefault();
     if (!canCreate) {
-      setError("Thiếu dữ liệu bắt buộc: ngày giao dịch và tổng tiền > 0.");
+      setError("Missing required data: date and total amount.");
       return;
     }
 
     setError("");
     setNotice("");
 
-    const descriptionParts = [parsed.merchant || "Hoa don OCR", parsed.note]
+    const descriptionParts = [parsed.merchant || "OCR receipt", parsed.note]
       .filter(Boolean)
       .join(" - ");
 
@@ -102,27 +101,27 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
         date: parsed.date
       });
-      setNotice("Tạo giao dịch từ hóa đơn thành công.");
+      setNotice("Transaction created from OCR.");
       setParsed(baseParsedState());
       setConfidence(baseConfidence);
       setFile(null);
       setOcrState("idle");
     } catch {
-      setError("Không thể tạo giao dịch từ hóa đơn.");
+      setError("Failed to create transaction from OCR.");
     }
   };
 
   return (
     <section className="panel">
       <div className="panel-header">
-        <h3>Nhập hóa đơn (OCR)</h3>
-        <span className="badge">UI + API giao dịch</span>
+        <h3>Receipt OCR</h3>
+        <span className="badge">OCR + transaction</span>
       </div>
 
       <div className="receipt-grid">
         <div className="receipt-uploader">
           <label className="field">
-            <span>Ảnh hóa đơn *</span>
+            <span>Receipt image *</span>
             <input
               type="file"
               accept="image/*"
@@ -131,14 +130,14 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
           </label>
 
           <button className="ghost" type="button" onClick={handleExtract}>
-            {ocrState === "running" ? "Đang OCR..." : "Trích xuất OCR"}
+            {ocrState === "running" ? "Processing..." : "Run OCR"}
           </button>
 
           <div className="receipt-preview">
             {previewUrl ? (
               <img src={previewUrl} alt="Receipt preview" />
             ) : (
-              <p className="empty">Chưa có ảnh. Hỗ trợ camera/file từ thiết bị.</p>
+              <p className="empty">No image selected.</p>
             )}
           </div>
         </div>
@@ -146,7 +145,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
         <form className="form" onSubmit={handleCreate}>
           <div className="row">
             <label className="field">
-              <span>Ngày giao dịch *</span>
+              <span>Date *</span>
               <input
                 type="date"
                 value={parsed.date}
@@ -166,7 +165,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 onChange={(event) =>
                   setParsed((current) => ({ ...current, merchant: event.target.value }))
                 }
-                placeholder="Ví dụ: Circle K"
+                placeholder="Example: Circle K"
               />
               <small className="hint">
                 Confidence: {Math.round(confidence.merchant * 100)}%
@@ -176,7 +175,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
 
           <div className="row">
             <label className="field">
-              <span>Tổng tiền *</span>
+              <span>Total *</span>
               <input
                 type="number"
                 min="0"
@@ -209,14 +208,14 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
 
           <div className="row">
             <label className="field">
-              <span>Danh mục</span>
+              <span>Category</span>
               <select
                 value={parsed.categoryId}
                 onChange={(event) =>
                   setParsed((current) => ({ ...current, categoryId: event.target.value }))
                 }
               >
-                <option value="">Chọn danh mục</option>
+                <option value="">Select category</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -226,7 +225,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
             </label>
 
             <label className="field">
-              <span>Tạm tính giao dịch</span>
+              <span>Estimated</span>
               <input
                 type="text"
                 value={parsed.total ? currency(Number(parsed.total)) : "--"}
@@ -236,14 +235,14 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
           </div>
 
           <label className="field">
-            <span>Ghi chú</span>
+            <span>Notes</span>
             <textarea
               rows="3"
               value={parsed.note}
               onChange={(event) =>
                 setParsed((current) => ({ ...current, note: event.target.value }))
               }
-              placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu"
+              placeholder="OCR text summary or custom note"
             />
           </label>
 
@@ -262,10 +261,10 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 setError("");
               }}
             >
-              Làm mới
+              Reset
             </button>
             <button className="primary" type="submit" disabled={!canCreate || loading}>
-              Tạo giao dịch từ hóa đơn
+              Create transaction
             </button>
           </div>
         </form>

@@ -34,3 +34,10 @@ class ChatResponse(BaseModel):
     end_date: DateType | None = None
     category_name: str | None = None
     total: float | None = None
+
+
+class OcrResponse(BaseModel):
+    merchant: str | None = None
+    total: float | None = None
+    date: DateType | None = None
+    text: str = ""

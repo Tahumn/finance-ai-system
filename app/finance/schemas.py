@@ -9,6 +9,7 @@ class TransactionCreate(BaseModel):
     amount: float = Field(..., gt=0, example=3.5)
     transaction_type: Literal["income", "expense"]
     category_id: int | None = None
+    account_id: int | None = None
     date: DateType | None = None
 
 
@@ -17,6 +18,7 @@ class TransactionUpdate(BaseModel):
     amount: float | None = Field(default=None, gt=0)
     transaction_type: Literal["income", "expense"] | None = None
     category_id: int | None = None
+    account_id: int | None = None
     date: DateType | None = None
 
 
@@ -27,6 +29,7 @@ class TransactionRead(BaseModel):
     amount: float
     transaction_type: str
     category_id: int | None
+    account_id: int | None
     date: DateType
     model_config = ConfigDict(from_attributes=True)
 

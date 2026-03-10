@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.models import User
 from app.finance import schemas
-from app.finance.models import Category, Transaction
+from app.finance.models import Account, Category, Transaction
 
 
 def create_category(db: Session, current_user: User, payload: schemas.CategoryCreate) -> Category:
@@ -50,12 +50,25 @@ def _validate_category_ownership(db: Session, current_user: User, category_id: i
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
 
+def _validate_account_ownership(db: Session, current_user: User, account_id: int | None) -> None:
+    if account_id is None:
+        return
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.user_id == current_user.id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+
 def create_transaction(
     db: Session,
     current_user: User,
     payload: schemas.TransactionCreate,
 ) -> Transaction:
     _validate_category_ownership(db, current_user, payload.category_id)
+    _validate_account_ownership(db, current_user, payload.account_id)
 
     db_tx = Transaction(
         user_id=current_user.id,
@@ -63,6 +76,7 @@ def create_transaction(
         amount=payload.amount,
         transaction_type=payload.transaction_type,
         category_id=payload.category_id,
+        account_id=payload.account_id,
         date=payload.date or date.today(),
     )
     db.add(db_tx)
@@ -77,6 +91,7 @@ def list_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     category_id: int | None = None,
+    account_id: int | None = None,
     transaction_type: str | None = None,
 ) -> list[Transaction]:
     query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
@@ -86,6 +101,8 @@ def list_transactions(
         query = query.filter(Transaction.date <= end_date)
     if category_id:
         query = query.filter(Transaction.category_id == category_id)
+    if account_id:
+        query = query.filter(Transaction.account_id == account_id)
     if transaction_type:
         query = query.filter(Transaction.transaction_type == transaction_type)
     return query.order_by(Transaction.date.desc(), Transaction.id.desc()).all()
@@ -108,6 +125,8 @@ def update_transaction(
     data = payload.model_dump(exclude_unset=True)
     if "category_id" in data:
         _validate_category_ownership(db, current_user, data["category_id"])
+    if "account_id" in data:
+        _validate_account_ownership(db, current_user, data["account_id"])
     if "description" in data and not data["description"].strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Description is required")
 

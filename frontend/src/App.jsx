@@ -21,7 +21,7 @@ import {
   listTransactions,
   updateTransaction
 } from "./api/finance.js";
-import { createTransactionFromText } from "./api/ai.js";
+import { createTransactionFromText, parseTransaction } from "./api/ai.js";
 import BottomNav from "./components/BottomNav.jsx";
 import SideMenu from "./components/SideMenu.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
@@ -369,6 +369,19 @@ export default function App() {
     }
   };
 
+  const handleParseFromText = async (text) => {
+    setLoading(true);
+    setError("");
+    try {
+      return await parseTransaction(text, { auto_create_category: false });
+    } catch (err) {
+      setError(err.message || "Unable to parse text.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUpdateTransaction = async (transactionId, payload) => {
     setLoading(true);
     setError("");
@@ -512,6 +525,7 @@ export default function App() {
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
             onCreateFromText={handleCreateFromText}
+            onParseFromText={handleParseFromText}
             onUpdate={handleUpdateTransaction}
             onDelete={handleDeleteTransaction}
             onCreateCategory={handleCreateCategory}
@@ -537,6 +551,7 @@ export default function App() {
           <ReportsScreen
             summary={summary}
             monthlySeries={monthlySeries}
+            transactions={transactionsWithLabels}
             onBack={() => setView("dashboard")}
             reportLayout={uiPrefs.reportLayout}
           />

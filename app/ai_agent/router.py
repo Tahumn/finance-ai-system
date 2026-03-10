@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.ai_agent import schemas, service
@@ -67,3 +67,13 @@ def chat(
     current_user: User = Depends(get_current_user),
 ):
     return service.answer_chat(db, current_user, payload.text)
+
+
+@router.post("/ocr", response_model=schemas.OcrResponse)
+async def ocr_receipt(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    payload = await file.read()
+    return service.extract_ocr(payload)

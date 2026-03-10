@@ -1,27 +1,80 @@
 import { useMemo, useState } from "react";
 import { currency } from "../../utils/format.js";
 
-export default function ReportsScreen({ summary, monthlySeries, onBack, reportLayout = "cards" }) {
+export default function ReportsScreen({
+  summary,
+  monthlySeries,
+  transactions = [],
+  onBack,
+  reportLayout = "cards"
+}) {
   const maxAbs = Math.max(1, ...monthlySeries.map((item) => Math.abs(item.value)));
   const [showForecast, setShowForecast] = useState(false);
   const [showSavingTips, setShowSavingTips] = useState(false);
   const [showAnomaly, setShowAnomaly] = useState(false);
+
+  const expenseTransactions = useMemo(
+    () => transactions.filter((item) => item.transaction_type === "expense"),
+    [transactions]
+  );
+  const expenseByMonth = useMemo(() => {
+    const buckets = {};
+    expenseTransactions.forEach((item) => {
+      const key = item.date.slice(0, 7);
+      if (!buckets[key]) buckets[key] = 0;
+      buckets[key] += Number(item.amount || 0);
+    });
+    return Object.entries(buckets)
+      .map(([month, total]) => ({ month, total }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [expenseTransactions]);
+  const forecast = useMemo(() => {
+    if (!expenseByMonth.length) return null;
+    const last = expenseByMonth.slice(-3);
+    const avg = last.reduce((sum, item) => sum + item.total, 0) / last.length;
+    return Math.round(avg);
+  }, [expenseByMonth]);
+  const topCategories = useMemo(() => {
+    const buckets = {};
+    expenseTransactions.forEach((item) => {
+      const label = item.categoryLabel || "Other";
+      if (!buckets[label]) buckets[label] = 0;
+      buckets[label] += Number(item.amount || 0);
+    });
+    return Object.entries(buckets)
+      .map(([category, total]) => ({ category, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 3);
+  }, [expenseTransactions]);
+  const anomalies = useMemo(() => {
+    if (!expenseTransactions.length) return [];
+    const values = expenseTransactions.map((item) => Number(item.amount || 0));
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance =
+      values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+    const stdev = Math.sqrt(variance) || 1;
+    return expenseTransactions
+      .filter((item) => (Number(item.amount || 0) - mean) / stdev > 2)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
+  }, [expenseTransactions]);
+
   const summaryRows = useMemo(
     () => [
       {
-        label: "Tổng thu",
+        label: "Total income",
         value: currency(summary.total_income),
-        meta: "Theo giai đoạn"
+        meta: "Selected range"
       },
       {
-        label: "Tổng chi",
+        label: "Total expense",
         value: currency(summary.total_expense),
-        meta: "Theo giai đoạn"
+        meta: "Selected range"
       },
       {
-        label: "Số dư",
+        label: "Balance",
         value: currency(summary.balance),
-        meta: "Cập nhật realtime"
+        meta: "Realtime"
       }
     ],
     [summary]
@@ -30,9 +83,9 @@ export default function ReportsScreen({ summary, monthlySeries, onBack, reportLa
   return (
     <section className="panel">
       <div className="panel-header">
-        <h3>Báo cáo</h3>
+        <h3>Reports</h3>
         <button className="ghost" onClick={onBack} type="button">
-          Quay lại
+          Back
         </button>
       </div>
       {reportLayout === "table" ? (
@@ -73,7 +126,7 @@ export default function ReportsScreen({ summary, monthlySeries, onBack, reportLa
         </div>
       )}
       <div className="panel">
-        <h3>Biểu đồ thu chi</h3>
+        <h3>Cashflow chart</h3>
         <div className="bars tall">
           {monthlySeries.map((item) => (
             <div key={item.month} className="bar">
@@ -93,45 +146,61 @@ export default function ReportsScreen({ summary, monthlySeries, onBack, reportLa
         <h3>AI Insights</h3>
         <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
           <button className="ghost" type="button" onClick={() => setShowForecast((v) => !v)}>
-            Dự đoán xu hướng chi tiêu
+            Forecast expense
           </button>
           <button className="ghost" type="button" onClick={() => setShowSavingTips((v) => !v)}>
-            Gợi ý tiết kiệm / cắt giảm
+            Saving tips
           </button>
           <button className="ghost" type="button" onClick={() => setShowAnomaly((v) => !v)}>
-            Phát hiện bất thường chi tiêu
+            Anomaly detection
           </button>
         </div>
 
         {showForecast && (
           <div className="insight-card">
-            <h4>Xu hướng 3 tháng tới</h4>
-            <ul>
-              <li>Chi tiêu dự kiến tăng nhẹ 8–12% nếu giữ thói quen hiện tại.</li>
-              <li>Đỉnh chi tiêu dự kiến rơi vào tuần cuối tháng.</li>
-              <li>Nhóm danh mục tăng mạnh: ăn uống, di chuyển.</li>
-            </ul>
+            <h4>Next month forecast</h4>
+            {!forecast ? (
+              <p>No expense history yet.</p>
+            ) : (
+              <ul>
+                <li>Estimated expense: {currency(forecast)}</li>
+                <li>Based on last 3 months average.</li>
+              </ul>
+            )}
           </div>
         )}
 
         {showSavingTips && (
           <div className="insight-card">
-            <h4>Gợi ý tiết kiệm</h4>
-            <ul>
-              <li>Giới hạn ngân sách ăn uống ở mức 1.5tr/tháng.</li>
-              <li>Gộp mua sắm vào 1–2 lần/tuần để giảm phát sinh.</li>
-              <li>Ưu tiên thanh toán một ví để dễ kiểm soát.</li>
-            </ul>
+            <h4>Top spending categories</h4>
+            {!topCategories.length ? (
+              <p>No expense data yet.</p>
+            ) : (
+              <ul>
+                {topCategories.map((item) => (
+                  <li key={item.category}>
+                    {item.category}: {currency(item.total)}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
         {showAnomaly && (
           <div className="insight-card">
-            <h4>Phát hiện bất thường</h4>
-            <ul>
-              <li>Giao dịch “Cà phê” tuần này tăng 2.1x so với tuần trước.</li>
-              <li>Chi phí di chuyển tăng đột biến trong 3 ngày gần nhất.</li>
-            </ul>
+            <h4>Potential anomalies</h4>
+            {!anomalies.length ? (
+              <p>No anomalies detected.</p>
+            ) : (
+              <ul>
+                {anomalies.map((item) => (
+                  <li key={`${item.id}-${item.amount}`}>
+                    {item.description}: {currency(item.amount)} ({item.date})
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
       </div>

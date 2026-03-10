@@ -43,6 +43,7 @@ export default function TransactionsScreen({
   onFiltersChange,
   onCreate,
   onCreateFromText,
+  onParseFromText,
   onUpdate,
   onDelete,
   onCreateCategory,
@@ -59,6 +60,7 @@ export default function TransactionsScreen({
   const [nlpText, setNlpText] = useState("");
   const [nlpNotice, setNlpNotice] = useState("");
   const [nlpError, setNlpError] = useState("");
+  const [nlpPreview, setNlpPreview] = useState(null);
   const [visibleCount, setVisibleCount] = useState(20);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showOcr, setShowOcr] = useState(false);
@@ -160,8 +162,23 @@ export default function TransactionsScreen({
       await onCreateFromText(text);
       setNlpNotice("Created from NLP input.");
       setNlpText("");
+      setNlpPreview(null);
     } catch (err) {
       setNlpError(err.message || "Unable to create from NLP input.");
+    }
+  };
+
+  const handleNlpPreview = async () => {
+    const text = nlpText.trim();
+    if (!text || !onParseFromText) return;
+    setNlpNotice("");
+    setNlpError("");
+    try {
+      const preview = await onParseFromText(text);
+      setNlpPreview(preview);
+    } catch (err) {
+      setNlpPreview(null);
+      setNlpError(err.message || "Unable to preview NLP input.");
     }
   };
 
@@ -223,12 +240,34 @@ export default function TransactionsScreen({
                   onChange={(event) => setNlpText(event.target.value)}
                   placeholder="NLP: hom nay chi 50k an sang"
                 />
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={handleNlpPreview}
+                  disabled={loading || !nlpText.trim()}
+                >
+                  Preview
+                </button>
                 <button className="primary" type="submit" disabled={loading || !nlpText.trim()}>
                   Create from NLP
                 </button>
               </div>
               {nlpNotice && <p className="form-note">{nlpNotice}</p>}
               {nlpError && <p className="form-error">{nlpError}</p>}
+              {nlpPreview && (
+                <div className="list" style={{ marginTop: 10 }}>
+                  <div className="item-row">
+                    <div>
+                      <p className="eyebrow">Preview</p>
+                      <p>Description: {nlpPreview.description}</p>
+                      <p>Type: {nlpPreview.transaction_type}</p>
+                      <p>Amount: {nlpPreview.amount ?? "N/A"}</p>
+                      <p>Date: {nlpPreview.date}</p>
+                      <p>Category: {nlpPreview.category_name || "None"}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
             <div className="filters compact">
               <div className="field">

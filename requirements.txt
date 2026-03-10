@@ -8,3 +8,5 @@ python-jose[cryptography]
 passlib
 email-validator
 python-multipart
+pytesseract
+Pillow

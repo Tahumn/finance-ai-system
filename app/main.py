@@ -35,6 +35,13 @@ def on_startup() -> None:
         auth_models.EmailOTP,
         finance_models.Category,
         finance_models.Transaction,
+        finance_models.Account,
+        finance_models.Transfer,
+        finance_models.Debt,
+        finance_models.Budget,
+        finance_models.Goal,
+        finance_models.Subscription,
+        finance_models.Reminder,
     )
 
 

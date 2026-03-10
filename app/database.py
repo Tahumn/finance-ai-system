@@ -17,7 +17,8 @@ def ensure_schema() -> None:
     """
 
     inspector = inspect(engine)
-    if "users" not in inspector.get_table_names():
+    tables = set(inspector.get_table_names())
+    if "users" not in tables:
         return
 
     existing = {col["name"] for col in inspector.get_columns("users")}
@@ -50,12 +51,24 @@ def ensure_schema() -> None:
             conn.execute(
                 text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)")
             )
-        return
+    else:
+        with engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
 
-    with engine.begin() as conn:
-        for stmt in statements:
-            conn.execute(text(stmt))
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
+    if "transactions" in tables:
+        tx_existing = {col["name"] for col in inspector.get_columns("transactions")}
+        tx_statements: list[str] = []
+        if "account_id" not in tx_existing:
+            tx_statements.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS account_id INTEGER")
+        if tx_statements:
+            with engine.begin() as conn:
+                for stmt in tx_statements:
+                    conn.execute(text(stmt))
+                conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions (account_id)")
+                )
 
 
 def get_db():
