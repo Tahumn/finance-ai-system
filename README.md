@@ -74,8 +74,29 @@ py -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+## Run Frontend (Web/Mobile)
+
+```powershell
+cd frontend
+npm install
+```
+
+Web (desktop layout):
+
+```powershell
+npm run dev:web
+```
+
+Mobile (LAN access for phones):
+
+```powershell
+npm run dev:mobile
+```
+
+Open the app on your phone using `http://<LAN-IP>:5173`. The frontend will call the same API at `http://<LAN-IP>:8000/api/v1`.
 
 ## Environment Variables
 

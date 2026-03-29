@@ -4,12 +4,31 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 
+class TagCreate(BaseModel):
+    name: str = Field(..., min_length=1)
+    color: str = Field(default="#1565c0")
+
+
+class TagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    color: str | None = None
+
+
+class TagRead(BaseModel):
+    id: int
+    name: str
+    color: str
+    user_id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TransactionCreate(BaseModel):
     description: str = Field(..., min_length=1, example="Coffee")
     amount: float = Field(..., gt=0, example=3.5)
     transaction_type: Literal["income", "expense"]
     category_id: int | None = None
     date: DateType | None = None
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 class TransactionUpdate(BaseModel):
@@ -18,6 +37,7 @@ class TransactionUpdate(BaseModel):
     transaction_type: Literal["income", "expense"] | None = None
     category_id: int | None = None
     date: DateType | None = None
+    tag_ids: list[int] | None = None
 
 
 class TransactionRead(BaseModel):
@@ -28,6 +48,7 @@ class TransactionRead(BaseModel):
     transaction_type: str
     category_id: int | None
     date: DateType
+    tags: list[TagRead] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
 
 

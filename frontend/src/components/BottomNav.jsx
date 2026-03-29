@@ -1,9 +1,12 @@
+import { t } from "../utils/i18n.js";
+
 const views = [
-  { key: "dashboard", label: "Tổng quan" },
-  { key: "transactions", label: "Thêm GD" },
-  { key: "chat", label: "Chat" },
-  { key: "reports", label: "Báo cáo" },
-  { key: "settings", label: "Hồ sơ" }
+  { key: "dashboard", label: "nav.overview" },
+  { key: "transactions", label: "nav.add_tx" },
+  { key: "chat", label: "nav.chat" },
+  { key: "reports", label: "nav.reports" },
+  { key: "notifications", label: "nav.notifications" },
+  { key: "settings", label: "nav.settings" }
 ];
 
 export default function BottomNav({ active, onChange }) {
@@ -16,7 +19,7 @@ export default function BottomNav({ active, onChange }) {
           onClick={() => onChange(item.key)}
           type="button"
         >
-          {item.label}
+          {t(item.label)}
         </button>
       ))}
     </nav>

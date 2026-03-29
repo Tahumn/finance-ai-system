@@ -2,11 +2,12 @@ from datetime import date
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth.models import User
 from app.finance import schemas
-from app.finance.models import Category, Transaction
+from app.finance.models import Category, Tag, Transaction
+from app.realtime import emit_finance_update
 
 
 def create_category(db: Session, current_user: User, payload: schemas.CategoryCreate) -> Category:
@@ -26,6 +27,7 @@ def create_category(db: Session, current_user: User, payload: schemas.CategoryCr
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
+    emit_finance_update("categories", current_user.id, db_category.id)
     return db_category
 
 
@@ -50,12 +52,102 @@ def _validate_category_ownership(db: Session, current_user: User, category_id: i
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
 
+def _load_tags(db: Session, current_user: User, tag_ids: list[int] | None) -> list[Tag]:
+    if not tag_ids:
+        return []
+    unique_ids = list({int(tag_id) for tag_id in tag_ids})
+    tags = (
+        db.query(Tag)
+        .filter(Tag.user_id == current_user.id, Tag.id.in_(unique_ids))
+        .all()
+    )
+    if len(tags) != len(unique_ids):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    return tags
+
+
+def create_tag(db: Session, current_user: User, payload: schemas.TagCreate) -> Tag:
+    tag_name = payload.name.strip()
+    if not tag_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag name is required")
+
+    exists = (
+        db.query(Tag)
+        .filter(Tag.user_id == current_user.id, Tag.name == tag_name)
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag already exists")
+
+    db_tag = Tag(name=tag_name, color=payload.color or "#1565c0", user_id=current_user.id)
+    db.add(db_tag)
+    db.commit()
+    db.refresh(db_tag)
+    emit_finance_update("tags", current_user.id, db_tag.id)
+    return db_tag
+
+
+def list_tags(db: Session, current_user: User) -> list[Tag]:
+    return (
+        db.query(Tag)
+        .filter(Tag.user_id == current_user.id)
+        .order_by(Tag.name.asc())
+        .all()
+    )
+
+
+def update_tag(db: Session, current_user: User, tag_id: int, payload: schemas.TagUpdate) -> Tag:
+    db_tag = (
+        db.query(Tag)
+        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
+        .first()
+    )
+    if not db_tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        name = data["name"].strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag name is required")
+        exists = (
+            db.query(Tag)
+            .filter(Tag.user_id == current_user.id, Tag.name == name, Tag.id != tag_id)
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag already exists")
+        data["name"] = name
+
+    for key, value in data.items():
+        setattr(db_tag, key, value)
+
+    db.commit()
+    db.refresh(db_tag)
+    emit_finance_update("tags", current_user.id, db_tag.id)
+    return db_tag
+
+
+def delete_tag(db: Session, current_user: User, tag_id: int) -> None:
+    db_tag = (
+        db.query(Tag)
+        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
+        .first()
+    )
+    if not db_tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    db.delete(db_tag)
+    db.commit()
+    emit_finance_update("tags", current_user.id, tag_id)
+
+
 def create_transaction(
     db: Session,
     current_user: User,
     payload: schemas.TransactionCreate,
 ) -> Transaction:
     _validate_category_ownership(db, current_user, payload.category_id)
+    tags = _load_tags(db, current_user, payload.tag_ids)
 
     db_tx = Transaction(
         user_id=current_user.id,
@@ -65,9 +157,12 @@ def create_transaction(
         category_id=payload.category_id,
         date=payload.date or date.today(),
     )
+    if tags:
+        db_tx.tags = tags
     db.add(db_tx)
     db.commit()
     db.refresh(db_tx)
+    emit_finance_update("transactions", current_user.id, db_tx.id)
     return db_tx
 
 
@@ -79,7 +174,11 @@ def list_transactions(
     category_id: int | None = None,
     transaction_type: str | None = None,
 ) -> list[Transaction]:
-    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    query = (
+        db.query(Transaction)
+        .options(selectinload(Transaction.tags))
+        .filter(Transaction.user_id == current_user.id)
+    )
     if start_date:
         query = query.filter(Transaction.date >= start_date)
     if end_date:
@@ -110,6 +209,9 @@ def update_transaction(
         _validate_category_ownership(db, current_user, data["category_id"])
     if "description" in data and not data["description"].strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Description is required")
+    if "tag_ids" in data:
+        db_tx.tags = _load_tags(db, current_user, data["tag_ids"])
+        data.pop("tag_ids", None)
 
     for key, value in data.items():
         if key == "description" and isinstance(value, str):
@@ -119,6 +221,7 @@ def update_transaction(
 
     db.commit()
     db.refresh(db_tx)
+    emit_finance_update("transactions", current_user.id, db_tx.id)
     return db_tx
 
 
@@ -132,6 +235,7 @@ def delete_transaction(db: Session, current_user: User, transaction_id: int) -> 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
     db.delete(db_tx)
     db.commit()
+    emit_finance_update("transactions", current_user.id, transaction_id)
 
 
 def _base_query(db: Session, current_user: User, start_date: date | None, end_date: date | None):

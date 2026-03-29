@@ -1,3 +1,5 @@
+import { getCategoryPrefs } from "./userPrefs.js";
+
 const palette = [
   "#ff8b5f",
   "#38b6ff",
@@ -11,8 +13,11 @@ const palette = [
   "#3b82f6"
 ];
 
-export const colorFor = (label) => {
+export const colorFor = (label, email) => {
   if (!label) return palette[0];
+  const prefs = getCategoryPrefs(email);
+  const stored = prefs[label];
+  if (stored?.color) return stored.color;
   let hash = 0;
   for (let i = 0; i < label.length; i += 1) {
     hash = label.charCodeAt(i) + ((hash << 5) - hash);

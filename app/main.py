@@ -6,6 +6,8 @@ from app.auth.router import router as auth_router
 from app.database import Base, engine, ensure_schema
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
+from app.notifications.router import router as notifications_router
+from app.realtime import socket_app
 
 app = FastAPI(title="Finance AI Monolith")
 
@@ -13,7 +15,7 @@ app = FastAPI(title="Finance AI Monolith")
 # via LAN IP like http://192.168.x.x:5173).
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):\d+$",
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,8 +36,12 @@ def on_startup() -> None:
         auth_models.EmailOTP,
         finance_models.Category,
         finance_models.Transaction,
+        finance_models.Tag,
     )
 
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+
+app.mount("/ws", socket_app)

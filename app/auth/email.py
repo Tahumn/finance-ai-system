@@ -28,3 +28,17 @@ def send_otp_email(*, to_email: str, code: str) -> None:
         server.login(settings.smtp_user, settings.smtp_password)
         server.send_message(msg)
 
+
+def send_notification_email(*, to_email: str, subject: str, message: str) -> None:
+    if not settings.smtp_user or not settings.smtp_password:
+        raise RuntimeError("SMTP is not configured. Set SMTP_USER and SMTP_PASSWORD in .env.")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = settings.smtp_from or settings.smtp_user
+    msg["To"] = to_email
+    msg.set_content(message)
+
+    with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
+        server.login(settings.smtp_user, settings.smtp_password)
+        server.send_message(msg)

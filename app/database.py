@@ -17,40 +17,33 @@ def ensure_schema() -> None:
     """
 
     inspector = inspect(engine)
-    if "users" not in inspector.get_table_names():
+    tables = set(inspector.get_table_names())
+    if "users" not in tables:
         return
 
-    existing = {col["name"] for col in inspector.get_columns("users")}
     statements: list[str] = []
 
-    if "first_name" not in existing:
+    user_columns = {col["name"] for col in inspector.get_columns("users")}
+    if "first_name" not in user_columns:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR")
-    if "last_name" not in existing:
+    if "last_name" not in user_columns:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR")
-    if "username" not in existing:
+    if "username" not in user_columns:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR")
-    if "phone" not in existing:
+    if "phone" not in user_columns:
         statements.append("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR")
-    if "email_verified" not in existing:
+    if "email_verified" not in user_columns:
         statements.append(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE"
         )
-    if "is_active" not in existing:
+    if "is_active" not in user_columns:
         statements.append(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE"
         )
-    if "created_at" not in existing:
+    if "created_at" not in user_columns:
         statements.append(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
         )
-
-    if not statements:
-        # Ensure index for username if column already exists.
-        with engine.begin() as conn:
-            conn.execute(
-                text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)")
-            )
-        return
 
     with engine.begin() as conn:
         for stmt in statements:

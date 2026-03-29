@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { currency } from "../../utils/format.js";
+import { currency, formatNumberInput, parseNumberInput } from "../../utils/format.js";
+import { t } from "../../utils/i18n.js";
 
 const storageKey = (email) => `finance_local_accounts:${email || "guest"}`;
 
@@ -46,7 +47,7 @@ export default function AccountsScreen({ userEmail }) {
       type: form.type,
       provider: form.provider.trim(),
       last4: form.last4.trim().slice(-4),
-      balance: form.balance ? Number(form.balance) : 0
+      balance: parseNumberInput(form.balance)
     };
 
     setAccounts((current) => {
@@ -65,7 +66,7 @@ export default function AccountsScreen({ userEmail }) {
       type: account.type,
       provider: account.provider,
       last4: account.last4,
-      balance: String(account.balance)
+      balance: formatNumberInput(account.balance)
     });
   };
 
@@ -80,52 +81,51 @@ export default function AccountsScreen({ userEmail }) {
   return (
     <section className="panel">
       <div className="panel-header">
-        <h3>Tài khoản & Phương thức</h3>
-        <span className="badge">UI local</span>
+        <h3>{t("accounts.title")}</h3>
       </div>
 
       <form className="form" onSubmit={handleSubmit}>
         <div className="row">
           <label className="field">
-            <span>Tên tài khoản *</span>
+            <span>{t("accounts.form.name")}</span>
             <input
               type="text"
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Ví dụ: Ví tiền mặt"
+              placeholder={t("accounts.form.name_placeholder")}
               required
             />
           </label>
 
           <label className="field">
-            <span>Loại</span>
+            <span>{t("accounts.form.type")}</span>
             <select
               value={form.type}
               onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
             >
-              <option value="cash">Tiền mặt</option>
-              <option value="card">Thẻ</option>
-              <option value="wallet">Ví điện tử</option>
-              <option value="bank">Tài khoản ngân hàng</option>
+              <option value="cash">{t("accounts.type.cash")}</option>
+              <option value="card">{t("accounts.type.card")}</option>
+              <option value="wallet">{t("accounts.type.wallet")}</option>
+              <option value="bank">{t("accounts.type.bank")}</option>
             </select>
           </label>
         </div>
 
         <div className="row">
           <label className="field">
-            <span>Nhà cung cấp</span>
+            <span>{t("accounts.form.provider")}</span>
             <input
               type="text"
               value={form.provider}
               onChange={(event) =>
                 setForm((current) => ({ ...current, provider: event.target.value }))
               }
-              placeholder="Visa / Momo / VCB"
+              placeholder={t("accounts.form.provider_placeholder")}
             />
           </label>
 
           <label className="field">
-            <span>4 số cuối</span>
+            <span>{t("accounts.form.last4")}</span>
             <input
               type="text"
               maxLength="4"
@@ -141,13 +141,16 @@ export default function AccountsScreen({ userEmail }) {
           </label>
 
           <label className="field">
-            <span>Số dư hiện tại</span>
+            <span>{t("accounts.form.balance")}</span>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={form.balance}
               onChange={(event) =>
-                setForm((current) => ({ ...current, balance: event.target.value }))
+                setForm((current) => ({
+                  ...current,
+                  balance: formatNumberInput(event.target.value)
+                }))
               }
             />
           </label>
@@ -163,41 +166,41 @@ export default function AccountsScreen({ userEmail }) {
                 setForm(emptyAccount);
               }}
             >
-              Hủy sửa
+              {t("accounts.action.cancel_edit")}
             </button>
           )}
           <button className="primary" type="submit">
-            {editingId ? "Lưu tài khoản" : "Thêm tài khoản"}
+            {editingId ? t("accounts.action.save") : t("accounts.action.add")}
           </button>
         </div>
       </form>
 
       <div className="list">
         {!accounts.length ? (
-          <p className="empty">Chưa có tài khoản/phương thức thanh toán nào.</p>
+          <p className="empty">{t("accounts.empty")}</p>
         ) : (
           accounts.map((account) => (
             <article key={account.id} className="item-row account-row">
               <div>
                 <p>
-                  <strong>{account.name}</strong> - {account.type}
+                  <strong>{account.name}</strong> - {t(`accounts.type.${account.type}`)}
                 </p>
                 <small>
-                  {account.provider || "Không có provider"} - {mask(account.last4)}
+                  {account.provider || t("accounts.no_provider")} - {mask(account.last4)}
                 </small>
               </div>
               <div className="account-right">
                 <p>{currency(account.balance || 0)}</p>
                 <div className="row-actions">
                   <button className="ghost" type="button" onClick={() => startEdit(account)}>
-                    Sửa
+                    {t("accounts.action.edit")}
                   </button>
                   <button
                     className="ghost danger"
                     type="button"
                     onClick={() => removeAccount(account.id)}
                   >
-                    Xóa
+                    {t("accounts.action.delete")}
                   </button>
                 </div>
               </div>

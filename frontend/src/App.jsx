@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { io } from "socket.io-client";
 import { clearToken, getToken, setToken } from "./api/client.js";
 import {
   login,
@@ -13,12 +14,16 @@ import {
 } from "./api/auth.js";
 import {
   createCategory,
+  createTag,
   createTransaction,
+  deleteTag,
   deleteTransaction,
   getCategoryBreakdown,
   getSummary,
   listCategories,
+  listTags,
   listTransactions,
+  updateTag,
   updateTransaction
 } from "./api/finance.js";
 import BottomNav from "./components/BottomNav.jsx";
@@ -26,6 +31,7 @@ import SideMenu from "./components/SideMenu.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
 import StatusBanner from "./components/StatusBanner.jsx";
 import AuthScreen from "./features/auth/AuthScreen.jsx";
+import OnboardingScreen from "./features/onboarding/OnboardingScreen.jsx";
 import DashboardScreen from "./features/dashboard/DashboardScreen.jsx";
 import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
@@ -36,22 +42,48 @@ import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
+import NotificationsScreen from "./features/notifications/NotificationsScreen.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
+import {
+  applyUserPrefs,
+  getUserPrefs,
+  isOnboardingDone,
+  setActiveUserEmail,
+  setOnboardingDone
+} from "./utils/userPrefs.js";
+import { t } from "./utils/i18n.js";
+import {
+  buildNotificationsFromData,
+  buildTransactionNotification,
+  clearNotifications,
+  getNotificationCounts,
+  getNotifications,
+  markAllRead,
+  markNotificationRead,
+  mergeNotifications,
+  pushNotification
+} from "./utils/notifications.js";
 
 const buildMonthlySeries = (transactions) => {
   const buckets = {};
   transactions.forEach((item) => {
     const key = item.date.slice(0, 7);
     if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
-    if (item.transaction_type === "income") buckets[key].income += item.amount;
-    if (item.transaction_type === "expense") buckets[key].expense += item.amount;
+    if (item.transaction_type === "income") buckets[key].income += Number(item.amount || 0);
+    if (item.transaction_type === "expense") buckets[key].expense += Number(item.amount || 0);
   });
   return Object.entries(buckets)
-    .map(([month, values]) => ({
-      month,
-      value: values.income - values.expense
-    }))
+    .map(([month, values]) => {
+      const net = values.income - values.expense;
+      return {
+        month,
+        income: values.income,
+        expense: values.expense,
+        net,
+        value: net
+      };
+    })
     .sort((a, b) => a.month.localeCompare(b.month))
     .slice(-6);
 };
@@ -81,13 +113,23 @@ const defaultFilters = () => ({
   categoryId: ""
 });
 
+const getSocketBase = () => {
+  if (import.meta.env.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE.replace(/\/api\/v1$/, "");
+  }
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:8000`;
+};
+
 export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [authState, setAuthState] = useState({ status: "checking", user: null });
   const [uiPrefs, setUiPrefs] = useState(() => getUiPrefs());
   const [view, setView] = useState("dashboard");
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
+  const [tags, setTags] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
     total_income: 0,
@@ -100,6 +142,13 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [languageVersion, setLanguageVersion] = useState(0);
+  const [notifications, setNotifications] = useState(() => getNotifications());
+  const loadFinanceRef = useRef(null);
+  const authStatusRef = useRef(authState.status);
+  const authUserIdRef = useRef(null);
+  const needsOnboardingRef = useRef(needsOnboarding);
+  const refreshTimerRef = useRef(null);
 
   useEffect(() => {
     const prefs = getUiPrefs(authState.user?.email);
@@ -120,6 +169,52 @@ export default function App() {
     return () => window.removeEventListener("finance:ui-prefs", handlePrefs);
   }, [authState.user?.email]);
 
+  useEffect(() => {
+    const prefs = getUserPrefs(authState.user?.email);
+    applyUserPrefs(prefs);
+  }, [authState.user?.email]);
+
+  useEffect(() => {
+    authStatusRef.current = authState.status;
+  }, [authState.status]);
+
+  useEffect(() => {
+    authUserIdRef.current = authState.user?.id || null;
+  }, [authState.user?.id]);
+
+  useEffect(() => {
+    needsOnboardingRef.current = needsOnboarding;
+  }, [needsOnboarding]);
+
+  useEffect(() => {
+    const handleUserPrefs = (event) => {
+      if (!event?.detail) return;
+      const currentEmail = authState.user?.email || "guest";
+      if ((event.detail.email || "guest") !== currentEmail) return;
+      const nextPrefs = event.detail.prefs || getUserPrefs(currentEmail);
+      applyUserPrefs(nextPrefs);
+      setLanguageVersion((current) => current + 1);
+    };
+    window.addEventListener("finance:user-prefs", handleUserPrefs);
+    return () => window.removeEventListener("finance:user-prefs", handleUserPrefs);
+  }, [authState.user?.email]);
+
+  useEffect(() => {
+    const email = authState.user?.email || "guest";
+    setNotifications(getNotifications(email));
+  }, [authState.user?.email]);
+
+  useEffect(() => {
+    const handleNotifications = (event) => {
+      if (!event?.detail) return;
+      const currentEmail = authState.user?.email || "guest";
+      if ((event.detail.email || "guest") !== currentEmail) return;
+      setNotifications(event.detail.items || []);
+    };
+    window.addEventListener("finance:notifications", handleNotifications);
+    return () => window.removeEventListener("finance:notifications", handleNotifications);
+  }, [authState.user?.email]);
+
   const categoryMap = useMemo(() => {
     const map = {};
     categories.forEach((item) => {
@@ -132,9 +227,9 @@ export default function App() {
     () =>
       transactions.map((item) => ({
         ...item,
-        categoryLabel: item.category_id ? categoryMap[item.category_id] || "Khác" : "Khác"
+        categoryLabel: item.category_id ? categoryMap[item.category_id] || t("transactions.none") : t("transactions.none")
       })),
-    [transactions, categoryMap]
+    [transactions, categoryMap, languageVersion]
   );
 
   const breakdownWithShare = useMemo(() => {
@@ -153,6 +248,38 @@ export default function App() {
     setNotice("");
     setAuthState({ status: "guest", user: null });
     setView("dashboard");
+    setActiveUserEmail("guest");
+    setNeedsOnboarding(false);
+    setNotifications(getNotifications("guest"));
+    setCategories([]);
+    setTags([]);
+    setTransactions([]);
+  };
+
+  const isAuthed = authState.status === "authed";
+
+  const handleAccountAction = () => {
+    if (isAuthed) {
+      handleLogout();
+      return;
+    }
+    setAuthMode("login");
+    setView("auth");
+  };
+
+  const handleChangeView = (nextView) => {
+    if (view === "onboarding") return;
+    if (!isAuthed && !["dashboard", "settings"].includes(nextView)) {
+      setAuthMode("login");
+      setView("auth");
+      return;
+    }
+    if (!isAuthed && nextView === "settings") {
+      setAuthMode("login");
+      setView("auth");
+      return;
+    }
+    setView(nextView);
   };
 
   const handleAuthSubmit = async ({
@@ -182,9 +309,13 @@ export default function App() {
       setToken(token.access_token, remember);
       const user = await me();
       setAuthState({ status: "authed", user });
+      setActiveUserEmail(user?.email || "guest");
+      const hasOnboarded = isOnboardingDone(user?.email);
+      setNeedsOnboarding(!hasOnboarded);
+      setView(hasOnboarded ? "dashboard" : "onboarding");
       return { next: "authed" };
     } catch (err) {
-      setError(err.message || "Không thể xác thực. Vui lòng thử lại.");
+      setError(err.message || t("auth.error.generic"));
       return { next: "error" };
     } finally {
       setAuthLoading(false);
@@ -197,10 +328,10 @@ export default function App() {
     setNotice("");
     try {
       const result = await verifyOtp(email, code);
-      setNotice("Xác thực email thành công. Vui lòng tạo mật khẩu.");
+      setNotice(t("auth.notice.verified"));
       return result;
     } catch (err) {
-      setError(err.message || "OTP không hợp lệ.");
+      setError(err.message || t("auth.error.otp_invalid"));
       return null;
     } finally {
       setAuthLoading(false);
@@ -213,10 +344,10 @@ export default function App() {
     setNotice("");
     try {
       await setPassword(registrationToken, password);
-      setNotice("Đã tạo mật khẩu. Bạn có thể đăng nhập.");
+      setNotice(t("auth.notice.password_set"));
       return true;
     } catch (err) {
-      setError(err.message || "Không thể tạo mật khẩu.");
+      setError(err.message || t("auth.error.password_set"));
       return false;
     } finally {
       setAuthLoading(false);
@@ -229,10 +360,10 @@ export default function App() {
     setNotice("");
     try {
       await resetPasswordStart(email);
-      setNotice("Đã gửi OTP đặt lại mật khẩu.");
+      setNotice(t("auth.notice.reset_otp_sent"));
       return true;
     } catch (err) {
-      setError(err.message || "Không thể gửi OTP.");
+      setError(err.message || t("auth.error.reset_otp_sent"));
       return false;
     } finally {
       setAuthLoading(false);
@@ -245,10 +376,10 @@ export default function App() {
     setNotice("");
     try {
       const result = await resetPasswordVerify(email, code);
-      setNotice("OTP hợp lệ. Vui lòng tạo mật khẩu mới.");
+      setNotice(t("auth.notice.reset_otp_valid"));
       return result;
     } catch (err) {
-      setError(err.message || "OTP không hợp lệ.");
+      setError(err.message || t("auth.error.otp_invalid"));
       return null;
     } finally {
       setAuthLoading(false);
@@ -261,10 +392,10 @@ export default function App() {
     setNotice("");
     try {
       await resetPasswordConfirm(resetToken, password);
-      setNotice("Đã cập nhật mật khẩu. Bạn có thể đăng nhập.");
+      setNotice(t("auth.notice.password_reset"));
       return true;
     } catch (err) {
-      setError(err.message || "Không thể cập nhật mật khẩu.");
+      setError(err.message || t("auth.error.password_reset"));
       return false;
     } finally {
       setAuthLoading(false);
@@ -277,9 +408,9 @@ export default function App() {
     setNotice("");
     try {
       await resendOtp(email);
-      setNotice("Đã gửi lại OTP. Vui lòng kiểm tra email.");
+      setNotice(t("auth.notice.otp_resent"));
     } catch (err) {
-      setError(err.message || "Không thể gửi lại OTP.");
+      setError(err.message || t("auth.error.otp_resent"));
     } finally {
       setAuthLoading(false);
     }
@@ -295,26 +426,79 @@ export default function App() {
         category_id: filters.categoryId || undefined,
         transaction_type: filters.type || undefined
       };
-      const [cats, txs, sum, catsBreakdown] = await Promise.all([
+      const [cats, tagsList, txs, sum, catsBreakdown] = await Promise.all([
         listCategories(),
+        listTags(),
         listTransactions(params),
         getSummary({ start_date: filters.start, end_date: filters.end }),
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end })
       ]);
       setCategories(cats);
+      setTags(tagsList);
       setTransactions(txs);
       setSummary(sum);
       setBreakdown(catsBreakdown);
+      const email = authState.user?.email || "guest";
+      await mergeNotifications(
+        email,
+        buildNotificationsFromData({
+          email,
+          summary: sum,
+          breakdown: catsBreakdown,
+          transactions: txs
+        })
+      );
     } catch (err) {
       if (err.status === 401) {
         handleLogout();
       } else {
-        setError(err.message || "Không thể tải dữ liệu.");
+        setError(err.message || t("finance.error.load"));
       }
     } finally {
       setLoading(false);
     }
   };
+
+  const scheduleRefresh = useCallback((delay = 250) => {
+    if (authStatusRef.current !== "authed" || needsOnboardingRef.current) return;
+    if (refreshTimerRef.current) return;
+    refreshTimerRef.current = window.setTimeout(() => {
+      refreshTimerRef.current = null;
+      loadFinanceRef.current?.();
+    }, delay);
+  }, []);
+
+  useEffect(() => {
+    loadFinanceRef.current = loadFinanceData;
+  }, [loadFinanceData]);
+
+  useEffect(() => {
+    const socket = io(getSocketBase(), {
+      path: "/ws/socket.io",
+      transports: ["websocket"]
+    });
+    socket.on("finance:update", (payload) => {
+      const currentUserId = authUserIdRef.current;
+      if (payload?.user_id && currentUserId && payload.user_id !== currentUserId) return;
+      scheduleRefresh();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [scheduleRefresh]);
+
+  useEffect(() => {
+    const handleFocus = () => scheduleRefresh(0);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") scheduleRefresh(0);
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [scheduleRefresh]);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -326,28 +510,35 @@ export default function App() {
       try {
         const user = await me();
         setAuthState({ status: "authed", user });
+        setActiveUserEmail(user?.email || "guest");
+        const hasOnboarded = isOnboardingDone(user?.email);
+        setNeedsOnboarding(!hasOnboarded);
+        if (!hasOnboarded) setView("onboarding");
       } catch {
         clearToken();
         setAuthState({ status: "guest", user: null });
+        setActiveUserEmail("guest");
       }
     };
     bootstrap();
   }, []);
 
   useEffect(() => {
-    if (authState.status === "authed") {
+    if (authState.status === "authed" && !needsOnboarding) {
       loadFinanceData();
     }
-  }, [authState.status, filters]);
+  }, [authState.status, filters, needsOnboarding]);
 
   const handleCreateTransaction = async (payload) => {
     setLoading(true);
     setError("");
     try {
-      await createTransaction(payload);
+      const created = await createTransaction(payload);
+      const email = authState.user?.email || "guest";
+      await pushNotification(email, buildTransactionNotification(created));
       await loadFinanceData();
     } catch (err) {
-      setError(err.message || "Không thể tạo giao dịch.");
+      setError(err.message || t("finance.error.create_tx"));
       throw err;
     } finally {
       setLoading(false);
@@ -361,7 +552,7 @@ export default function App() {
       await updateTransaction(transactionId, payload);
       await loadFinanceData();
     } catch (err) {
-      setError(err.message || "Không thể cập nhật giao dịch.");
+      setError(err.message || t("finance.error.update_tx"));
     } finally {
       setLoading(false);
     }
@@ -374,7 +565,7 @@ export default function App() {
       await deleteTransaction(transactionId);
       await loadFinanceData();
     } catch (err) {
-      setError(err.message || "Không thể xoá giao dịch.");
+      setError(err.message || t("finance.error.delete_tx"));
     } finally {
       setLoading(false);
     }
@@ -387,7 +578,48 @@ export default function App() {
       await createCategory(name);
       await loadFinanceData();
     } catch (err) {
-      setError(err.message || "Không thể tạo danh mục.");
+      setError(err.message || t("finance.error.create_category"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateTag = async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      const created = await createTag(payload);
+      await loadFinanceData();
+      return created;
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateTag = async (tagId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateTag(tagId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteTag = async (tagId) => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteTag(tagId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
     } finally {
       setLoading(false);
     }
@@ -399,9 +631,11 @@ export default function App() {
     setFilters((current) => ({ ...current, ...nextRange }));
   };
 
-  const showDateFilters = ["dashboard", "transactions", "reports"].includes(view);
+  const showDateFilters =
+    isAuthed && ["dashboard", "transactions", "reports"].includes(view);
+  const notificationCounts = getNotificationCounts(notifications);
 
-  if (authState.status !== "authed") {
+  if (!isAuthed && view === "auth") {
     return (
       <div className="app">
         <AuthScreen
@@ -422,13 +656,31 @@ export default function App() {
     );
   }
 
+  if (isAuthed && view === "onboarding") {
+    return (
+      <div className="app">
+        <OnboardingScreen
+          userEmail={authState.user?.email}
+          currentUiPrefs={uiPrefs}
+          onComplete={() => {
+            setOnboardingDone(authState.user?.email, true);
+            setNeedsOnboarding(false);
+            setView("dashboard");
+            loadFinanceData();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <SideMenu
         active={view}
-        onChange={setView}
-        onLogout={handleLogout}
-        user={authState.user}
+        onChange={handleChangeView}
+        onLogout={handleAccountAction}
+        user={isAuthed ? authState.user : null}
+        notificationsCount={notificationCounts.unread}
       />
 
       <main className="app-shell app-shell-topnav">
@@ -436,23 +688,27 @@ export default function App() {
           <>
             <header className="app-header">
               <div>
-                <p className="eyebrow">Xin chào</p>
-                <h1>{authState.user?.username || authState.user?.email || "Người dùng"}</h1>
+                {isAuthed && <p className="eyebrow">{t("dashboard.greeting")}</p>}
+                <h1>
+                  {isAuthed
+                    ? authState.user?.username || authState.user?.email || t("user.default")
+                    : t("nav.overview")}
+                </h1>
               </div>
             </header>
 
             <section className="balance-card">
               <div>
-                <p className="label">Số dư hiện tại</p>
+                <p className="label">{t("dashboard.balance")}</p>
                 <h2>{currency(summary.balance)}</h2>
               </div>
               <div className="balance-meta">
                 <div>
-                  <p>Thu</p>
+                  <p>{t("dashboard.income")}</p>
                   <strong>{currency(summary.total_income)}</strong>
                 </div>
                 <div>
-                  <p>Chi</p>
+                  <p>{t("dashboard.expense")}</p>
                   <strong>{currency(summary.total_expense)}</strong>
                 </div>
               </div>
@@ -479,13 +735,14 @@ export default function App() {
             breakdown={breakdownWithShare}
             transactions={transactionsWithLabels}
             monthlySeries={monthlySeries}
-            onViewTransactions={() => setView("transactions")}
-            onGoOcr={() => setView("ocr")}
-            onGoChat={() => setView("chat")}
-            onGoAddTransaction={() => setView("transactions")}
-            onGoReports={() => setView("reports")}
+            onViewTransactions={() => handleChangeView("transactions")}
+            onGoOcr={() => handleChangeView("ocr")}
+            onGoChat={() => handleChangeView("chat")}
+            onGoAddTransaction={() => handleChangeView("transactions")}
+            onGoReports={() => handleChangeView("reports")}
             rangePreset={rangePreset}
             onSelectPreset={selectRangePreset}
+            userEmail={authState.user?.email}
           />
         )}
 
@@ -493,15 +750,19 @@ export default function App() {
           <TransactionsScreen
             transactions={transactionsWithLabels}
             categories={categories}
+            tags={tags}
             filters={filters}
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
             onUpdate={handleUpdateTransaction}
             onDelete={handleDeleteTransaction}
             onCreateCategory={handleCreateCategory}
+            onCreateTag={handleCreateTag}
+            onUpdateTag={handleUpdateTag}
+            onDeleteTag={handleDeleteTag}
             userEmail={authState.user?.email}
             onCreateTransaction={handleCreateTransaction}
-            onBack={() => setView("dashboard")}
+            onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />
         )}
@@ -510,19 +771,30 @@ export default function App() {
           <CategoriesScreen
             categories={categories}
             onCreate={handleCreateCategory}
-            onBack={() => setView("dashboard")}
+            onBack={() => handleChangeView("dashboard")}
             loading={loading}
+            userEmail={authState.user?.email}
           />
         )}
 
-        {view === "tags" && <TagsScreen userEmail={authState.user?.email} />}
+        {view === "tags" && (
+          <TagsScreen
+            tags={tags}
+            onCreate={handleCreateTag}
+            onUpdate={handleUpdateTag}
+            onDelete={handleDeleteTag}
+            loading={loading}
+          />
+        )}
 
         {view === "reports" && (
           <ReportsScreen
             summary={summary}
             monthlySeries={monthlySeries}
-            onBack={() => setView("dashboard")}
-            reportLayout={uiPrefs.reportLayout}
+            breakdown={breakdownWithShare}
+            transactions={transactions}
+            userEmail={authState.user?.email}
+            onBack={() => handleChangeView("dashboard")}
           />
         )}
 
@@ -548,7 +820,17 @@ export default function App() {
 
         {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
 
-        <BottomNav active={view} onChange={setView} />
+        {view === "notifications" && (
+          <NotificationsScreen
+            notifications={notifications}
+            onBack={() => handleChangeView("dashboard")}
+            onMarkRead={(id) => markNotificationRead(authState.user?.email || "guest", id)}
+            onMarkAllRead={() => markAllRead(authState.user?.email || "guest")}
+            onClearAll={() => clearNotifications(authState.user?.email || "guest")}
+          />
+        )}
+
+        <BottomNav active={view} onChange={handleChangeView} />
       </main>
     </div>
   );

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { currency, toInputDate } from "../../utils/format.js";
+import { colorFor } from "../../utils/colors.js";
+import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
+import { t } from "../../utils/i18n.js";
 
 const emptyForm = () => ({
   name: "",
@@ -44,6 +46,13 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
   const [form, setForm] = useState(emptyForm);
   const [plans, setPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const categoryMap = useMemo(() => {
+    const map = {};
+    categories.forEach((category) => {
+      map[String(category.id)] = category.name;
+    });
+    return map;
+  }, [categories]);
 
   useEffect(() => {
     const raw = localStorage.getItem(storageKey(userEmail));
@@ -85,7 +94,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const amount = Number(form.amount);
+    const amount = parseNumberInput(form.amount);
     const threshold = Number(form.threshold);
     if (!form.name.trim()) return;
     if (!(amount > 0)) return;
@@ -131,7 +140,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
     setForm({
       name: plan.name,
       categoryIds: plan.categoryIds,
-      amount: String(plan.amount),
+      amount: formatNumberInput(plan.amount),
       cycle: plan.cycle,
       startDate: plan.startDate,
       endDate: plan.endDate,
@@ -139,35 +148,43 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
     });
   };
 
+  const toggleCategory = (categoryId) => {
+    setForm((current) => {
+      const exists = current.categoryIds.includes(categoryId);
+      const next = exists
+        ? current.categoryIds.filter((item) => item !== categoryId)
+        : [...current.categoryIds, categoryId];
+      return { ...current, categoryIds: next };
+    });
+  };
+
   return (
     <section className="panel">
       <div className="panel-header">
-        <h3>Kế hoạch / Ngân sách</h3>
-        <span className="badge">UI local + dự báo AI-lite</span>
+        <h3>{t("budgets.title")}</h3>
       </div>
 
       <form className="form" onSubmit={handleSubmit}>
         <div className="row">
           <label className="field">
-            <span>Tên kế hoạch *</span>
+            <span>{t("budgets.form.name")}</span>
             <input
               type="text"
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Ví dụ: Kiểm soát ăn uống"
+              placeholder={t("budgets.form.name_placeholder")}
               required
             />
           </label>
 
           <label className="field">
-            <span>Ngân sách *</span>
+            <span>{t("budgets.form.amount")}</span>
             <input
-              type="number"
-              min="1"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={form.amount}
               onChange={(event) =>
-                setForm((current) => ({ ...current, amount: event.target.value }))
+                setForm((current) => ({ ...current, amount: formatNumberInput(event.target.value) }))
               }
               placeholder="0"
               required
@@ -177,40 +194,53 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
 
         <div className="row">
           <label className="field">
-            <span>Danh mục liên quan *</span>
-            <select
-              multiple
-              value={form.categoryIds}
-              onChange={(event) => {
-                const next = Array.from(event.target.selectedOptions).map((option) => option.value);
-                setForm((current) => ({ ...current, categoryIds: next }));
-              }}
-            >
-              {categories.map((category) => (
-                <option key={category.id} value={String(category.id)}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            <span>{t("budgets.form.categories")}</span>
+            <div className="category-picker">
+              {!categories.length ? (
+                <p className="empty">{t("budgets.empty_categories", null, "Chưa có danh mục nào")}</p>
+              ) : (
+                categories.map((category) => {
+                  const id = String(category.id);
+                  const active = form.categoryIds.includes(id);
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      className={`category-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleCategory(id)}
+                      aria-pressed={active}
+                    >
+                      <span className="dot" style={{ background: colorFor(category.name, userEmail) }} />
+                      <span>{category.name}</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <small className="hint">
+              {form.categoryIds.length
+                ? t("budgets.form.categories_selected", { count: form.categoryIds.length }, `${form.categoryIds.length} danh mục đã chọn`)
+                : t("budgets.form.categories_hint", null, "Chọn 1 hoặc nhiều danh mục")}
+            </small>
           </label>
 
           <label className="field">
-            <span>Chu kỳ *</span>
+            <span>{t("budgets.form.cycle")}</span>
             <select
               value={form.cycle}
               onChange={(event) => setForm((current) => ({ ...current, cycle: event.target.value }))}
             >
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-              <option value="one-time">One-time</option>
+              <option value="weekly">{t("budgets.cycle.weekly")}</option>
+              <option value="monthly">{t("budgets.cycle.monthly")}</option>
+              <option value="yearly">{t("budgets.cycle.yearly")}</option>
+              <option value="one-time">{t("budgets.cycle.one_time")}</option>
             </select>
           </label>
         </div>
 
         <div className="row">
           <label className="field">
-            <span>Ngày bắt đầu</span>
+            <span>{t("budgets.form.start")}</span>
             <input
               type="date"
               value={form.startDate}
@@ -220,7 +250,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
             />
           </label>
           <label className="field">
-            <span>Ngày kết thúc</span>
+            <span>{t("budgets.form.end")}</span>
             <input
               type="date"
               value={form.endDate}
@@ -228,7 +258,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
             />
           </label>
           <label className="field">
-            <span>Cảnh báo (%)</span>
+            <span>{t("budgets.form.threshold")}</span>
             <input
               type="number"
               min="1"
@@ -251,32 +281,51 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
                 setForm(emptyForm());
               }}
             >
-              Hủy sửa
+              {t("budgets.action.cancel_edit")}
             </button>
           )}
           <button className="primary" type="submit">
-            {editingId ? "Lưu thay đổi" : "Tạo kế hoạch"}
+            {editingId ? t("budgets.action.save_changes") : t("budgets.action.create")}
           </button>
         </div>
       </form>
 
       <div className="list">
         {!plansWithStats.length ? (
-          <p className="empty">Chưa có kế hoạch ngân sách. Tạo mới để theo dõi tiến độ.</p>
+          <p className="empty">{t("budgets.empty")}</p>
         ) : (
-          plansWithStats.map((plan) => (
-            <article key={plan.id} className="item-row budget-card">
-              <div className="panel-header">
-                <div>
-                  <h4>{plan.name}</h4>
-                  <p className="budget-meta">
-                    {currency(plan.spent)} / {currency(plan.budget)} - {plan.cycle}
-                  </p>
+          plansWithStats.map((plan) => {
+            const planCategories = plan.categoryIds
+              .map((id) => categoryMap[id])
+              .filter(Boolean);
+            return (
+              <article key={plan.id} className="item-row budget-card">
+                <div className="panel-header">
+                  <div>
+                    <h4>{plan.name}</h4>
+                    <p className="budget-meta">
+                      {currency(plan.spent)} / {currency(plan.budget)} -{" "}
+                      {t(`budgets.cycle.${plan.cycle === "one-time" ? "one_time" : plan.cycle}`)}
+                    </p>
+                    <div className="budget-tags">
+                      {planCategories.length ? (
+                        planCategories.map((label) => (
+                          <span key={label} className="budget-tag">
+                            <span className="dot" style={{ background: colorFor(label, userEmail) }} />
+                            {label}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="budget-tag muted">
+                          {t("budgets.tag.all", null, "Tất cả danh mục")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`badge ${plan.status === "paused" ? "muted" : ""}`}>
+                    {t(`budgets.status.${plan.status}`)}
+                  </span>
                 </div>
-                <span className={`badge ${plan.status === "paused" ? "muted" : ""}`}>
-                  {plan.status}
-                </span>
-              </div>
 
               <div className="progress">
                 <span
@@ -287,18 +336,18 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
 
               <div className="budget-insights">
                 <p>
-                  Dự báo cuối kỳ: <strong>{currency(plan.forecast)}</strong>
+                  {t("budgets.forecast")}: <strong>{currency(plan.forecast)}</strong>
                 </p>
                 <p>
                   {plan.willOverrun
-                    ? "AI cảnh báo: có khả năng vượt ngân sách nếu giữ tốc độ chi hiện tại."
-                    : "AI dự báo: đang trong ngưỡng kiểm soát."}
+                    ? t("budgets.ai_overrun")
+                    : t("budgets.ai_ok")}
                 </p>
               </div>
 
               <div className="row-actions">
                 <button className="ghost" type="button" onClick={() => startEdit(plan)}>
-                  Chỉnh sửa
+                  {t("budgets.action.edit")}
                 </button>
                 <button
                   className="ghost"
@@ -307,21 +356,22 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
                     updateStatus(plan.id, plan.status === "paused" ? "active" : "paused")
                   }
                 >
-                  {plan.status === "paused" ? "Tiếp tục" : "Tạm dừng"}
+                  {plan.status === "paused" ? t("budgets.action.resume") : t("budgets.action.pause")}
                 </button>
                 <button
                   className="ghost"
                   type="button"
                   onClick={() => updateStatus(plan.id, "completed")}
                 >
-                  Hoàn thành
+                  {t("budgets.action.complete")}
                 </button>
                 <button className="ghost danger" type="button" onClick={() => removePlan(plan.id)}>
-                  Xóa
+                  {t("budgets.action.delete")}
                 </button>
               </div>
-            </article>
-          ))
+              </article>
+            );
+          })
         )}
       </div>
     </section>

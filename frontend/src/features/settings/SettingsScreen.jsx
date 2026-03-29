@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { applyUiPrefs, getUiPrefs, saveUiPrefs, UI_TEMPLATES } from "../../utils/uiPrefs.js";
+import { useEffect, useRef, useState } from "react";
+import { getUserPrefs, saveUserPrefs } from "../../utils/userPrefs.js";
+import { applyUiPrefs, getUiPrefs, saveUiPrefs, UI_COLORS, UI_LAYOUTS } from "../../utils/uiPrefs.js";
+import { t } from "../../utils/i18n.js";
 
 const settingsKey = (email) => `finance_local_settings:${email || "guest"}`;
 
@@ -26,6 +28,7 @@ export default function SettingsScreen({ user }) {
   const email = user?.email || "guest";
   const emailRef = useRef(email);
   const [settings, setSettings] = useState(defaultSettings);
+  const [userPrefs, setUserPrefs] = useState(() => getUserPrefs(email));
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -37,6 +40,7 @@ export default function SettingsScreen({ user }) {
   useEffect(() => {
     emailRef.current = email;
     setSettings(safeParse(localStorage.getItem(settingsKey(email)), defaultSettings));
+    setUserPrefs(getUserPrefs(email));
   }, [email]);
 
   useEffect(() => {
@@ -52,26 +56,40 @@ export default function SettingsScreen({ user }) {
     applyUiPrefs(uiPrefs);
   }, [uiPrefs]);
 
-  const activityLogs = useMemo(() => {
-    const now = new Date().toLocaleString();
-    return [
-      `Phiên đăng nhập gần nhất: ${now}`,
-      "Thiết bị hiện tại: Web browser",
-      "Bản ghi audit nâng cao: mock mode"
-    ];
-  }, []);
+  const updateUserPrefs = (patch) => {
+    const next = { ...userPrefs, ...patch };
+    setUserPrefs(next);
+    saveUserPrefs(emailRef.current, next);
+  };
+
+  const now = new Date().toLocaleString();
+  const activityLogs = [
+    t("settings.logs.last_login", { time: now }),
+    t("settings.logs.device"),
+    t("settings.logs.audit")
+  ];
+  const displayName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
+    user?.username ||
+    user?.email ||
+    t("user.default");
+  const profileInitial = (displayName || "U").trim().charAt(0).toUpperCase();
+  const normalizedBrandColor = (uiPrefs.brandColor || "").toLowerCase();
+  const isPresetBrand = UI_COLORS.some(
+    (item) => item.value.toLowerCase() === normalizedBrandColor
+  );
 
   const handleChangePassword = (event) => {
     event.preventDefault();
     if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-      setNotice("Mật khẩu mới cần tối thiểu 6 ký tự.");
+      setNotice(t("settings.notice.password_short"));
       return;
     }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setNotice("Mật khẩu xác nhận không khớp.");
+      setNotice(t("settings.notice.password_mismatch"));
       return;
     }
-    setNotice("Đổi mật khẩu thành công (demo UI). Chưa gọi API backend.");
+    setNotice(t("settings.notice.password_changed"));
     setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
   };
 
@@ -81,7 +99,6 @@ export default function SettingsScreen({ user }) {
       email,
       settings,
       budgets: safeParse(localStorage.getItem(`finance_local_budgets:${email}`), []),
-      tags: safeParse(localStorage.getItem(`finance_local_tags:${email}`), []),
       accounts: safeParse(localStorage.getItem(`finance_local_accounts:${email}`), [])
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -106,15 +123,12 @@ export default function SettingsScreen({ user }) {
         if (parsed.budgets) {
           localStorage.setItem(`finance_local_budgets:${email}`, JSON.stringify(parsed.budgets));
         }
-        if (parsed.tags) {
-          localStorage.setItem(`finance_local_tags:${email}`, JSON.stringify(parsed.tags));
-        }
         if (parsed.accounts) {
           localStorage.setItem(`finance_local_accounts:${email}`, JSON.stringify(parsed.accounts));
         }
-        setNotice("Import dữ liệu thành công.");
+        setNotice(t("settings.notice.import_ok"));
       } catch {
-        setNotice("File import không hợp lệ.");
+        setNotice(t("settings.notice.import_invalid"));
       }
     };
     reader.readAsText(file);
@@ -123,34 +137,47 @@ export default function SettingsScreen({ user }) {
   return (
     <section className="panel settings-panel">
       <div className="panel-header">
-        <h3>Cài đặt & Hồ sơ</h3>
+        <h3>{t("settings.title")}</h3>
       </div>
 
-      <section className="settings-section">
-        <h4>Hồ sơ</h4>
-        <div className="report-grid">
-          <div className="report-card">
-            <p>Email</p>
-            <strong>{user?.email || "--"}</strong>
+      <section className="settings-section profile-section">
+        <h4>{t("settings.section.profile")}</h4>
+        <div className="profile-card">
+          <div className="profile-header">
+            <div className="profile-avatar">{profileInitial}</div>
+            <div className="profile-main">
+              <h5>{displayName}</h5>
+              <p className="muted">{user?.email || "--"}</p>
+              <div className="profile-badges">
+                {user?.username && <span className="badge">{user.username}</span>}
+                <span className="badge muted">{t("settings.profile.status", null, "Đang hoạt động")}</span>
+              </div>
+            </div>
           </div>
-          <div className="report-card">
-            <p>Họ tên</p>
-            <strong>{[user?.first_name, user?.last_name].filter(Boolean).join(" ") || "--"}</strong>
-          </div>
-          <div className="report-card">
-            <p>Số điện thoại</p>
-            <strong>{user?.phone || "--"}</strong>
+          <div className="profile-grid">
+            <div className="profile-field">
+              <span>{t("settings.label.email")}</span>
+              <strong>{user?.email || "--"}</strong>
+            </div>
+            <div className="profile-field">
+              <span>{t("settings.label.name")}</span>
+              <strong>{[user?.first_name, user?.last_name].filter(Boolean).join(" ") || "--"}</strong>
+            </div>
+            <div className="profile-field">
+              <span>{t("settings.label.phone")}</span>
+              <strong>{user?.phone || "--"}</strong>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="settings-section">
-        <h4>Bảo mật</h4>
+        <h4>{t("settings.section.security")}</h4>
         <form className="form" onSubmit={handleChangePassword}>
           <div className="row">
             <input
               type="password"
-              placeholder="Mật khẩu hiện tại"
+              placeholder={t("settings.label.current_password")}
               value={passwordForm.currentPassword}
               onChange={(event) =>
                 setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))
@@ -158,7 +185,7 @@ export default function SettingsScreen({ user }) {
             />
             <input
               type="password"
-              placeholder="Mật khẩu mới"
+              placeholder={t("settings.label.new_password")}
               value={passwordForm.newPassword}
               onChange={(event) =>
                 setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))
@@ -166,7 +193,7 @@ export default function SettingsScreen({ user }) {
             />
             <input
               type="password"
-              placeholder="Xác nhận mật khẩu"
+              placeholder={t("settings.label.confirm_password")}
               value={passwordForm.confirmPassword}
               onChange={(event) =>
                 setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))
@@ -175,14 +202,14 @@ export default function SettingsScreen({ user }) {
           </div>
           <div className="row-actions">
             <button className="primary" type="submit">
-              Đổi mật khẩu
+              {t("settings.action.change_password")}
             </button>
           </div>
         </form>
       </section>
 
       <section className="settings-section">
-        <h4>Đồng bộ đa nền tảng</h4>
+        <h4>{t("settings.section.sync")}</h4>
         <div className="switch-grid">
           <label>
             <input
@@ -192,7 +219,7 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, cloudSync: event.target.checked }))
               }
             />
-            Bật đồng bộ cloud
+            {t("settings.sync.cloud")}
           </label>
           <label>
             <input
@@ -202,38 +229,50 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, thresholdAlerts: event.target.checked }))
               }
             />
-            Cảnh báo vượt ngưỡng chi tiêu
+            {t("settings.sync.threshold")}
           </label>
         </div>
       </section>
 
       <section className="settings-section">
-        <h4>Tùy chỉnh giao diện / báo cáo</h4>
+        <h4>{t("settings.section.ui")}</h4>
         <div className="row">
           <label className="field">
-            <span>Theme</span>
+            <span>{t("settings.ui.language")}</span>
+            <select
+              value={userPrefs.language}
+              onChange={(event) => updateUserPrefs({ language: event.target.value })}
+            >
+              <option value="vi">{t("settings.ui.language_vi", null, "Tiếng Việt")}</option>
+              <option value="en">{t("settings.ui.language_en", null, "English")}</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{t("settings.ui.theme")}</span>
             <select
               value={uiPrefs.theme}
               onChange={(event) =>
                 setUiPrefs((current) => ({ ...current, theme: event.target.value }))
               }
             >
-              <option value="light">Sáng</option>
-              <option value="dark">Tối</option>
-              <option value="system">Theo hệ thống</option>
+              <option value="light">{t("settings.ui.theme_light")}</option>
+              <option value="dark">{t("settings.ui.theme_dark")}</option>
+              <option value="system">{t("settings.ui.theme_system")}</option>
             </select>
           </label>
+        </div>
+        <div className="row">
           <label className="field">
-            <span>Layout báo cáo</span>
+            <span>{t("settings.ui.layout")}</span>
             <select
               value={uiPrefs.reportLayout}
               onChange={(event) =>
                 setUiPrefs((current) => ({ ...current, reportLayout: event.target.value }))
               }
             >
-              <option value="cards">Cards</option>
-              <option value="charts">Charts</option>
-              <option value="table">Table</option>
+              <option value="cards">{t("settings.ui.layout_cards")}</option>
+              <option value="charts">{t("settings.ui.layout_charts")}</option>
+              <option value="table">{t("settings.ui.layout_table")}</option>
             </select>
           </label>
         </div>
@@ -244,67 +283,92 @@ export default function SettingsScreen({ user }) {
             onChange={(event) =>
               setUiPrefs((current) => ({ ...current, compactMode: event.target.checked }))
             }
-          />
-          Compact mode
+            />
+          {t("settings.ui.compact")}
         </label>
 
-        <p className="muted" style={{ margin: "10px 0 0" }}>
-          Templates dễ thương
+        <p className="muted" style={{ margin: "12px 0 0" }}>
+          {t("settings.ui.layout_style")}
         </p>
-        <div className="template-grid" style={{ marginTop: 12 }}>
-          {UI_TEMPLATES.map((template) => {
-            const swatches = [
-              template.colors.primary,
-              template.colors.accent,
-              template.colors.grad1,
-              template.colors.grad2
-            ];
+        <div className="layout-grid" style={{ marginTop: 12 }}>
+          {UI_LAYOUTS.map((layout) => (
+            <button
+              key={layout.id}
+              type="button"
+              className={`layout-card ${uiPrefs.templateId === layout.id ? "active" : ""}`}
+              onClick={() =>
+                setUiPrefs((current) => ({
+                  ...current,
+                  templateId: layout.id
+                }))
+              }
+            >
+              <div className={`layout-preview layout-${layout.id}`}>
+                <span />
+                <span />
+                <span />
+              </div>
+              <strong>{t(layout.labelKey, null, layout.name)}</strong>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                {t(layout.descriptionKey, null, layout.description)}
+              </p>
+            </button>
+          ))}
+        </div>
+
+        <p className="muted" style={{ margin: "16px 0 0" }}>
+          {t("settings.ui.color")}
+        </p>
+        <div className="color-grid" style={{ marginTop: 12 }}>
+          {UI_COLORS.map((color) => {
+            const active = normalizedBrandColor === color.value.toLowerCase();
             return (
               <button
-                key={template.id}
+                key={color.id}
                 type="button"
-                className={`template-card ${
-                  uiPrefs.templateId === template.id ? "active" : ""
-                }`}
+                className={`color-chip ${active ? "active" : ""}`}
                 onClick={() =>
-                  setUiPrefs((current) => ({
-                    ...current,
-                    templateId: template.id,
-                    theme: template.theme
-                  }))
+                  setUiPrefs((current) => ({ ...current, brandColor: color.value }))
                 }
               >
-                <strong>{template.name}</strong>
-                <p className="muted" style={{ margin: "4px 0 0" }}>
-                  {template.description}
-                </p>
-                <div className="template-swatches">
-                  {swatches.map((color) => (
-                    <span
-                      key={color}
-                      className="template-swatch"
-                      style={{ background: color }}
-                    />
-                  ))}
-                </div>
+                <span className="color-swatch" style={{ background: color.value }} />
+                <span>{t(color.labelKey, null, color.label)}</span>
               </button>
             );
           })}
+          <label className={`color-chip custom ${!isPresetBrand ? "active" : ""}`}>
+            <span className="color-swatch" style={{ background: uiPrefs.brandColor }} />
+            <span>{t("settings.color.custom", null, "Custom")}</span>
+            <input
+              type="color"
+              value={uiPrefs.brandColor}
+              onChange={(event) =>
+                setUiPrefs((current) => ({ ...current, brandColor: event.target.value }))
+              }
+              aria-label={t("settings.color.custom", null, "Custom")}
+            />
+          </label>
         </div>
       </section>
 
       <section className="settings-section">
-        <h4>Thông báo & Đồng bộ</h4>
+        <h4>{t("settings.section.notifications")}</h4>
         <div className="switch-grid">
           <label>
             <input
               type="checkbox"
               checked={settings.pushNotifications}
-              onChange={(event) =>
-                setSettings((current) => ({ ...current, pushNotifications: event.target.checked }))
-              }
+              onChange={(event) => {
+                const next = event.target.checked;
+                if (next && typeof window !== "undefined" && "Notification" in window) {
+                  if (Notification.permission === "default") {
+                    Notification.requestPermission().catch(() => {});
+                  }
+                }
+                setSettings((current) => ({ ...current, pushNotifications: next }));
+              }}
             />
-            Push notifications
+            {t("settings.notifications.push")}
           </label>
           <label>
             <input
@@ -314,7 +378,7 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, emailNotifications: event.target.checked }))
               }
             />
-            Email notifications
+            {t("settings.notifications.email")}
           </label>
           <label>
             <input
@@ -324,13 +388,13 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, thresholdAlerts: event.target.checked }))
               }
             />
-            Threshold alerts
+            {t("settings.notifications.threshold")}
           </label>
         </div>
       </section>
 
       <section className="settings-section">
-        <h4>AI & Privacy</h4>
+        <h4>{t("settings.section.ai")}</h4>
         <div className="switch-grid">
           <label>
             <input
@@ -340,7 +404,7 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, aiOptIn: event.target.checked }))
               }
             />
-            Opt-in model usage
+            {t("settings.ai.opt_in")}
           </label>
           <label>
             <input
@@ -350,10 +414,10 @@ export default function SettingsScreen({ user }) {
                 setSettings((current) => ({ ...current, keepPromptLogs: event.target.checked }))
               }
             />
-            Lưu log truy vấn AI
+            {t("settings.ai.keep_logs")}
           </label>
           <label>
-            Estimated monthly AI cost (USD)
+            {t("settings.ai.cost")}
             <input
               type="number"
               min="0"
@@ -371,20 +435,20 @@ export default function SettingsScreen({ user }) {
       </section>
 
       <section className="settings-section">
-        <h4>Export / Import</h4>
+        <h4>{t("settings.section.export")}</h4>
         <div className="row-actions">
           <button className="ghost" type="button" onClick={handleExport}>
-            Export JSON
+            {t("settings.export.export_json")}
           </button>
           <label className="ghost import-button">
-            Import JSON
+            {t("settings.export.import_json")}
             <input type="file" accept="application/json" onChange={handleImport} />
           </label>
         </div>
       </section>
 
       <section className="settings-section">
-        <h4>Activity logs</h4>
+        <h4>{t("settings.section.logs")}</h4>
         <div className="list">
           {activityLogs.map((line) => (
             <p key={line} className="empty">

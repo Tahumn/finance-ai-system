@@ -28,6 +28,43 @@ def list_categories(
     return service.list_categories(db, current_user)
 
 
+@router.post("/tags", response_model=schemas.TagRead, status_code=status.HTTP_201_CREATED)
+def create_tag(
+    payload: schemas.TagCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_tag(db, current_user, payload)
+
+
+@router.get("/tags", response_model=list[schemas.TagRead])
+def list_tags(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_tags(db, current_user)
+
+
+@router.put("/tags/{tag_id}", response_model=schemas.TagRead)
+def update_tag(
+    tag_id: int,
+    payload: schemas.TagUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.update_tag(db, current_user, tag_id, payload)
+
+
+@router.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service.delete_tag(db, current_user, tag_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/transactions", response_model=schemas.TransactionRead, status_code=status.HTTP_201_CREATED)
 def create_transaction(
     payload: schemas.TransactionCreate,

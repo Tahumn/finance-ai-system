@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { t } from "../../utils/i18n.js";
 
-const PASSWORD_RULES = [
-  { label: "Tối thiểu 8 ký tự", test: (value) => value.length >= 8 },
-  { label: "Có chữ cái", test: (value) => /[A-Za-z]/.test(value) },
-  { label: "Có số hoặc ký tự đặc biệt", test: (value) => /[\d\W]/.test(value) }
+const buildPasswordRules = () => [
+  { label: t("auth.password_rules_1"), test: (value) => value.length >= 8 },
+  { label: t("auth.password_rules_2"), test: (value) => /[A-Za-z]/.test(value) },
+  { label: t("auth.password_rules_3"), test: (value) => /[\d\W]/.test(value) }
 ];
 
 const strengthLabel = (score) => {
-  if (score <= 1) return "Yếu";
-  if (score === 2) return "Trung bình";
-  return "Mạnh";
+  if (score <= 1) return t("auth.password_strength_weak");
+  if (score === 2) return t("auth.password_strength_mid");
+  return t("auth.password_strength_strong");
 };
 
 function EyeIcon({ open }) {
@@ -51,7 +52,7 @@ function PasswordField({ value, onChange, placeholder, show, onToggle, name }) {
         className="icon-btn"
         type="button"
         onClick={onToggle}
-        aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+        aria-label={show ? t("auth.hide_password") : t("auth.show_password")}
       >
         <EyeIcon open={show} />
       </button>
@@ -106,9 +107,11 @@ export default function AuthScreen({
   const otpCode = otpDigits.join("");
   const otpValid = otpCode.length === 6 && /^\d{6}$/.test(otpCode);
 
-  const passwordScore = useMemo(() => {
-    return PASSWORD_RULES.reduce((acc, rule) => acc + (rule.test(newPassword) ? 1 : 0), 0);
-  }, [newPassword]);
+  const passwordRules = buildPasswordRules();
+  const passwordScore = passwordRules.reduce(
+    (acc, rule) => acc + (rule.test(newPassword) ? 1 : 0),
+    0
+  );
 
   const passwordOk = passwordScore >= 3;
   const confirmOk = newPassword && newPassword === confirmPassword;
@@ -174,22 +177,22 @@ export default function AuthScreen({
   return (
     <main className="auth-shell">
       <section className="auth-card">
-        <h1>Finance AI</h1>
-        <p className="subhead">Quản lý tài chính cá nhân thông minh</p>
+        <h1>{t("auth.title")}</h1>
+        <p className="subhead">{t("auth.subtitle")}</p>
         <div className="auth-tabs">
           <button
             className={mode === "login" ? "active" : ""}
             onClick={() => setMode("login")}
             type="button"
           >
-            Đăng nhập
+            {t("auth.login")}
           </button>
           <button
             className={mode === "register" ? "active" : ""}
             onClick={() => setMode("register")}
             type="button"
           >
-            Đăng ký
+            {t("auth.register")}
           </button>
         </div>
 
@@ -198,24 +201,24 @@ export default function AuthScreen({
             <input
               name="full_name"
               type="text"
-              placeholder="Họ và tên"
+              placeholder={t("auth.full_name")}
               maxLength={100}
               required
             />
             <input
               name="username"
               type="text"
-              placeholder="Username"
+              placeholder={t("auth.username")}
               maxLength={100}
               required
             />
-            <input name="email" type="email" placeholder="Email" required />
-            <input name="phone" type="tel" placeholder="Số điện thoại (optional)" />
+            <input name="email" type="email" placeholder={t("auth.email")} required />
+            <input name="phone" type="tel" placeholder={t("auth.phone")} />
             <button className="primary" type="submit" disabled={loading}>
-              Đăng ký (Gửi OTP)
+              {t("auth.register_otp")}
             </button>
             <button className="ghost" type="button" onClick={() => setMode("login")}>
-              Đăng nhập nếu đã có tài khoản
+              {t("auth.login_exists")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -225,7 +228,7 @@ export default function AuthScreen({
         {step === "otp" && (
           <div className="form">
             <p className="otp-hint">
-              OTP đã gửi đến <strong>{pendingEmail}</strong>
+              {t("auth.otp_sent")} <strong>{pendingEmail}</strong>
             </p>
             <div className="otp-inputs">
               {otpDigits.map((digit, index) => (
@@ -252,7 +255,7 @@ export default function AuthScreen({
                 }
               }}
             >
-              Xác thực OTP
+              {t("auth.verify_otp")}
             </button>
             <button
               className="ghost"
@@ -260,10 +263,10 @@ export default function AuthScreen({
               disabled={loading}
               onClick={() => onResendOtp(pendingEmail)}
             >
-              Gửi lại OTP
+              {t("auth.resend")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("register")}>
-              Đổi email
+              {t("auth.change_email", null, "Đổi email")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -272,10 +275,12 @@ export default function AuthScreen({
 
         {step === "set_password" && (
           <div className="form">
-            <p className="otp-hint">Email đã xác thực. Tạo mật khẩu để kích hoạt tài khoản.</p>
+            <p className="otp-hint">
+              {t("auth.verified_hint", null, "Email đã xác thực. Tạo mật khẩu để kích hoạt tài khoản.")}
+            </p>
             <PasswordField
               name="new_password"
-              placeholder="Mật khẩu mới"
+              placeholder={t("auth.new_password")}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               show={showNewPassword}
@@ -287,17 +292,21 @@ export default function AuthScreen({
                 style={{ width: `${(passwordScore / 3) * 100}%` }}
               />
             </div>
-            <p className="meter-label">Độ mạnh: {strengthLabel(passwordScore)}</p>
+            <p className="meter-label">
+              {t("auth.password_strength")}: {strengthLabel(passwordScore)}
+            </p>
             <PasswordField
               name="confirm_password"
-              placeholder="Xác nhận mật khẩu"
+              placeholder={t("auth.confirm_password")}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               show={showConfirmPassword}
               onToggle={() => setShowConfirmPassword((prev) => !prev)}
             />
             {!confirmOk && confirmPassword && (
-              <p className="form-error">Mật khẩu xác nhận không khớp.</p>
+              <p className="form-error">
+                {t("auth.confirm_mismatch", null, "Mật khẩu xác nhận không khớp.")}
+              </p>
             )}
             <button
               className="primary"
@@ -305,13 +314,24 @@ export default function AuthScreen({
               disabled={loading || !passwordOk || !confirmOk}
               onClick={async () => {
                 const ok = await onSetPassword(registrationToken, newPassword);
-                if (ok) setMode("login");
+                if (ok) {
+                  const result = await onSubmit({
+                    identifier: pendingEmail,
+                    password: newPassword,
+                    remember,
+                    mode: "login"
+                  });
+                  if (result?.next !== "authed") {
+                    setMode("login");
+                    setStep("login");
+                  }
+                }
               }}
             >
-              Lưu mật khẩu
+              {t("auth.save_password")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("otp")}>
-              Quay lại OTP
+              {t("auth.back_otp", null, "Quay lại OTP")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -320,10 +340,10 @@ export default function AuthScreen({
 
         {step === "login" && (
           <form className="form" onSubmit={handleLoginSubmit}>
-            <input name="identifier" type="text" placeholder="Email hoặc username" required />
+            <input name="identifier" type="text" placeholder={t("auth.identifier")} required />
             <PasswordField
               name="password"
-              placeholder="Mật khẩu"
+              placeholder={t("auth.password")}
               value={loginPassword}
               onChange={(event) => setLoginPassword(event.target.value)}
               show={showLoginPassword}
@@ -335,16 +355,16 @@ export default function AuthScreen({
                 checked={remember}
                 onChange={(event) => setRemember(event.target.checked)}
               />
-              Ghi nhớ tôi
+              {t("auth.remember")}
             </label>
             <button className="primary" type="submit" disabled={loading}>
-              Đăng nhập
+              {t("auth.login_label")}
             </button>
             <button className="ghost" type="button" onClick={() => setMode("register")}>
-              Đăng ký
+              {t("auth.register")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("reset_request")}>
-              Quên mật khẩu
+              {t("auth.forgot")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -353,12 +373,12 @@ export default function AuthScreen({
 
         {step === "reset_request" && (
           <form className="form" onSubmit={handleResetRequest}>
-            <input name="email" type="email" placeholder="Email khôi phục" required />
+            <input name="email" type="email" placeholder={t("auth.reset_email")} required />
             <button className="primary" type="submit" disabled={loading}>
-              Gửi OTP
+              {t("auth.reset_send")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("login")}>
-              Quay lại đăng nhập
+              {t("common.back")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -368,7 +388,7 @@ export default function AuthScreen({
         {step === "reset_otp" && (
           <div className="form">
             <p className="otp-hint">
-              OTP đã gửi đến <strong>{resetEmail}</strong>
+              {t("auth.otp_sent")} <strong>{resetEmail}</strong>
             </p>
             <div className="otp-inputs">
               {otpDigits.map((digit, index) => (
@@ -395,7 +415,7 @@ export default function AuthScreen({
                 }
               }}
             >
-              Xác thực OTP
+              {t("auth.reset_verify")}
             </button>
             <button
               className="ghost"
@@ -403,10 +423,10 @@ export default function AuthScreen({
               disabled={loading}
               onClick={() => onResetStart(resetEmail)}
             >
-              Gửi lại OTP
+              {t("auth.resend")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("reset_request")}>
-              Đổi email
+              {t("auth.change_email", null, "Đổi email")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
@@ -415,10 +435,12 @@ export default function AuthScreen({
 
         {step === "reset_set_password" && (
           <div className="form">
-            <p className="otp-hint">Tạo mật khẩu mới để đăng nhập.</p>
+            <p className="otp-hint">
+              {t("auth.reset_hint", null, "Tạo mật khẩu mới để đăng nhập.")}
+            </p>
             <PasswordField
               name="reset_password"
-              placeholder="Mật khẩu mới"
+              placeholder={t("auth.new_password")}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               show={showNewPassword}
@@ -430,17 +452,21 @@ export default function AuthScreen({
                 style={{ width: `${(passwordScore / 3) * 100}%` }}
               />
             </div>
-            <p className="meter-label">Độ mạnh: {strengthLabel(passwordScore)}</p>
+            <p className="meter-label">
+              {t("auth.password_strength")}: {strengthLabel(passwordScore)}
+            </p>
             <PasswordField
               name="reset_confirm"
-              placeholder="Xác nhận mật khẩu"
+              placeholder={t("auth.confirm_password")}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               show={showConfirmPassword}
               onToggle={() => setShowConfirmPassword((prev) => !prev)}
             />
             {!confirmOk && confirmPassword && (
-              <p className="form-error">Mật khẩu xác nhận không khớp.</p>
+              <p className="form-error">
+                {t("auth.confirm_mismatch", null, "Mật khẩu xác nhận không khớp.")}
+              </p>
             )}
             <button
               className="primary"
@@ -454,10 +480,10 @@ export default function AuthScreen({
                 }
               }}
             >
-              Lưu mật khẩu
+              {t("auth.save_password")}
             </button>
             <button className="ghost" type="button" onClick={() => setStep("reset_otp")}>
-              Quay lại OTP
+              {t("auth.back_otp", null, "Quay lại OTP")}
             </button>
             {error && <p className="form-error">{error}</p>}
             {notice && !error && <p className="form-note">{notice}</p>}
