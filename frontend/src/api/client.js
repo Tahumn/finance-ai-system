@@ -10,8 +10,11 @@ const API_BASE = inferApiBase();
 
 const TOKEN_KEY = "finance_token";
 
-export const getToken = () =>
-  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+export const getToken = () => {
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (!token || token === "undefined" || token === "null") return null;
+  return token;
+};
 
 export const setToken = (token, remember = true) => {
   clearToken();
@@ -49,6 +52,44 @@ export async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
+    let message = payload?.detail || payload?.message || "Request failed";
+    if (Array.isArray(message)) {
+      message = message.map((item) => item?.msg || "Invalid input").join(", ");
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+export async function requestForm(path, formData) {
+  const token = getToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: formData
+  });
+
+  if (response.status === 204) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
     let message = payload?.detail || payload?.message || "Request failed";
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");

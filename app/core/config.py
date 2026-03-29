@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     smtp_from: str | None = None
     otp_expire_minutes: int = 10
     dev_return_otp: bool = False
+    dify_api_base: str | None = None
+    dify_api_key: str | None = None
+    dify_timeout_seconds: int = 30
+    dify_force_json: bool = False
+    ocr_provider: str = "tesseract"
+    gemini_api_base: str | None = None
+    gemini_api_key: str | None = None
+    gemini_model: str | None = None
+    gemini_model_name: str | None = None
+    gemini_timeout_seconds: int = 30
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

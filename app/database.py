@@ -50,6 +50,13 @@ def ensure_schema() -> None:
             conn.execute(text(stmt))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
 
+    if "transactions" in tables:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS account_id INTEGER"))
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions (account_id)")
+            )
+
 
 def get_db():
     db = SessionLocal()

@@ -12,6 +12,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-long-random-string}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      DIFY_API_BASE: ${DIFY_API_BASE:-http://dify-api:5001/v1}
+      DIFY_API_KEY: ${DIFY_API_KEY:-}
+      DIFY_FORCE_JSON: ${DIFY_FORCE_JSON:-true}
       DEV_RETURN_OTP: ${DEV_RETURN_OTP:-true}
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-465}
@@ -56,6 +59,104 @@ services:
       api:
         condition: service_started
 
+  dify-api:
+    image: langgenius/dify-api:latest
+    container_name: dify-api
+    environment:
+      MODE: api
+      LOG_LEVEL: INFO
+      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+      DB_HOST: dify-db
+      DB_PORT: 5432
+      DB_USERNAME: dify
+      DB_PASSWORD: dify
+      DB_DATABASE: dify
+      REDIS_HOST: dify-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      CELERY_BROKER_URL: redis://dify-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+      SERVICE_URL: http://localhost:5001
+      CONSOLE_URL: http://localhost:5002
+    volumes:
+      - dify_api_storage:/app/api/storage
+    ports:
+      - "5001:5001"
+    depends_on:
+      dify-db:
+        condition: service_started
+      dify-redis:
+        condition: service_started
+      dify-sandbox:
+        condition: service_started
+
+  dify-worker:
+    image: langgenius/dify-api:latest
+    container_name: dify-worker
+    environment:
+      MODE: worker
+      LOG_LEVEL: INFO
+      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+      DB_HOST: dify-db
+      DB_PORT: 5432
+      DB_USERNAME: dify
+      DB_PASSWORD: dify
+      DB_DATABASE: dify
+      REDIS_HOST: dify-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      CELERY_BROKER_URL: redis://dify-redis:6379/0
+      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/api/storage
+      SERVICE_URL: http://dify-api:5001
+      CONSOLE_URL: http://dify-web:3000
+    volumes:
+      - dify_api_storage:/app/api/storage
+    depends_on:
+      dify-api:
+        condition: service_started
+      dify-db:
+        condition: service_started
+      dify-redis:
+        condition: service_started
+
+  dify-web:
+    image: langgenius/dify-web:latest
+    container_name: dify-web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:5001
+    ports:
+      - "5002:3000"
+    depends_on:
+      dify-api:
+        condition: service_started
+
+  dify-db:
+    image: postgres:15-alpine
+    container_name: dify-postgres
+    environment:
+      POSTGRES_USER: dify
+      POSTGRES_PASSWORD: dify
+      POSTGRES_DB: dify
+    volumes:
+      - dify_db_data:/var/lib/postgresql/data
+
+  dify-redis:
+    image: redis:7-alpine
+    container_name: dify-redis
+    volumes:
+      - dify_redis_data:/data
+
+  dify-sandbox:
+    image: langgenius/dify-sandbox:latest
+    container_name: dify-sandbox
+
 volumes:
   postgres_data:
   n8n_data:
+  dify_db_data:
+  dify_redis_data:
+  dify_api_storage:

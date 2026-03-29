@@ -424,18 +424,21 @@ export default function App() {
         start_date: filters.start,
         end_date: filters.end,
         category_id: filters.categoryId || undefined,
-        transaction_type: filters.type || undefined
+        transaction_type: filters.type || undefined,
+        limit: 500,
+        offset: 0
       };
-      const [cats, tagsList, txs, sum, catsBreakdown] = await Promise.all([
+      const [cats, tagsList, txData, sum, catsBreakdown] = await Promise.all([
         listCategories(),
         listTags(),
         listTransactions(params),
         getSummary({ start_date: filters.start, end_date: filters.end }),
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end })
       ]);
+      const txItems = Array.isArray(txData) ? txData : txData?.items || [];
       setCategories(cats);
       setTags(tagsList);
-      setTransactions(txs);
+      setTransactions(txItems);
       setSummary(sum);
       setBreakdown(catsBreakdown);
       const email = authState.user?.email || "guest";
@@ -445,7 +448,7 @@ export default function App() {
           email,
           summary: sum,
           breakdown: catsBreakdown,
-          transactions: txs
+          transactions: txItems
         })
       );
     } catch (err) {

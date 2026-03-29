@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_agent import models as ai_models
+from app.ai_agent.router import router as ai_router
 from app.auth import models as auth_models
 from app.auth.router import router as auth_router
 from app.database import Base, engine, ensure_schema
@@ -37,11 +39,20 @@ def on_startup() -> None:
         finance_models.Category,
         finance_models.Transaction,
         finance_models.Tag,
+        finance_models.Account,
+        finance_models.Transfer,
+        finance_models.Debt,
+        finance_models.Budget,
+        finance_models.Goal,
+        finance_models.Subscription,
+        finance_models.Reminder,
+        ai_models.ChatMessage,
     )
 
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
 
 app.mount("/ws", socket_app)
