@@ -2,6 +2,8 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./styles.css";
+import "./insight.css";
+
 
 const appMode = import.meta.env.VITE_APP_MODE || "auto";
 if (typeof document !== "undefined") {

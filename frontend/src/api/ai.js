@@ -36,3 +36,7 @@ export const extractOcr = (file) => {
 };
 
 export const getAnomalies = () => request("/ai/anomalies");
+
+export const getForecast = () => request("/ai/forecast");
+
+export const getSavingsTips = () => request("/ai/savings-tips");

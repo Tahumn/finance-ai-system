@@ -95,3 +95,19 @@ def get_anomalies(
     current_user: User = Depends(get_current_active_user),
 ):
     return {"alerts": service.get_spending_anomalies(db, current_user)}
+
+
+@router.get("/forecast", response_model=schemas.ForecastResponse)
+def get_forecast(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return service.get_spending_forecast(db, current_user)
+
+
+@router.get("/savings-tips", response_model=schemas.SavingTipsResponse)
+def get_savings_tips(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return service.get_savings_suggestions(db, current_user)

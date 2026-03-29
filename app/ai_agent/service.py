@@ -46,6 +46,28 @@ except Exception:
     cv2 = None
     np = None
 
+
+def _extract_json(text: str) -> dict:
+    """Extract JSON object from Gemini response text (handles markdown fences)."""
+    text = text.strip()
+    # Try to strip markdown code fence
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Try to find first {...} block
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+    return {}
+
+
+
 AMOUNT_REGEX = re.compile(
     r"(?P<num>\d+(?:[.,]\d+)*)\s*(?P<unit>k|nghin|ngan|tr|trieu|m|million|ty|ti)?\s*(?:đ|d|vnd|\$|eur)?(?=\s|\W|$)", 
     re.IGNORECASE
@@ -1220,20 +1242,261 @@ def get_spending_anomalies(db: Session, current_user: User) -> list[finance_sche
     # Lấy giao dịch 30 ngày qua để tính trung bình
     today = DateType.today()
     start = today - timedelta(days=30)
-    txs = finance_service.list_transactions(db, current_user, start_date=start, end_date=today, transaction_type="expense")[0]
+    txs = finance_service.list_transactions(db, current_user, start_date=start, end_date=today, transaction_type="expense", limit=500)[0]
     
     anomalies = _detect_spend_anomalies(txs)
     alerts = []
     for day, amount in anomalies:
+        # Try to get AI-enhanced explanation
+        day_txs = [tx for tx in txs if tx.date == day]
+        categories = list({tx.category_id for tx in day_txs if tx.category_id})
+        cat_names_raw = (
+            db.query(Category)
+            .filter(Category.id.in_(categories), Category.user_id == current_user.id)
+            .all()
+        ) if categories else []
+        cat_label = ", ".join(c.name for c in cat_names_raw) if cat_names_raw else "nhiều danh mục"
+        
         alerts.append(finance_schemas.AnomalyAlert(
             id=f"anomaly-{day}",
             date=day,
             amount=amount,
-            description=f"Chi tiêu ngày {day} cao bất thường",
-            reason="Vượt ngưỡng trung bình 7-30 ngày qua (> 200%)",
-            severity="high" if amount > 1000000 else "medium" # Ví dụ ngưỡng đơn giản
+            description=f"Chi tiêu ngày {day} cao bất thường ({cat_label})",
+            reason=f"Vượt ngưỡng trung bình 30 ngày qua (> 2 độ lệch chuẩn), các danh mục: {cat_label}",
+            severity="high" if amount > 1_000_000 else "medium"
         ))
     return alerts
+
+
+def _get_user_financial_context(
+    db: Session,
+    current_user: User,
+    months: int = 6,
+) -> dict:
+    """Build a financial context dict for AI prompts."""
+    today = DateType.today()
+    start = DateType(today.year, 1, 1) if months >= 12 else (
+        today.replace(day=1) if months == 1 else
+        DateType(
+            today.year if today.month > months else today.year - 1,
+            (today.month - months) % 12 or 12,
+            1
+        )
+    )
+    # Monthly series
+    monthly_data = finance_service.get_chart_data(db, current_user, limit_months=months)
+    # Category breakdown for expenses
+    breakdown = finance_service.get_category_breakdown(db, current_user, start_date=start, end_date=today, transaction_type="expense")
+    # Summary
+    summary = finance_service.get_summary(db, current_user, start_date=start, end_date=today)
+    return {
+        "series": [{"month": p.month, "income": p.income, "expense": p.expense} for p in monthly_data.series],
+        "breakdown": [{"category": b.category, "spent": b.spent} for b in breakdown],
+        "total_income": summary.total_income,
+        "total_expense": summary.total_expense,
+        "balance": summary.balance,
+    }
+
+
+def get_spending_forecast(
+    db: Session,
+    current_user: User,
+) -> dict:
+    """Phân tích và dự đoán xu hướng chi tiêu 3 tháng tới bằng Gemini."""
+    from calendar import month_abbr
+    ctx = _get_user_financial_context(db, current_user, months=6)
+
+    today = DateType.today()
+    next_months = []
+    for i in range(1, 4):
+        m = (today.month - 1 + i) % 12 + 1
+        y = today.year + ((today.month - 1 + i) // 12)
+        next_months.append(f"{y}-{str(m).zfill(2)}")
+
+    # Try Gemini first
+    gemini_result = None
+    if genai is not None and settings.gemini_api_key:
+        try:
+            genai.configure(api_key=settings.gemini_api_key)
+            model_name = (
+                os.environ.get("GEMINI_MODEL_NAME")
+                or settings.gemini_model_name
+                or settings.gemini_model
+                or "gemini-1.5-flash"
+            )
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=(
+                    "Bạn là chuyên gia phân tích tài chính cá nhân. "
+                    "Phân tích dữ liệu thu chi và trả về dự báo dưới dạng JSON thuần (không có markdown). "
+                    "Luôn dùng tiếng Việt tự nhiên trong các trường text."
+                )
+            )
+            series_str = json.dumps(ctx["series"], ensure_ascii=False)
+            breakdown_str = json.dumps(ctx["breakdown"], ensure_ascii=False)
+            prompt = (
+                f"Dữ liệu thu chi 6 tháng gần đây (đơn vị VND):\n{series_str}\n"
+                f"Cơ cấu chi tiêu theo danh mục:\n{breakdown_str}\n"
+                f"Tổng thu: {ctx['total_income']:,.0f} VND, Tổng chi: {ctx['total_expense']:,.0f} VND\n\n"
+                f"Hãy dự báo chi tiêu cho 3 tháng tới: {', '.join(next_months)}.\n"
+                "Trả về JSON với cấu trúc (không bao gồm markdown):\n"
+                "{\"summary\": \"mô tả tóm tắt xu hướng\", "
+                "\"points\": [{\"month\": \"YYYY-MM\", \"predicted_expense\": number, \"note\": \"ghi chú\"}], "
+                "\"top_growing_categories\": [\"danh mục tăng mạnh\"], "
+                "\"risk_level\": \"low|medium|high\", "
+                "\"tips\": [\"lời khuyên\"]}"
+            )
+            generation_config = genai.GenerationConfig(response_mime_type="application/json")
+            response = model.generate_content(prompt, generation_config=generation_config)
+            if response and response.text:
+                gemini_result = _extract_json(response.text)
+        except Exception as e:
+            print(f"Gemini Forecast Error: {e}")
+
+    if gemini_result and "summary" in gemini_result:
+        return gemini_result
+
+    # Fallback: statistical forecast
+    series = ctx["series"]
+    if not series:
+        return {
+            "summary": "Chưa có đủ dữ liệu để dự báo xu hướng chi tiêu.",
+            "points": [],
+            "top_growing_categories": [],
+            "risk_level": "low",
+            "tips": ["Hãy bắt đầu ghi lại chi tiêu hàng ngày để nhận dự báo chính xác hơn."],
+        }
+    expenses = [s["expense"] for s in series if s.get("expense", 0) > 0]
+    avg_expense = sum(expenses) / len(expenses) if expenses else 0
+    # Simple trend: compare last 2 months
+    if len(expenses) >= 2:
+        trend_pct = (expenses[-1] - expenses[-2]) / (expenses[-2] or 1) * 100
+    else:
+        trend_pct = 0
+    projected = avg_expense * (1 + trend_pct / 100)
+    risk = "high" if trend_pct > 15 else "medium" if trend_pct > 5 else "low"
+    top_cats = sorted(ctx["breakdown"], key=lambda x: x["spent"], reverse=True)[:3]
+    return {
+        "summary": (
+            f"Chi tiêu trung bình {avg_expense:,.0f} VND/tháng. "
+            f"Xu hướng {'tăng' if trend_pct > 0 else 'giảm'} {abs(trend_pct):.1f}% so với tháng trước."
+        ),
+        "points": [
+            {"month": nm, "predicted_expense": round(projected * (1 + 0.02 * i)), "note": "Dựa trên xu hướng hiện tại"}
+            for i, nm in enumerate(next_months)
+        ],
+        "top_growing_categories": [c["category"] for c in top_cats],
+        "risk_level": risk,
+        "tips": [
+            "Theo dõi chi tiêu hàng ngày để có dự báo chính xác hơn.",
+            f"Danh mục chiếm nhiều nhất: {top_cats[0]['category'] if top_cats else 'chưa xác định'}."
+        ],
+    }
+
+
+def get_savings_suggestions(
+    db: Session,
+    current_user: User,
+) -> dict:
+    """Gợi ý kế hoạch tiết kiệm dựa trên phân tích chi tiêu thực tế bằng Gemini."""
+    ctx = _get_user_financial_context(db, current_user, months=3)
+
+    # Try Gemini first
+    gemini_result = None
+    if genai is not None and settings.gemini_api_key:
+        try:
+            genai.configure(api_key=settings.gemini_api_key)
+            model_name = (
+                os.environ.get("GEMINI_MODEL_NAME")
+                or settings.gemini_model_name
+                or settings.gemini_model
+                or "gemini-1.5-flash"
+            )
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=(
+                    "Bạn là cố vấn tài chính cá nhân thông minh. "
+                    "Phân tích cơ cấu chi tiêu và đưa ra các gợi ý tiết kiệm thực tế bằng tiếng Việt. "
+                    "Trả về JSON thuần (không markdown)."
+                )
+            )
+            breakdown_str = json.dumps(ctx["breakdown"], ensure_ascii=False)
+            prompt = (
+                f"Cơ cấu chi tiêu 3 tháng gần đây (VND):\n{breakdown_str}\n"
+                f"Tổng thu: {ctx['total_income']:,.0f} VND, Tổng chi: {ctx['total_expense']:,.0f} VND\n\n"
+                "Phân tích và đưa ra gợi ý tiết kiệm thực tế. Trả về JSON:\n"
+                "{\"summary\": \"tóm tắt tổng quan\", "
+                "\"tips\": [{\"category\": \"tên danh mục\", \"current_spend\": number, "
+                "\"suggested_limit\": number, \"potential_saving\": number, \"tip\": \"lời khuyên cụ thể\"}], "
+                "\"total_potential_saving\": number, "
+                "\"general_advice\": [\"lời khuyên chung\"]}"
+            )
+            generation_config = genai.GenerationConfig(response_mime_type="application/json")
+            response = model.generate_content(prompt, generation_config=generation_config)
+            if response and response.text:
+                gemini_result = _extract_json(response.text)
+        except Exception as e:
+            print(f"Gemini Savings Error: {e}")
+
+    if gemini_result and "summary" in gemini_result:
+        return gemini_result
+
+    # Fallback: rule-based suggestions
+    breakdown = ctx["breakdown"]
+    if not breakdown:
+        return {
+            "summary": "Chưa có đủ dữ liệu chi tiêu để phân tích.",
+            "tips": [],
+            "total_potential_saving": 0.0,
+            "general_advice": [
+                "Hãy ghi lại chi tiêu hàng ngày để nhận được gợi ý tiết kiệm cá nhân hóa.",
+                "Đặt mục tiêu tiết kiệm ít nhất 20% thu nhập mỗi tháng."
+            ],
+        }
+    sorted_cats = sorted(breakdown, key=lambda x: x["spent"], reverse=True)
+    total_expense = ctx["total_expense"] or 1
+    tips = []
+    total_saving = 0.0
+    for cat in sorted_cats[:5]:
+        share = cat["spent"] / total_expense
+        if share > 0.25:
+            limit = cat["spent"] * 0.8
+            saving = cat["spent"] - limit
+            tips.append({
+                "category": cat["category"],
+                "current_spend": cat["spent"],
+                "suggested_limit": round(limit),
+                "potential_saving": round(saving),
+                "tip": f"Giảm chi tiêu cho {cat['category']} xuống còn {limit:,.0f} VND/tháng (giảm 20%)."
+            })
+            total_saving += saving
+        elif share > 0.15:
+            limit = cat["spent"] * 0.9
+            saving = cat["spent"] - limit
+            tips.append({
+                "category": cat["category"],
+                "current_spend": cat["spent"],
+                "suggested_limit": round(limit),
+                "potential_saving": round(saving),
+                "tip": f"Cân nhắc giảm nhẹ chi tiêu {cat['category']} khoảng 10%."
+            })
+            total_saving += saving
+    income = ctx["total_income"]
+    savings_rate = (income - total_expense) / income * 100 if income > 0 else 0
+    return {
+        "summary": (
+            f"Tỷ lệ tiết kiệm hiện tại: {savings_rate:.1f}%. "
+            + ("Rất tốt! Hãy duy trì." if savings_rate > 20 else
+               "Cần cải thiện để đạt mục tiêu tiết kiệm 20%.")
+        ),
+        "tips": tips,
+        "total_potential_saving": round(total_saving),
+        "general_advice": [
+            "Gộp mua sắm vào 1-2 lần/tuần để kiểm soát phát sinh.",
+            "Đặt hạn mức ngân sách cho từng danh mục chi tiêu.",
+            "Ưu tiên thanh toán tự động để tránh phát sinh phí phạt."
+        ],
+    }
 
 
 def _resolve_category(

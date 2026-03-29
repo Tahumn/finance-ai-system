@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
+import { getForecast, getSavingsTips, getAnomalies } from "../../api/ai.js";
+
 
 const buildDonutItems = (breakdown, limit, otherLabel) => {
   if (!breakdown.length) return [];
@@ -210,6 +212,56 @@ export default function ReportsScreen({
   const [showForecast, setShowForecast] = useState(false);
   const [showSavingTips, setShowSavingTips] = useState(false);
   const [showAnomaly, setShowAnomaly] = useState(false);
+
+  // AI Insights data & loading states
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState(null);
+
+  const [savingTipsData, setSavingTipsData] = useState(null);
+  const [savingTipsLoading, setSavingTipsLoading] = useState(false);
+  const [savingTipsError, setSavingTipsError] = useState(null);
+
+  const [anomalyData, setAnomalyData] = useState(null);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [anomalyError, setAnomalyError] = useState(null);
+
+  const handleToggleForecast = useCallback(async () => {
+    const next = !showForecast;
+    setShowForecast(next);
+    if (next && !forecastData && !forecastLoading) {
+      setForecastLoading(true);
+      setForecastError(null);
+      try { const data = await getForecast(); setForecastData(data); }
+      catch { setForecastError("Không thể tải dữ liệu AI."); }
+      finally { setForecastLoading(false); }
+    }
+  }, [showForecast, forecastData, forecastLoading]);
+
+  const handleToggleSavingTips = useCallback(async () => {
+    const next = !showSavingTips;
+    setShowSavingTips(next);
+    if (next && !savingTipsData && !savingTipsLoading) {
+      setSavingTipsLoading(true);
+      setSavingTipsError(null);
+      try { const data = await getSavingsTips(); setSavingTipsData(data); }
+      catch { setSavingTipsError("Không thể tải dữ liệu AI."); }
+      finally { setSavingTipsLoading(false); }
+    }
+  }, [showSavingTips, savingTipsData, savingTipsLoading]);
+
+  const handleToggleAnomaly = useCallback(async () => {
+    const next = !showAnomaly;
+    setShowAnomaly(next);
+    if (next && !anomalyData && !anomalyLoading) {
+      setAnomalyLoading(true);
+      setAnomalyError(null);
+      try { const data = await getAnomalies(); setAnomalyData(data); }
+      catch { setAnomalyError("Không thể tải dữ liệu AI."); }
+      finally { setAnomalyLoading(false); }
+    }
+  }, [showAnomaly, anomalyData, anomalyLoading]);
+
   const [donutTooltip, setDonutTooltip] = useState(null);
   const [trendHoverIndex, setTrendHoverIndex] = useState(null);
   const donutRef = useRef(null);
@@ -640,49 +692,172 @@ export default function ReportsScreen({
         </div>
       </div>
 
-      <div className="panel">
-        <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
-        <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
-          <button className="ghost" type="button" onClick={() => setShowForecast((v) => !v)}>
-            {t("reports.ai_forecast", null, "Dự đoán xu hướng chi tiêu")}
+      <div className="panel insight-panel">
+        <div className="insight-panel-header">
+          <span className="insight-badge-ai">✶ AI</span>
+          <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
+          <p className="insight-subtitle muted">{t("reports.ai_subtitle", null, "Phân tích thông minh dựa trên dữ liệu tài chính thực tế của bạn")}</p>
+        </div>
+        <div className="insight-actions">
+          <button
+            className={`insight-btn${showForecast ? " active" : ""}`}
+            type="button"
+            onClick={handleToggleForecast}
+          >
+            <span>{t("reports.ai_forecast", null, "Dự đoán xu hướng")}</span>
+            {forecastLoading && <span className="insight-spinner" />}
           </button>
-          <button className="ghost" type="button" onClick={() => setShowSavingTips((v) => !v)}>
-            {t("reports.ai_saving", null, "Gợi ý tiết kiệm / cắt giảm")}
+          <button
+            className={`insight-btn${showSavingTips ? " active" : ""}`}
+            type="button"
+            onClick={handleToggleSavingTips}
+          >
+            <span>{t("reports.ai_saving", null, "Gợi ý tiết kiệm")}</span>
+            {savingTipsLoading && <span className="insight-spinner" />}
           </button>
-          <button className="ghost" type="button" onClick={() => setShowAnomaly((v) => !v)}>
-            {t("reports.ai_anomaly", null, "Phát hiện bất thường chi tiêu")}
+          <button
+            className={`insight-btn${showAnomaly ? " active" : ""}`}
+            type="button"
+            onClick={handleToggleAnomaly}
+          >
+            <span>{t("reports.ai_anomaly", null, "Phát hiện bất thường")}</span>
+            {anomalyLoading && <span className="insight-spinner" />}
           </button>
         </div>
 
         {showForecast && (
-          <div className="insight-card">
-            <h4>{t("reports.forecast_title", null, "Xu hướng 3 tháng tới")}</h4>
-            <ul>
-              <li>{t("reports.forecast_1", null, "Chi tiêu dự kiến tăng nhẹ 8–12% nếu giữ thói quen hiện tại.")}</li>
-              <li>{t("reports.forecast_2", null, "Đỉnh chi tiêu dự kiến rơi vào tuần cuối tháng.")}</li>
-              <li>{t("reports.forecast_3", null, "Nhóm danh mục tăng mạnh: ăn uống, di chuyển.")}</li>
-            </ul>
+          <div className="insight-card forecast-card">
+            <div className="insight-card-header">
+              <h4>{t("reports.forecast_title", null, "Dự báo xu hướng 3 tháng tới")}</h4>
+            </div>
+            {forecastLoading && (
+              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích dữ liệu của bạn...</p></div>
+            )}
+            {forecastError && <p className="insight-error">{forecastError}</p>}
+            {forecastData && !forecastLoading && (
+              <>
+                <p className="insight-summary">{forecastData.summary}</p>
+                {forecastData.points && forecastData.points.length > 0 && (
+                  <div className="forecast-points">
+                    {forecastData.points.map((pt) => (
+                      <div key={pt.month} className={`forecast-point risk-${forecastData.risk_level || "low"}`}>
+                        <span className="forecast-month">{pt.month}</span>
+                        <span className="forecast-value">{currency(pt.predicted_expense)}</span>
+                        {pt.note && <span className="forecast-note muted">{pt.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {forecastData.top_growing_categories && forecastData.top_growing_categories.length > 0 && (
+                  <div className="insight-tags">
+                    <span className="muted">Danh mục tăng mạnh: </span>
+                    {forecastData.top_growing_categories.map((cat) => (
+                      <span key={cat} className="insight-tag warn">{cat}</span>
+                    ))}
+                  </div>
+                )}
+                {forecastData.tips && forecastData.tips.length > 0 && (
+                  <ul className="insight-tips">
+                    {forecastData.tips.map((tip, i) => <li key={i}>{tip}</li>)}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {showSavingTips && (
-          <div className="insight-card">
-            <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm")}</h4>
-            <ul>
-              <li>{t("reports.saving_1", null, "Giới hạn ngân sách ăn uống ở mức 1.5tr/tháng.")}</li>
-              <li>{t("reports.saving_2", null, "Gộp mua sắm vào 1–2 lần/tuần để giảm phát sinh.")}</li>
-              <li>{t("reports.saving_3", null, "Ưu tiên thanh toán một ví để dễ kiểm soát.")}</li>
-            </ul>
+          <div className="insight-card saving-card">
+            <div className="insight-card-header">
+              <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm & cắt giảm")}</h4>
+            </div>
+            {savingTipsLoading && (
+              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích dữ liệu của bạn...</p></div>
+            )}
+            {savingTipsError && <p className="insight-error">{savingTipsError}</p>}
+            {savingTipsData && !savingTipsLoading && (
+              <>
+                <p className="insight-summary">{savingTipsData.summary}</p>
+                {savingTipsData.total_potential_saving > 0 && (
+                  <div className="saving-highlight">
+                    <span>Có thể tiết kiệm thêm:</span>
+                    <strong className="income">{currency(savingTipsData.total_potential_saving)}/tháng</strong>
+                  </div>
+                )}
+                {savingTipsData.tips && savingTipsData.tips.length > 0 && (
+                  <div className="saving-tips-list">
+                    {savingTipsData.tips.map((tip, i) => (
+                      <div key={i} className="saving-tip-item">
+                        <div className="saving-tip-category">
+                          <strong>{tip.category}</strong>
+                          <span className={`insight-tag ${tip.potential_saving > 500000 ? "danger" : "warn"}`}>
+                            -{currency(tip.potential_saving)}
+                          </span>
+                        </div>
+                        <div className="saving-tip-bar-row">
+                          <div className="saving-tip-bars">
+                            <div className="saving-tip-bar-track"><span className="saving-tip-bar-current" /></div>
+                            <div className="saving-tip-bar-track">
+                              <span
+                                className="saving-tip-bar-target"
+                                style={{ width: `${Math.min((tip.suggested_limit / (tip.current_spend || 1)) * 100, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="saving-tip-amounts">
+                            <span className="muted">Hiện: <strong>{currency(tip.current_spend)}</strong></span>
+                            <span className="muted">Mục tiêu: <strong className="income">{currency(tip.suggested_limit)}</strong></span>
+                          </div>
+                        </div>
+                        <p className="saving-tip-text">{tip.tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {savingTipsData.general_advice && savingTipsData.general_advice.length > 0 && (
+                  <ul className="insight-tips">
+                    {savingTipsData.general_advice.map((advice, i) => <li key={i}>{advice}</li>)}
+                  </ul>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {showAnomaly && (
-          <div className="insight-card">
-            <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường")}</h4>
-            <ul>
-              <li>{t("reports.anomaly_1", null, "Giao dịch “Cà phê” tuần này tăng 2.1x so với tuần trước.")}</li>
-              <li>{t("reports.anomaly_2", null, "Chi phí di chuyển tăng đột biến trong 3 ngày gần nhất.")}</li>
-            </ul>
+          <div className="insight-card anomaly-card">
+            <div className="insight-card-header">
+              <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường chi tiêu")}</h4>
+            </div>
+            {anomalyLoading && (
+              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích...</p></div>
+            )}
+            {anomalyError && <p className="insight-error">{anomalyError}</p>}
+            {anomalyData && !anomalyLoading && (
+              <>
+                {anomalyData.alerts && anomalyData.alerts.length > 0 ? (
+                  <div className="anomaly-list">
+                    {anomalyData.alerts.map((alert) => (
+                      <div key={alert.id} className={`anomaly-item severity-${alert.severity}`}>
+                        <div className="anomaly-item-header">
+                          <span className={`anomaly-badge ${alert.severity}`}>
+                            {alert.severity === "high" ? "⚠️ Cao" : "ℹ️ Trung bình"}
+                          </span>
+                          <span className="anomaly-date">{alert.date}</span>
+                          <strong className="anomaly-amount expense">{currency(alert.amount)}</strong>
+                        </div>
+                        <p className="anomaly-description">{alert.description}</p>
+                        <p className="anomaly-reason muted">{alert.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="insight-ok">
+                    <p>✅ Chi tiêu 30 ngày qua ổn định, không phát hiện bất thường.</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
