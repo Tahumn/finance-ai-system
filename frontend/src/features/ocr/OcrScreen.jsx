@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { currency, toInputDate } from "../../utils/format.js";
+import { toInputDate } from "../../utils/format.js";
 import { extractOcr } from "../../api/ai.js";
 
 const baseParsedState = () => ({
@@ -7,6 +7,7 @@ const baseParsedState = () => ({
   merchant: "",
   total: "",
   vat: "",
+  estimated: "",
   categoryId: "",
   note: ""
 });
@@ -15,7 +16,8 @@ const baseConfidence = {
   date: 0,
   merchant: 0,
   total: 0,
-  vat: 0
+  vat: 0,
+  estimated: 0
 };
 
 const sanitizeName = (name) =>
@@ -32,6 +34,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
   const [ocrState, setOcrState] = useState("idle");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [warnings, setWarnings] = useState([]);
 
   useEffect(() => {
     if (!file) {
@@ -61,16 +64,23 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
       setParsed((current) => ({
         ...current,
         merchant: result.merchant || current.merchant || sanitizeName(file.name),
-        total: result.total ? String(result.total) : current.total,
-        note: result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note,
+        total: result.total !== null && result.total !== undefined ? String(result.total) : current.total,
+        vat: result.vat !== null && result.vat !== undefined ? String(result.vat) : current.vat,
+        estimated:
+          result.estimated !== null && result.estimated !== undefined
+            ? String(result.estimated)
+            : current.estimated,
+        note: result.note || (result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note),
         date: result.date || current.date
       }));
       setConfidence({
         date: result.date ? 0.8 : 0.3,
         merchant: result.merchant ? 0.8 : 0.3,
         total: result.total ? 0.9 : 0.3,
-        vat: 0.0
+        vat: result.vat ? 0.7 : 0.2,
+        estimated: result.estimated ? 0.6 : 0.2
       });
+      setWarnings(result.warnings || []);
       setNotice("OCR done. Review and confirm before creating transaction.");
       setOcrState("done");
     } catch (err) {
@@ -106,6 +116,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
       setConfidence(baseConfidence);
       setFile(null);
       setOcrState("idle");
+      setWarnings([]);
     } catch {
       setError("Failed to create transaction from OCR.");
     }
@@ -227,10 +238,18 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
             <label className="field">
               <span>Estimated</span>
               <input
-                type="text"
-                value={parsed.total ? currency(Number(parsed.total)) : "--"}
-                readOnly
+                type="number"
+                min="0"
+                step="0.01"
+                value={parsed.estimated}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, estimated: event.target.value }))
+                }
+                placeholder="0"
               />
+              <small className="hint">
+                Confidence: {Math.round(confidence.estimated * 100)}%
+              </small>
             </label>
           </div>
 
@@ -246,6 +265,9 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
             />
           </label>
 
+          {warnings.length > 0 && (
+            <p className="form-error">{warnings.join(" ")}</p>
+          )}
           {notice && <p className="form-note">{notice}</p>}
           {error && <p className="form-error">{error}</p>}
 
@@ -259,6 +281,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 setConfidence(baseConfidence);
                 setNotice("");
                 setError("");
+                setWarnings([]);
               }}
             >
               Reset

@@ -306,6 +306,7 @@ button:disabled {
   margin-bottom: 12px;
 }
 
+/* Charts and Bars */
 .bars {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
@@ -344,6 +345,50 @@ button:disabled {
 .bar small {
   font-size: 11px;
   color: var(--muted);
+}
+
+/* Grouped Bars for Dashboard */
+.bars.grouped {
+  display: flex !important;
+  align-items: flex-end;
+  gap: 20px;
+  height: 180px;
+  margin-top: 20px;
+}
+
+.bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+}
+
+.bar-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  height: 140px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+  padding: 0 8px;
+  position: relative;
+}
+
+.bar-container span {
+  flex: 1;
+  border-radius: 4px 4px 0 0;
+  min-width: 12px;
+  transition: height 0.3s ease;
+}
+
+.bar-container span.positive {
+  background: #2acb7f;
+}
+
+.bar-container span.negative {
+  background: #ff7b6b;
 }
 
 .donut {
@@ -1306,10 +1351,6 @@ textarea {
   opacity: 0;
 }
 
-.bottom-nav {
-  display: none;
-}
-
 @media (max-width: 1060px) {
   .top-header {
     height: 70px;
@@ -1350,6 +1391,7 @@ textarea {
     gap: 6px;
     padding: 6px;
     box-shadow: var(--shadow);
+    display: grid !important;
   }
 
   .receipt-grid {

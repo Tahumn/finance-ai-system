@@ -2,8 +2,7 @@ const primaryViews = [
   { key: "dashboard", label: "Dashboard" },
   { key: "transactions", label: "Transactions" },
   { key: "reports", label: "Reports" },
-  { key: "budgets", label: "Budgets" },
-  { key: "chat", label: "Chat" }
+  { key: "budgets", label: "Budgets" }
 ];
 
 const getInitial = (user) => {

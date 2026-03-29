@@ -10,8 +10,11 @@ const API_BASE = inferApiBase();
 
 const TOKEN_KEY = "finance_token";
 
-export const getToken = () =>
-  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+export const getToken = () => {
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (!token || token === "undefined" || token === "null") return null;
+  return token;
+};
 
 export const setToken = (token, remember = true) => {
   clearToken();
@@ -49,6 +52,10 @@ export async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
     let message = payload?.detail || payload?.message || "Request failed";
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");
@@ -79,6 +86,10 @@ export async function requestForm(path, formData) {
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
     let message = payload?.detail || payload?.message || "Request failed";
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");

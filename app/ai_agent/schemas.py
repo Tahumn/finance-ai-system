@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import date as DateType
+from datetime import date as DateType, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.finance import schemas as finance_schemas
 
 
 class ParseTransactionRequest(BaseModel):
@@ -36,8 +38,33 @@ class ChatResponse(BaseModel):
     total: float | None = None
 
 
+class ChatMessageRead(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    intent: str | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatHistoryResponse(BaseModel):
+    messages: list[ChatMessageRead] = []
+
+
 class OcrResponse(BaseModel):
     merchant: str | None = None
     total: float | None = None
     date: DateType | None = None
+    vat: float | None = None
+    estimated: float | None = None
+    note: str | None = None
+    computed_total: float | None = None
+    total_delta: float | None = None
+    is_total_consistent: bool | None = None
+    warnings: list[str] = []
     text: str = ""
+
+
+class AnomalyListResponse(BaseModel):
+    alerts: list[finance_schemas.AnomalyAlert]

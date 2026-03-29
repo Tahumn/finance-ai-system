@@ -1,7 +1,6 @@
 const views = [
   { key: "dashboard", label: "Tổng quan" },
   { key: "transactions", label: "Thêm GD" },
-  { key: "chat", label: "Chat" },
   { key: "reports", label: "Báo cáo" },
   { key: "settings", label: "Hồ sơ" }
 ];

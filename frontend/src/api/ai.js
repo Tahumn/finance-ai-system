@@ -26,8 +26,13 @@ export const chatWithAi = (text) =>
     body: { text }
   });
 
+export const getChatHistory = (limit = 50) =>
+  request(`/ai/chat/history?limit=${limit}`);
+
 export const extractOcr = (file) => {
   const formData = new FormData();
   formData.append("file", file);
   return requestForm("/ai/ocr", formData);
 };
+
+export const getAnomalies = () => request("/ai/anomalies");

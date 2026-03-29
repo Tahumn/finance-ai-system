@@ -3,7 +3,7 @@ import TransactionRow from "../../components/TransactionRow.jsx";
 import CategoriesScreen from "../categories/CategoriesScreen.jsx";
 import TagsScreen from "../tags/TagsScreen.jsx";
 import OcrScreen from "../ocr/OcrScreen.jsx";
-import { toInputDate } from "../../utils/format.js";
+import { toInputDate, currency } from "../../utils/format.js";
 
 const parseMonthFromNL = (text) => {
   const match = text.toLowerCase().match(/thang\s*(\d{1,2})/);
@@ -38,6 +38,7 @@ const extractTags = (description) => {
 
 export default function TransactionsScreen({
   transactions,
+  totalCount,
   categories,
   filters,
   onFiltersChange,
@@ -48,6 +49,8 @@ export default function TransactionsScreen({
   onDelete,
   onCreateCategory,
   onCreateTransaction,
+  onLoadMore,
+  hasMore,
   userEmail,
   onBack,
   loading
@@ -61,13 +64,12 @@ export default function TransactionsScreen({
   const [nlpNotice, setNlpNotice] = useState("");
   const [nlpError, setNlpError] = useState("");
   const [nlpPreview, setNlpPreview] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(20);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showOcr, setShowOcr] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
 
-  const filteredTransactions = useMemo(() => {
+  const displayTransactions = useMemo(() => {
     return transactions.filter((item) => {
       const matchText =
         !searchText.trim() ||
@@ -81,12 +83,6 @@ export default function TransactionsScreen({
     });
   }, [transactions, searchText, minAmount, maxAmount]);
 
-  const visibleTransactions = filteredTransactions.slice(0, visibleCount);
-
-  useMemo(() => extractTags(filteredTransactions.map((item) => item.description).join(" ")), [
-    filteredTransactions
-  ]);
-
   const handleCreate = (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -99,6 +95,7 @@ export default function TransactionsScreen({
       date: form.get("date")
     });
     event.currentTarget.reset();
+    setShowAddForm(false);
   };
 
   const handleUpdate = (event) => {
@@ -132,7 +129,7 @@ export default function TransactionsScreen({
 
   const handleExportCsv = () => {
     const header = ["date", "description", "type", "amount", "category"];
-    const lines = [header.join(","), ...filteredTransactions.map(toCsvRow)];
+    const lines = [header.join(","), ...displayTransactions.map(toCsvRow)];
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -160,11 +157,11 @@ export default function TransactionsScreen({
     setNlpError("");
     try {
       await onCreateFromText(text);
-      setNlpNotice("Created from NLP input.");
+      setNlpNotice("Đã tạo giao dịch từ văn bản.");
       setNlpText("");
       setNlpPreview(null);
     } catch (err) {
-      setNlpError(err.message || "Unable to create from NLP input.");
+      setNlpError(err.message || "Không thể tạo từ văn bản.");
     }
   };
 
@@ -178,7 +175,7 @@ export default function TransactionsScreen({
       setNlpPreview(preview);
     } catch (err) {
       setNlpPreview(null);
-      setNlpError(err.message || "Unable to preview NLP input.");
+      setNlpError(err.message || "Không thể xem trước.");
     }
   };
 
@@ -186,8 +183,8 @@ export default function TransactionsScreen({
     <section className="panel transactions-page">
       <header className="transactions-header">
         <div>
-          <p className="eyebrow">Finance Workspace</p>
-          <h2>Transactions</h2>
+          <p className="eyebrow">Quản lý giao dịch</p>
+          <h2>Giao dịch ({totalCount})</h2>
         </div>
         <div className="transactions-actions">
           <button
@@ -195,14 +192,14 @@ export default function TransactionsScreen({
             type="button"
             onClick={() => setShowOcr((current) => !current)}
           >
-            {showOcr ? "Ẩn OCR" : "Nhập hóa đơn (OCR)"}
+            {showOcr ? "Ẩn OCR" : "Nhập OCR"}
           </button>
           <button
             className="ghost"
             type="button"
             onClick={() => setShowAddForm((current) => !current)}
           >
-            {showAddForm ? "Ẩn form giao dịch" : "Thêm giao dịch mới"}
+            {showAddForm ? "Ẩn form" : "Thêm mới"}
           </button>
           <button className="ghost" onClick={onBack} type="button">
             Quay lại
@@ -232,66 +229,123 @@ export default function TransactionsScreen({
 
       <div className="transactions-content-card">
         <>
-            <form className="form" onSubmit={handleNlpCreate} style={{ marginBottom: 16 }}>
-              <div className="row">
-                <input
-                  type="text"
-                  value={nlpText}
-                  onChange={(event) => setNlpText(event.target.value)}
-                  placeholder="NLP: hom nay chi 50k an sang"
-                />
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={handleNlpPreview}
-                  disabled={loading || !nlpText.trim()}
-                >
-                  Preview
-                </button>
-                <button className="primary" type="submit" disabled={loading || !nlpText.trim()}>
-                  Create from NLP
-                </button>
-              </div>
-              {nlpNotice && <p className="form-note">{nlpNotice}</p>}
-              {nlpError && <p className="form-error">{nlpError}</p>}
-              {nlpPreview && (
-                <div className="list" style={{ marginTop: 10 }}>
-                  <div className="item-row">
-                    <div>
-                      <p className="eyebrow">Preview</p>
-                      <p>Description: {nlpPreview.description}</p>
-                      <p>Type: {nlpPreview.transaction_type}</p>
-                      <p>Amount: {nlpPreview.amount ?? "N/A"}</p>
-                      <p>Date: {nlpPreview.date}</p>
-                      <p>Category: {nlpPreview.category_name || "None"}</p>
-                    </div>
+          <form className="form" onSubmit={handleNlpCreate} style={{ marginBottom: 16 }}>
+            <div className="row">
+              <input
+                type="text"
+                value={nlpText}
+                onChange={(event) => setNlpText(event.target.value)}
+                placeholder="NLP: hom nay chi 50k an sang"
+              />
+              <button
+                className="ghost"
+                type="button"
+                onClick={handleNlpPreview}
+                disabled={loading || !nlpText.trim()}
+              >
+                Xem trước
+              </button>
+              <button className="primary" type="submit" disabled={loading || !nlpText.trim()}>
+                Nhập nhanh
+              </button>
+            </div>
+            {nlpNotice && <p className="form-note">{nlpNotice}</p>}
+            {nlpError && <p className="form-error">{nlpError}</p>}
+            {nlpPreview && (
+              <div className="list" style={{ marginTop: 10 }}>
+                <div className="item-row preview-box">
+                  <div>
+                    <p className="eyebrow">Xem trước kết quả</p>
+                    <p><strong>Mô tả:</strong> {nlpPreview.description}</p>
+                    <p><strong>Loại:</strong> {nlpPreview.transaction_type === 'income' ? 'Thu' : 'Chi'}</p>
+                    <p><strong>Số tiền:</strong> {currency(nlpPreview.amount || 0)}</p>
+                    <p><strong>Ngày:</strong> {nlpPreview.date}</p>
+                    <p><strong>Danh mục:</strong> {nlpPreview.category_name || "Mặc định"}</p>
                   </div>
                 </div>
-              )}
-            </form>
-            <div className="filters compact">
-              <div className="field">
-                <label>Loại</label>
-                <select
-                  value={filters.type}
-                  onChange={(event) =>
-                    onFiltersChange({ ...filters, type: event.target.value })
-                  }
-                >
-                  <option value="">Tất cả</option>
-                  <option value="income">Thu nhập</option>
-                  <option value="expense">Chi tiêu</option>
-                </select>
               </div>
-              <div className="field">
-                <label>Danh mục</label>
-                <select
-                  value={filters.categoryId}
-                  onChange={(event) =>
-                    onFiltersChange({ ...filters, categoryId: event.target.value })
-                  }
-                >
-                  <option value="">Tất cả</option>
+            )}
+          </form>
+
+          <div className="filters compact">
+            <div className="field">
+              <label>Loại</label>
+              <select
+                value={filters.type}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, type: event.target.value })
+                }
+              >
+                <option value="">Tất cả</option>
+                <option value="income">Thu nhập</option>
+                <option value="expense">Chi tiêu</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Danh mục</label>
+              <select
+                value={filters.categoryId}
+                onChange={(event) =>
+                  onFiltersChange({ ...filters, categoryId: event.target.value })
+                }
+              >
+                <option value="">Tất cả</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Tìm kiếm</label>
+              <input
+                type="text"
+                value={searchText}
+                placeholder="Mô tả..."
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Min</label>
+              <input
+                type="number"
+                value={minAmount}
+                onChange={(event) => setMinAmount(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Max</label>
+              <input
+                type="number"
+                value={maxAmount}
+                onChange={(event) => setMaxAmount(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="row" style={{ marginBottom: 14 }}>
+            <input
+              type="text"
+              value={nlQuery}
+              onChange={(event) => setNlQuery(event.target.value)}
+              placeholder='Tìm nhanh: "cafe tháng 3"'
+            />
+            <button className="ghost" type="button" onClick={handleApplyNlQuery}>
+              Áp dụng
+            </button>
+          </div>
+
+          {showAddForm && (
+            <form className="form" onSubmit={handleCreate} style={{ background: 'var(--bg-alt)', padding: 15, borderRadius: 8 }}>
+              <input name="description" type="text" placeholder="Mô tả" required />
+              <div className="row">
+                <select name="transaction_type" defaultValue="expense">
+                  <option value="expense">Chi tiêu</option>
+                  <option value="income">Thu nhập</option>
+                </select>
+                <select name="category_id" defaultValue="">
+                  <option value="">Không có danh mục</option>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -299,137 +353,79 @@ export default function TransactionsScreen({
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label>Từ khóa</label>
-                <input
-                  type="text"
-                  value={searchText}
-                  placeholder="Mô tả, danh mục..."
-                  onChange={(event) => setSearchText(event.target.value)}
-                />
+              <div className="row">
+                <input name="amount" type="number" placeholder="Số tiền" required />
+                <input name="date" type="date" required />
               </div>
-              <div className="field">
-                <label>Min amount</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={minAmount}
-                  onChange={(event) => setMinAmount(event.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label>Max amount</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={maxAmount}
-                  onChange={(event) => setMaxAmount(event.target.value)}
-                />
-              </div>
-            </div>
+              <button className="primary" type="submit" disabled={loading}>
+                Lưu giao dịch
+              </button>
+            </form>
+          )}
 
-            <div className="row" style={{ marginBottom: 14 }}>
-              <input
-                type="text"
-                value={nlQuery}
-                onChange={(event) => setNlQuery(event.target.value)}
-                placeholder='Tôi chi bao nhiêu cà phê tháng 12'
-              />
-              <button className="ghost" type="button" onClick={handleApplyNlQuery}>
-                Áp dụng query NL
+          <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <div>
+              <button
+                className="ghost danger"
+                type="button"
+                disabled={!selectedIds.length}
+                onClick={handleBulkDelete}
+              >
+                Xóa ({selectedIds.length})
               </button>
             </div>
+            <button className="ghost" type="button" onClick={handleExportCsv}>
+              Xuất CSV
+            </button>
+          </div>
 
-            {showAddForm && (
-              <form className="form" onSubmit={handleCreate}>
-                <input name="description" type="text" placeholder="Mô tả" required />
-                <div className="row">
-                  <select name="transaction_type" defaultValue="expense">
-                    <option value="expense">Chi tiêu</option>
-                    <option value="income">Thu nhập</option>
-                  </select>
-                  <select name="category_id" defaultValue="">
-                    <option value="">Không có danh mục</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row">
-                  <input name="amount" type="number" placeholder="Số tiền" required />
-                  <input name="date" type="date" required />
-                </div>
-                <button className="primary" type="submit" disabled={loading}>
-                  Thêm giao dịch
-                </button>
-              </form>
-            )}
-
-            <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 8 }}>
-              <div>
-                <button
-                  className="ghost danger"
-                  type="button"
-                  disabled={!selectedIds.length}
-                  onClick={handleBulkDelete}
-                >
-                  Xóa đã chọn ({selectedIds.length})
-                </button>
-              </div>
-              <button className="ghost" type="button" onClick={handleExportCsv}>
-                Export CSV
-              </button>
-            </div>
-
-            <div className="list">
-              {!visibleTransactions.length ? (
-                <p className="empty">Chưa có giao dịch nào trong giai đoạn này.</p>
-              ) : (
-                visibleTransactions.map((item) => (
-                  <div key={item.id} className="item-row">
-                    <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(item.id)}
-                        onChange={() => toggleSelection(item.id)}
-                      />
-                      <span className="eyebrow">Chọn</span>
-                    </label>
-                    <TransactionRow item={item} categoryLabel={item.categoryLabel} />
-                    <div className="row-actions">
-                      <button className="ghost" type="button" onClick={() => setSelectedTx(item)}>
-                        Chi tiết
-                      </button>
-                      <button className="ghost" onClick={() => setEditingTx(item)} type="button">
-                        Sửa
-                      </button>
-                      <button
-                        className="ghost danger"
-                        onClick={() => onDelete(item.id)}
-                        type="button"
-                      >
-                        Xóa
-                      </button>
-                    </div>
+          <div className="list">
+            {!displayTransactions.length ? (
+              <p className="empty">Không tìm thấy giao dịch nào.</p>
+            ) : (
+              displayTransactions.map((item) => (
+                <div key={item.id} className="item-row">
+                  <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => toggleSelection(item.id)}
+                    />
+                  </label>
+                  <TransactionRow item={item} categoryLabel={item.categoryLabel} />
+                  <div className="row-actions">
+                    <button className="ghost" type="button" onClick={() => setSelectedTx(item)}>
+                      Chi tiết
+                    </button>
+                    <button className="ghost" onClick={() => setEditingTx(item)} type="button">
+                      Sửa
+                    </button>
+                    <button
+                      className="ghost danger"
+                      onClick={() => onDelete(item.id)}
+                      type="button"
+                    >
+                      Xóa
+                    </button>
                   </div>
-                ))
-              )}
-            </div>
-
-            {filteredTransactions.length > visibleCount && (
-              <div className="row-actions" style={{ justifyContent: "center" }}>
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={() => setVisibleCount((current) => current + 20)}
-                >
-                  Xem thêm
-                </button>
-              </div>
+                </div>
+              ))
             )}
-          </>
+          </div>
+
+          {hasMore && (
+            <div className="row-actions" style={{ justifyContent: "center", marginTop: 20 }}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={onLoadMore}
+                disabled={loading}
+              >
+                {loading ? "Đang tải..." : "Tải thêm giao dịch"}
+              </button>
+            </div>
+          )}
+        </>
       </div>
 
       {editingTx && (
@@ -489,7 +485,7 @@ export default function TransactionsScreen({
               </div>
               <div>
                 <p className="eyebrow">Loại</p>
-                <strong>{selectedTx.transaction_type}</strong>
+                <strong>{selectedTx.transaction_type === 'income' ? 'Thu nhập' : 'Chi tiêu'}</strong>
               </div>
               <div>
                 <p className="eyebrow">Danh mục</p>
@@ -497,21 +493,7 @@ export default function TransactionsScreen({
               </div>
               <div>
                 <p className="eyebrow">Số tiền</p>
-                <strong>{selectedTx.amount}</strong>
-              </div>
-              <div>
-                <p className="eyebrow">Tags</p>
-                <div className="tag-row">
-                  {extractTags(selectedTx.description).length ? (
-                    extractTags(selectedTx.description).map((tag) => (
-                      <span key={tag} className="tag-chip">
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="muted">Không có</span>
-                  )}
-                </div>
+                <strong>{currency(selectedTx.amount)}</strong>
               </div>
             </div>
             <div className="row-actions">

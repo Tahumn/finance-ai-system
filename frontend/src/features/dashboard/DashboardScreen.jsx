@@ -75,17 +75,18 @@ const buildAiInsights = (summary, transactions, breakdown) => {
 export default function DashboardScreen({
   summary,
   breakdown,
+  incomeBreakdown,
   transactions,
   monthlySeries,
+  anomalies,
   onViewTransactions,
   onGoOcr,
-  onGoChat,
   onGoAddTransaction,
   onGoReports,
   rangePreset,
   onSelectPreset
 }) {
-  const maxAbs = Math.max(1, ...monthlySeries.map((item) => Math.abs(item.value)));
+  const maxVal = Math.max(1, ...monthlySeries.flatMap((item) => [item.income, item.expense]));
   const slicedTransactions = transactions.slice(0, 4);
   const insights = buildAiInsights(summary, transactions, breakdown);
 
@@ -114,55 +115,75 @@ export default function DashboardScreen({
           <button className="ghost" type="button" onClick={onGoOcr}>
             Nhập hóa đơn OCR
           </button>
-          <button className="ghost" type="button" onClick={onGoChat}>
-            Chat NLP
-          </button>
           <button className="ghost" type="button" onClick={onGoReports}>
             Xem báo cáo
           </button>
         </div>
       </section>
 
+      {anomalies && anomalies.length > 0 && (
+        <section className="panel anomalies">
+          <div className="panel-header">
+            <h3 style={{ color: "var(--danger)" }}>⚠️ Cảnh báo chi tiêu (Anomaly)</h3>
+          </div>
+          <div className="anomaly-list">
+            {anomalies.map((alert) => (
+              <div key={alert.id} className={`anomaly-item ${alert.severity}`}>
+                <div className="anomaly-info">
+                  <strong>{alert.description}</strong>
+                  <p>{alert.reason}</p>
+                </div>
+                <div className="anomaly-amount">
+                  {currency(alert.amount)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="grid">
         <div className="panel">
-          <h3>Dòng tiền 6 tháng</h3>
-          <div className="bars">
+          <h3>Dòng tiền (Thu vs Chi)</h3>
+          <div className="bars grouped">
             {monthlySeries.map((item) => (
-              <div key={item.month} className="bar">
-                <span
-                  style={{
-                    height: `${(Math.abs(item.value) / maxAbs) * 100}%`
-                  }}
-                  className={item.value >= 0 ? "positive" : "negative"}
-                />
+              <div key={item.month} className="bar-group">
+                <div className="bar-container">
+                  <span
+                    style={{ height: `${(item.income / maxVal) * 100}%` }}
+                    className="positive"
+                  />
+                  <span
+                    style={{ height: `${(item.expense / maxVal) * 100}%` }}
+                    className="negative"
+                  />
+                </div>
                 <small>{item.month.slice(5)}</small>
               </div>
             ))}
           </div>
         </div>
         <div className="panel">
-          <h3>Chi tiêu theo danh mục</h3>
-          <div
-            className="donut"
-            style={{
-              background: buildDonutGradient(breakdown)
-            }}
-          >
-            <div>
-              <strong>{currency(summary.total_expense)}</strong>
-              <span>Tổng chi</span>
-            </div>
-          </div>
-          <div className="legend">
-            {breakdown.map((item) => (
-              <div key={item.category}>
-                <span className="dot" style={{ background: colorFor(item.category) }} />
-                <div>
-                  <p>{item.category}</p>
-                  <small>{percent(item.share)}</small>
-                </div>
+          <h3>Cơ cấu Thu & Chi</h3>
+          <div className="dual-donuts">
+            <div className="donut-wrap">
+              <div
+                className="donut small"
+                style={{ background: buildDonutGradient(breakdown) }}
+              >
+                <div><strong>{currency(summary.period_total_expense)}</strong></div>
               </div>
-            ))}
+              <span>Chi tiêu</span>
+            </div>
+            <div className="donut-wrap">
+              <div
+                className="donut small"
+                style={{ background: buildDonutGradient(incomeBreakdown || []) }}
+              >
+                <div><strong>{currency(summary.period_total_income)}</strong></div>
+              </div>
+              <span>Nguồn thu</span>
+            </div>
           </div>
         </div>
       </section>
@@ -170,7 +191,7 @@ export default function DashboardScreen({
       <section className="panel list">
         <div className="panel-header">
           <h3>Gợi ý AI</h3>
-          <span className="badge">summary mode</span>
+          <span className="badge">AI Insights</span>
         </div>
         {insights.map((insight) => (
           <p key={insight} className="insight-item">

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.ai_agent import schemas, service
 from app.auth.models import User
-from app.auth.service import get_current_user
+from app.auth.service import get_current_user, get_current_active_user
 from app.database import get_db
 from app.finance import schemas as finance_schemas
 from app.finance import service as finance_service
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 def parse_transaction(
     payload: schemas.ParseTransactionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     result = service.parse_transaction_text(
         db=db,
@@ -35,7 +35,7 @@ def parse_transaction(
 def create_transaction_from_text(
     payload: schemas.ParseTransactionRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     result = service.parse_transaction_text(
         db=db,
@@ -64,16 +64,34 @@ def create_transaction_from_text(
 def chat(
     payload: schemas.ChatRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     return service.answer_chat(db, current_user, payload.text)
+
+
+@router.get("/chat/history", response_model=schemas.ChatHistoryResponse)
+def chat_history(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    messages = service.get_chat_history(db, current_user, limit=limit)
+    return {"messages": messages}
 
 
 @router.post("/ocr", response_model=schemas.OcrResponse)
 async def ocr_receipt(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     _ = current_user
     payload = await file.read()
     return service.extract_ocr(payload)
+
+
+@router.get("/anomalies", response_model=schemas.AnomalyListResponse)
+def get_anomalies(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    return {"alerts": service.get_spending_anomalies(db, current_user)}

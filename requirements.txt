@@ -10,3 +10,7 @@ email-validator
 python-multipart
 pytesseract
 Pillow
+opencv-python-headless
+numpy
+scipy
+google-generativeai
