@@ -110,13 +110,33 @@ export default function App() {
       setUiPrefs(nextPrefs);
       applyUiPrefs(nextPrefs);
     };
+    const handleRefresh = (event) => {
+      if (authState.status !== "authed") return;
+      const range = event?.detail;
+      if (range?.startDate && range?.endDate) {
+        const start = filters.start;
+        const end = filters.end;
+        if (start && end && (range.startDate < start || range.endDate > end)) {
+          const dateLabel =
+            range.startDate === range.endDate
+              ? range.startDate
+              : `${range.startDate} - ${range.endDate}`;
+          setNotice(
+            `Giao dich vua luu ngay ${dateLabel}. Bo loc hien tai (${start} -> ${end}) khong hien thi. Hay doi pham vi neu can.`
+          );
+        }
+      }
+      loadFinanceData();
+    };
     window.addEventListener("finance:ui-prefs", handlePrefs);
     window.addEventListener("finance:logout", handleLogout);
+    window.addEventListener("finance:refresh", handleRefresh);
     return () => {
       window.removeEventListener("finance:ui-prefs", handlePrefs);
       window.removeEventListener("finance:logout", handleLogout);
+      window.removeEventListener("finance:refresh", handleRefresh);
     };
-  }, [authState.user?.email]);
+  }, [authState.user?.email, authState.status, filters]);
 
   const categoryMap = useMemo(() => {
     const map = {};

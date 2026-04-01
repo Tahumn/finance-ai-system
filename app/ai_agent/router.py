@@ -29,7 +29,7 @@ def parse_transaction(
 
 @router.post(
     "/transactions",
-    response_model=finance_schemas.TransactionRead,
+    # response_model=finance_schemas.TransactionRead,
     status_code=status.HTTP_201_CREATED,
 )
 def create_transaction_from_text(
@@ -66,6 +66,7 @@ def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    # Sử dụng chatbot mới ổn định và có fallback chuyên nghiệp
     return service.answer_chat(db, current_user, payload.text)
 
 

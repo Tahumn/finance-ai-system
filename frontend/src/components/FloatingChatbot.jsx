@@ -133,6 +133,17 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
         content,
         intent: response.intent 
       }]);
+
+      if (response?.intent === "create_transaction" || response?.intent === "create_transactions") {
+        window.dispatchEvent(
+          new CustomEvent("finance:refresh", {
+            detail: {
+              startDate: response.start_date || null,
+              endDate: response.end_date || null
+            }
+          })
+        );
+      }
     } catch (err) {
       if (err.status === 401) {
         setMessages((prev) => [...prev, { role: "assistant", content: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục." }]);
