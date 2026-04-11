@@ -236,7 +236,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         name: item.name.trim()
       }));
       const created = await Promise.all(
-        cleanedCategories.map((item) => createCategory(item.name))
+        cleanedCategories.map((item) => createCategory(item.name).catch(() => null))
       );
       let nameToId = {};
       created.forEach((item, index) => {
@@ -244,7 +244,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
           nameToId[cleanedCategories[index].name.toLowerCase()] = item.id;
         }
       });
-      if (!Object.keys(nameToId).length) {
+      if (Object.keys(nameToId).length < cleanedCategories.length) {
         const fetched = await listCategories();
         nameToId = fetched.reduce((acc, item) => {
           acc[item.name.toLowerCase()] = item.id;

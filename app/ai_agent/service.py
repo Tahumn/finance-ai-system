@@ -2298,60 +2298,41 @@ def _ocr_to_text(image: Image.Image, psm: int = 6) -> str:
 
 
 def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
-    if not settings.gemini_api_base or not settings.gemini_api_key:
-        return None
-    model = settings.gemini_model or "gemini-1.5-pro"
-    base = settings.gemini_api_base.rstrip("/")
-    url = f"{base}/models/{model}:generateContent?key={settings.gemini_api_key}"
-
-    prompt = (
-        "Ban la he thong trich xuat hoa don. "
-        "Tra ve JSON only voi cac truong: "
-        "date (YYYY-MM-DD hoac dd/mm/yyyy), merchant, total, vat, estimated, note, text. "
-        "Neu thieu thi null. text la toan bo noi dung OCR."
-    )
-    mime = "image/jpeg"
-    encoded = base64.b64encode(image_bytes).decode("utf-8")
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": mime, "data": encoded}},
-                ]
-            }
-        ]
-    }
-    data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=settings.gemini_timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.URLError:
+    if genai is None or not settings.gemini_api_key:
         return None
     try:
-        response_json = json.loads(body)
-    except json.JSONDecodeError:
+        genai.configure(api_key=settings.gemini_api_key)
+        model_name = (
+            os.environ.get("GEMINI_MODEL_NAME")
+            or settings.gemini_model_name
+            or settings.gemini_model
+            or "gemini-1.5-flash"
+        )
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=(
+                "Bạn là hệ thống nhận diện hóa đơn OCR tài chính. "
+                "Trích xuất thông tin thành JSON chuẩn xác. Yêu cầu:\n"
+                "- date: Ngày trên hóa đơn có định dạng 'YYYY-MM-DD', nếu không có trả về null.\n"
+                "- merchant: Tên cửa hàng, siêu thị. Ngắn gọn, chuẩn hóa, bỏ bớt địa chỉ.\n"
+                "- total: Tổng tiền thanh toán cuối cùng (kiểu số nguyên).\n"
+                "- vat: Tiền thuế (nếu có, kiểu số nguyên).\n"
+                "- estimated: Tiền hàng trước thuế hoặc giảm giá (nếu có, kiểu số nguyên).\n"
+                "- note: Ghi chú mô tả ngắn về hóa đơn.\n"
+                "- text: Các chi tiết chữ thô nhận diện được.\n"
+                "TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON, KHÔNG XUẤT MARKDOWN, KHÔNG GIẢI THÍCH."
+            )
+        )
+        response = model.generate_content(
+            [{"mime_type": "image/jpeg", "data": image_bytes}]
+        )
+        text_val = getattr(response, "text", "")
+        if not text_val:
+            return None
+        return _extract_json(text_val) or {"text": text_val}
+    except Exception as e:
+        print(f"Gemini OCR Failed: {e}")
         return None
-
-    # Try to find text content in Gemini response.
-    text_value = None
-    try:
-        candidates = response_json.get("candidates") or []
-        if candidates:
-            parts = candidates[0].get("content", {}).get("parts", [])
-            if parts:
-                text_value = parts[0].get("text")
-    except Exception:
-        text_value = None
-    if not text_value:
-        return None
-    return _extract_json(text_value) or {"text": text_value}
 
 
 def _score_ocr_text(text: str) -> float:
@@ -2579,7 +2560,7 @@ def extract_ocr(image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
 
     gemini_result = None
-    if settings.ocr_provider.lower() == "gemini":
+    if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
         gemini_result = _call_gemini_ocr(image_bytes)
 
     text = ""
