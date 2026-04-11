@@ -284,13 +284,19 @@ export default function ReportsScreen({
   };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h3>{t("reports.title")}</h3>
-        <button className="ghost" onClick={onBack} type="button">
-          {t("common.back")}
-        </button>
-      </div>
+    <section className="panel report-page">
+      <header className="transactions-header" style={{ marginBottom: 14 }}>
+        <div>
+          <p className="eyebrow">Finance Workspace</p>
+          <h2>{t("reports.title")}</h2>
+        </div>
+
+        <div className="transactions-actions">
+          <button className="ghost" onClick={onBack} type="button">
+            {t("common.back")}
+          </button>
+        </div>
+      </header>
       <div className="report-grid report-grid-summary">
         {summaryRows.map((row) => (
           <div key={row.label} className="report-card">

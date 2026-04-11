@@ -182,6 +182,16 @@ def get_current_user(
     return db_user
 
 
+def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
+        )
+    return current_user
+
+
 def _create_action_token(*, user_id: int, email: str, purpose: str, minutes: int = 15) -> str:
     exp = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     to_encode = {

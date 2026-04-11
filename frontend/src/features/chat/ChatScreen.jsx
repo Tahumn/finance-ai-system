@@ -1,6 +1,17 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../utils/i18n.js";
 
+import { chatWithAi } from "../../api/ai.js";
+
+const seedMessages = [
+  {
+    id: "seed-hello",
+    role: "assistant",
+    content:
+      "Chat AI (demo). Hãy hỏi về thu chi, ngân sách, hoặc kế hoạch tiết kiệm."
+  }
+];
+
 const buildStorageKey = (email) => `finance_chat_history:${email || "guest"}`;
 
 const formatTimestamp = (ts) => {
@@ -129,23 +140,38 @@ export default function ChatScreen({ userEmail }) {
     threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages]);
 
-  const handleSend = (event) => {
+  const handleSend = async (event) => {
     event.preventDefault();
     const text = input.trim();
     if (!text) return;
     const now = Date.now();
-    const next = [
-      ...messages,
-      { id: `u-${now}`, role: "user", content: text, created_at: now },
+    setMessages((current) => [
+      ...current,
+      { id: `u-${now}`, role: "user", content: text, created_at: now }
+    ]);
+    setInput("");
+
+    let reply = "";
+    try {
+      const response = await chatWithAi(text);
+      reply = response?.answer || "";
+    } catch {
+      reply = "";
+    }
+
+    if (!reply) {
+      reply = "Khong the tra loi. Vui long thu lai hoac hoi ro hon.";
+    }
+
+    setMessages((current) => [
+      ...current,
       {
         id: `a-${now}`,
         role: "assistant",
-        content: buildMockReply(text),
+        content: reply,
         created_at: now + 1
       }
-    ];
-    setMessages(next);
-    setInput("");
+    ]);
   };
 
   const handleClear = () => {

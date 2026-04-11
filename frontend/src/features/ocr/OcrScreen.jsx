@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
+import { extractOcr } from "../../api/ai.js";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
   merchant: "",
   total: "",
   vat: "",
+  estimated: "",
   categoryId: "",
   note: ""
 });
@@ -15,7 +17,8 @@ const baseConfidence = {
   date: 0,
   merchant: 0,
   total: 0,
-  vat: 0
+  vat: 0,
+  estimated: 0
 };
 
 const sanitizeName = (name) =>
@@ -32,6 +35,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
   const [ocrState, setOcrState] = useState("idle");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [warnings, setWarnings] = useState([]);
 
   useEffect(() => {
     if (!file) {
@@ -108,6 +112,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
       setConfidence(baseConfidence);
       setFile(null);
       setOcrState("idle");
+      setWarnings([]);
     } catch {
       setError(t("ocr.error.create_failed"));
     }
@@ -242,6 +247,9 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 value={parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
                 readOnly
               />
+              <small className="hint">
+                Confidence: {Math.round(confidence.estimated * 100)}%
+              </small>
             </label>
           </div>
 
@@ -257,6 +265,9 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
             />
           </label>
 
+          {warnings.length > 0 && (
+            <p className="form-error">{warnings.join(" ")}</p>
+          )}
           {notice && <p className="form-note">{notice}</p>}
           {error && <p className="form-error">{error}</p>}
 
@@ -270,6 +281,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 setConfidence(baseConfidence);
                 setNotice("");
                 setError("");
+                setWarnings([]);
               }}
             >
               {t("ocr.action.reset")}

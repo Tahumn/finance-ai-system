@@ -106,6 +106,45 @@ From `.env.example`:
 - `SECRET_KEY`
 - `ALGORITHM`
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
+## Run without Docker
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn app.main:app --reload
+```
+
+## Environment Variables
+
+From `.env`:
+
+- `DB_URL`
+- `SECRET_KEY`
+- `ALGORITHM`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+
+### Gemini + SMTP Notes (Important)
+
+- `GEMINI_API_KEY` is a personal API key. Do not commit it to git. Each developer should create their own key (or run without Gemini and use the fallback parsing).
+- `SMTP_PASSWORD` should NOT be shared/committed. For Gmail this is an "App Password" (16 characters), not your normal Gmail password, and requires 2-step verification.
+- For local/dev without email, set `DEV_RETURN_OTP=true` and leave `SMTP_USER` / `SMTP_PASSWORD` empty.
+
+### Dify (LLM) Optional
+
+To enable LLM-backed NLP and chat intent parsing:
+
+- `DIFY_API_BASE` (example: `http://localhost:5001/v1`)
+- `DIFY_API_KEY`
+- `DIFY_FORCE_JSON` (`true` to enforce JSON-only replies)
+- `DIFY_SECRET_KEY` (used by Dify services)
+
+If you run the bundled Dify stack, open:
+- `http://localhost:5002` (Dify web)
+- `http://localhost:5001` (Dify API)
+
+See `docs/LLM_PROMPTS.md` for recommended prompt templates.
 
 ## API Overview
 

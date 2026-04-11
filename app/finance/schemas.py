@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import date as DateType
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Literal
 
 
 class TagCreate(BaseModel):
@@ -19,6 +21,7 @@ class TagRead(BaseModel):
     name: str
     color: str
     user_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -49,7 +52,15 @@ class TransactionRead(BaseModel):
     category_id: int | None
     date: DateType
     tags: list[TagRead] = Field(default_factory=list)
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedTransactions(BaseModel):
+    items: list[TransactionRead]
+    total: int
+    page: int
+    limit: int
 
 
 class CategoryCreate(BaseModel):
@@ -60,10 +71,15 @@ class CategoryRead(BaseModel):
     id: int
     name: str
     user_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class FinanceSummary(BaseModel):
+    total_balance: float = Field(..., description="Tổng (Thu - Chi) của toàn bộ lịch sử")
+    period_total_income: float = Field(..., description="Thu nhập trong kỳ")
+    period_total_expense: float = Field(..., description="Chi tiêu trong kỳ")
+    period_net_flow: float = Field(..., description="Thu - Chi trong kỳ")
     total_income: float
     total_expense: float
     balance: float
@@ -72,4 +88,23 @@ class FinanceSummary(BaseModel):
 class CategoryBreakdown(BaseModel):
     category: str
     spent: float
+
+
+class ChartPoint(BaseModel):
+    month: str
+    income: float
+    expense: float
+
+
+class GroupedChartData(BaseModel):
+    series: list[ChartPoint]
+
+
+class AnomalyAlert(BaseModel):
+    id: str
+    date: DateType
+    amount: float
+    description: str
+    reason: str
+    severity: Literal["low", "medium", "high"]
 

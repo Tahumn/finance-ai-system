@@ -45,10 +45,30 @@ def ensure_schema() -> None:
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
         )
 
-    with engine.begin() as conn:
-        for stmt in statements:
-            conn.execute(text(stmt))
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
+    if not statements:
+        # Ensure index for username if column already exists.
+        with engine.begin() as conn:
+            conn.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)")
+            )
+    else:
+        with engine.begin() as conn:
+            for stmt in statements:
+                conn.execute(text(stmt))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
+
+    if "transactions" in tables:
+        tx_existing = {col["name"] for col in inspector.get_columns("transactions")}
+        tx_statements: list[str] = []
+        if "account_id" not in tx_existing:
+            tx_statements.append("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS account_id INTEGER")
+        if tx_statements:
+            with engine.begin() as conn:
+                for stmt in tx_statements:
+                    conn.execute(text(stmt))
+                conn.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions (account_id)")
+                )
 
 
 def get_db():

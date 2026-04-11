@@ -8,6 +8,8 @@ from app.finance import models as finance_models
 from app.finance.router import router as finance_router
 from app.notifications.router import router as notifications_router
 from app.realtime import socket_app
+from app.ai_agent import models as ai_models
+from app.ai_agent.router import router as ai_router
 
 app = FastAPI(title="Finance AI Monolith")
 
@@ -37,6 +39,14 @@ def on_startup() -> None:
         finance_models.Category,
         finance_models.Transaction,
         finance_models.Tag,
+        finance_models.Account,
+        finance_models.Transfer,
+        finance_models.Debt,
+        finance_models.Budget,
+        finance_models.Goal,
+        finance_models.Subscription,
+        finance_models.Reminder,
+        ai_models.ChatMessage,
     )
 
 
@@ -45,3 +55,4 @@ app.include_router(finance_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 
 app.mount("/ws", socket_app)
+app.include_router(ai_router, prefix="/api/v1")

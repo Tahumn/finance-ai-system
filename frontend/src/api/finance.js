@@ -69,3 +69,6 @@ export const getSummary = (params) =>
 
 export const getCategoryBreakdown = (params) =>
   request(`/finance/reports/category-breakdown${buildQuery(params)}`);
+
+export const getChartData = (params) =>
+  request(`/finance/reports/chart${buildQuery(params)}`);

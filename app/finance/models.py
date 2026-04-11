@@ -1,7 +1,18 @@
-from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, Table, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, Float, ForeignKey, Integer, String, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    currency = Column(String, nullable=False, default="VND")
+    opening_balance = Column(Float, nullable=False, default=0.0)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
 
 
 class Category(Base):
@@ -38,8 +49,73 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True, index=True)
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     transaction_type = Column(String, nullable=False)
     date = Column(Date, nullable=False)
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")
+
+
+class Transfer(Base):
+    __tablename__ = "transfers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    from_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+    to_account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    date = Column(Date, nullable=False)
+    note = Column(String, nullable=True)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    start_date = Column(Date, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_subscription_name"),)
+
+
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    __table_args__ = (UniqueConstraint("user_id", "category_id", name="uq_user_budget_category"),)
+
+
+class Debt(Base):
+    __tablename__ = "debts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    due_date = Column(Date, nullable=True)
+
+
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    target_amount = Column(Float, nullable=False, default=0.0)
+    target_date = Column(Date, nullable=True)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    due_date = Column(Date, nullable=True)
+    is_done = Column(Boolean, nullable=False, default=False)

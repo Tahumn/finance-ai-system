@@ -160,9 +160,12 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
 
   return (
     <section className="panel">
-      <div className="panel-header">
-        <h3>{t("budgets.title")}</h3>
-      </div>
+      <header className="transactions-header" style={{ marginBottom: 14 }}>
+        <div>
+          <p className="eyebrow">Finance Workspace</p>
+          <h2>{t("budgets.title")}</h2>
+        </div>
+      </header>
 
       <form className="form" onSubmit={handleSubmit}>
         <div className="row">

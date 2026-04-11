@@ -9,3 +9,10 @@ passlib
 email-validator
 python-multipart
 python-socketio[asgi]
+pytesseract
+Pillow
+opencv-python-headless
+numpy
+scipy
+google-generativeai
+httpx

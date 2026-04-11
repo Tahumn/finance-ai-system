@@ -191,6 +191,8 @@ export default function DashboardScreen({
   breakdown = [],
   transactions = [],
   monthlySeries = [],
+  incomeBreakdown,
+  anomalies = [],
   onViewTransactions,
   onGoOcr,
   onGoChat,
@@ -200,6 +202,7 @@ export default function DashboardScreen({
   onSelectPreset,
   userEmail
 }) {
+  const maxVal = Math.max(1, ...monthlySeries.flatMap((item) => [item.income, item.expense]));
   const slicedTransactions = transactions.slice(0, 4);
   const insights = buildAiInsights(summary, transactions, breakdown);
   const donutItems = buildDonutItems(breakdown, 4, t("reports.other", null, "Khác"));
@@ -233,14 +236,37 @@ export default function DashboardScreen({
           <button className="ghost" type="button" onClick={onGoOcr}>
             {t("dashboard.ocr")}
           </button>
-          <button className="ghost" type="button" onClick={onGoChat}>
-            {t("dashboard.chat")}
-          </button>
+          {onGoChat && (
+            <button className="ghost" type="button" onClick={onGoChat}>
+              {t("dashboard.chat")}
+            </button>
+          )}
           <button className="ghost" type="button" onClick={onGoReports}>
             {t("dashboard.reports")}
           </button>
         </div>
       </section>
+
+      {anomalies && anomalies.length > 0 && (
+        <section className="panel anomalies">
+          <div className="panel-header">
+            <h3 style={{ color: "var(--danger)" }}>⚠️ Cảnh báo chi tiêu (Anomaly)</h3>
+          </div>
+          <div className="anomaly-list">
+            {anomalies.map((alert) => (
+              <div key={alert.id} className={`anomaly-item ${alert.severity}`}>
+                <div className="anomaly-info">
+                  <strong>{alert.description}</strong>
+                  <p>{alert.reason}</p>
+                </div>
+                <div className="anomaly-amount">
+                  {currency(alert.amount)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="grid">
         <div className="panel">
