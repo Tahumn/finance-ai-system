@@ -123,6 +123,14 @@ INCOME_KEYWORDS = [
     "refund",
     "hoan tien",
     "thuong",
+    "duoc cho",
+    "duoc tang",
+    "duoc bieu",
+    "duoc li xi",
+    "li xi",
+    "lixi",
+    "duoc ho tro",
+    "duoc chuyen",
 ]
 EXPENSE_KEYWORDS = [
     "chi",
@@ -140,17 +148,33 @@ EXPENSE_KEYWORDS = [
 
 def _has_income_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in INCOME_KEYWORDS:
-        if re.search(rf"\b{re.escape(kw)}\b", normalized):
-            return True
+        kw_norm = kw.strip().lower()
+        if not kw_norm:
+            continue
+        if " " in kw_norm:
+            if kw_norm in normalized:
+                return True
+        else:
+            if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
+                return True
     return False
 
 
 def _has_expense_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in EXPENSE_KEYWORDS:
-        if re.search(rf"\b{re.escape(kw)}\b", normalized):
-            return True
+        kw_norm = kw.strip().lower()
+        if not kw_norm:
+            continue
+        if " " in kw_norm:
+            if kw_norm in normalized:
+                return True
+        else:
+            if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
+                return True
     return False
 
 CATEGORY_KEYWORDS = {
@@ -534,6 +558,98 @@ def _is_question(text: str) -> bool:
     if text.strip().endswith("?"):
         return True
     return any(hint in normalized for hint in QUESTION_HINTS)
+
+
+def _is_greeting(text: str) -> bool:
+    normalized = _normalize_text(text)
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return False
+
+    greetings = {
+        "xin chao",
+        "chao",
+        "hello",
+        "hi",
+        "hey",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "chao ban",
+        "chao minh",
+    }
+    if normalized in greetings:
+        return True
+
+    return bool(re.search(r"\b(xin\s*chao|chao|hello|hi|hey)\b", normalized))
+
+
+MULTI_CONNECTOR_REGEX = re.compile(
+    r"\b(?:nhung|nhưng|va|và|roi|rồi|sau do|sau đó|dong thoi|đồng thời|cung|cũng|kem theo|kèm theo|kem|kèm)\b",
+    re.IGNORECASE,
+)
+
+
+def _split_transaction_segments(text: str) -> list[str]:
+    if not text or not text.strip():
+        return []
+    parts = [part.strip(" ,.;") for part in MULTI_CONNECTOR_REGEX.split(text)]
+    parts = [part for part in parts if part]
+    if len(parts) <= 1:
+        return [text.strip()]
+    return parts
+
+
+def _extract_multi_transactions(
+    db: Session,
+    current_user: User,
+    text: str,
+) -> list[dict]:
+    segments = _split_transaction_segments(text)
+    if len(segments) < 2:
+        return []
+
+    explicit_date = _parse_date(text)
+    candidates: list[dict] = []
+    for segment in segments:
+        parsed = parse_transaction_text(
+            db,
+            current_user,
+            segment,
+            auto_create_category=True,
+            use_llm=False,
+        )
+        amount = parsed.get("amount")
+        if amount is None:
+            continue
+        tx_type = parsed.get("transaction_type")
+        if _has_income_keyword(segment) and not _has_expense_keyword(segment):
+            tx_type = "income"
+        elif _has_expense_keyword(segment) and not _has_income_keyword(segment):
+            tx_type = "expense"
+        if tx_type not in ("income", "expense"):
+            continue
+
+        segment_date = _parse_date(segment)
+        date_value = parsed.get("date")
+        if explicit_date and not segment_date:
+            date_value = explicit_date
+
+        candidates.append(
+            {
+                "amount": amount,
+                "transaction_type": tx_type,
+                "category_id": parsed.get("category_id"),
+                "category_name": parsed.get("category_name"),
+                "note": parsed.get("description") or segment,
+                "date": date_value,
+            }
+        )
+
+    if len(candidates) < 2:
+        return []
+    return candidates
 
 
 def _extract_quoted(text: str) -> list[str]:
@@ -1631,6 +1747,7 @@ def parse_transaction_text(
     transaction_type = None
     category_name = None
 
+    explicit_text_date = _parse_date(text)
     llm_response = _call_gemini_chat(text) if use_llm else None
     if llm_response:
         intent = llm_response.get("intent")
@@ -1638,9 +1755,8 @@ def parse_transaction_text(
         
         if intent in ("SAVE_EXPENSE", "SAVE_INCOME"):
             amount = _coerce_amount(data.get("amount"))
-            date_value = data.get("date")
-            if isinstance(date_value, str):
-                parsed_date = _parse_iso_date(date_value) or _parse_date(date_value)
+            if explicit_text_date:
+                parsed_date = explicit_text_date
             
             transaction_type = "expense" if intent == "SAVE_EXPENSE" else "income"
             if _has_income_keyword(text) and not _has_expense_keyword(text):
@@ -1656,7 +1772,7 @@ def parse_transaction_text(
         if amount is None:
             warnings.append("amount_not_found")
     if parsed_date is None:
-        parsed_date = _parse_date(text) or default_date or DateType.today()
+        parsed_date = explicit_text_date or default_date or DateType.today()
     if not transaction_type:
         transaction_type = _parse_transaction_type(text)
     if not category_name:
@@ -1841,6 +1957,13 @@ def _fallback_chat_intent_payload(
             "friendly_response": "Minh dang kiem tra giao dich bat thuong.",
         }
 
+    if _is_greeting(text):
+        return {
+            "intent": "GREETING",
+            "data": {},
+            "friendly_response": "Xin chao! Minh co the giup ban ghi chep chi tieu, kiem tra ngan sach, hoac tim giao dich. Ban can gi?",
+        }
+
     if "ngan sach" in normalized or ("con bao nhieu" in normalized and " cho " in f" {normalized} "):
         return {
             "intent": "CHECK_BUDGET",
@@ -1876,6 +1999,47 @@ def _fallback_chat_intent_payload(
 
 
 def answer_chat(db: Session, current_user: User, text: str) -> dict:
+    multi = _extract_multi_transactions(db, current_user, text)
+    if multi:
+        created = []
+        for item in multi:
+            dt = _coerce_date_value(item.get("date")) or DateType.today()
+            tx = finance_service.create_transaction(
+                db,
+                current_user,
+                finance_schemas.TransactionCreate(
+                    description=item.get("note") or text,
+                    amount=item.get("amount"),
+                    transaction_type=item.get("transaction_type"),
+                    category_id=item.get("category_id"),
+                    date=dt,
+                ),
+            )
+            created.append({**item, "date": tx.date})
+
+        start_date = min(tx_item["date"] for tx_item in created)
+        end_date = max(tx_item["date"] for tx_item in created)
+        msg = [f"Da ghi nhan {len(created)} giao dich:"]
+        for tx_item in created:
+            kind = "Thu" if tx_item["transaction_type"] == "income" else "Chi"
+            amount = _format_amount(tx_item["amount"])
+            cat = tx_item.get("category_name")
+            if cat:
+                msg.append(f"- {kind} {amount}d ({cat}) ngay {tx_item['date']}")
+            else:
+                msg.append(f"- {kind} {amount}d ngay {tx_item['date']}")
+
+        response = {
+            "answer": "\n".join(msg),
+            "intent": "create_transactions",
+            "start_date": start_date,
+            "end_date": end_date,
+            "category_name": None,
+            "total": None,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
     llm_resp = _call_gemini_chat(text)
     if not isinstance(llm_resp, dict):
         llm_resp = _fallback_chat_intent_payload(db, current_user, text)
@@ -1895,6 +2059,12 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     heuristic_type = heuristic.get("transaction_type")
     heuristic_category = heuristic.get("category_name")
     heuristic_date = heuristic.get("date")
+    explicit_text_date = _parse_date(text)
+
+    if explicit_text_date:
+        data["date"] = explicit_text_date
+    elif data.get("date"):
+        data.pop("date", None)
 
     if heuristic_amount is not None and intent not in ("QUERY_HISTORY", "CHECK_BUDGET", "ANOMALY_DETECTION"):
         if _has_income_keyword(text) and not _has_expense_keyword(text):

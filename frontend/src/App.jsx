@@ -38,6 +38,7 @@ import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
 import OcrScreen from "./features/ocr/OcrScreen.jsx";
+import FloatingChatbot from "./components/FloatingChatbot.jsx";
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
@@ -165,9 +166,34 @@ export default function App() {
       setUiPrefs(nextPrefs);
       applyUiPrefs(nextPrefs);
     };
+    const handleRefresh = (event) => {
+      if (authState.status !== "authed") return;
+      const range = event?.detail;
+      if (range?.startDate && range?.endDate) {
+        const start = filters.start;
+        const end = filters.end;
+        if (start && end && (range.startDate < start || range.endDate > end)) {
+          const dateLabel =
+            range.startDate === range.endDate
+              ? range.startDate
+              : `${range.startDate} - ${range.endDate}`;
+          setNotice(
+            `Giao dich vua luu ngay ${dateLabel}. Bo loc hien tai (${start} -> ${end}) khong hien thi. Hay doi pham vi neu can.`
+          );
+        }
+      }
+      loadFinanceData();
+    };
     window.addEventListener("finance:ui-prefs", handlePrefs);
-    return () => window.removeEventListener("finance:ui-prefs", handlePrefs);
-  }, [authState.user?.email]);
+    window.addEventListener("finance:logout", handleLogout);
+    window.addEventListener("finance:refresh", handleRefresh);
+
+    return () => {
+      window.removeEventListener("finance:ui-prefs", handlePrefs);
+      window.removeEventListener("finance:logout", handleLogout);
+      window.removeEventListener("finance:refresh", handleRefresh);
+    };
+  }, [authState.user?.email, authState.status, filters]);
 
   useEffect(() => {
     const prefs = getUserPrefs(authState.user?.email);
@@ -821,7 +847,12 @@ export default function App() {
 
         {view === "settings" && <SettingsScreen user={authState.user} />}
 
-        {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
+        {view === "chat" && (
+          <ChatScreen 
+            userEmail={authState.user?.email} 
+            onCreateTransaction={handleCreateTransaction} 
+          />
+        )}
 
         {view === "notifications" && (
           <NotificationsScreen
@@ -835,6 +866,12 @@ export default function App() {
 
         <BottomNav active={view} onChange={handleChangeView} />
       </main>
+
+      <FloatingChatbot 
+        isAuthed={isAuthed} 
+        userEmail={authState.user?.email} 
+        onCreateTransaction={handleCreateTransaction}
+      />
     </div>
   );
 }

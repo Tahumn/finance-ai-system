@@ -3,11 +3,19 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    db_url: str = "postgresql://finance_user:finance_pass@localhost:5432/finance_db"
-    secret_key: str = Field(default="replace-me-in-env")
+    # Cấu hình Cơ sở dữ liệu (PostgreSQL)
+    db_url: str = "postgresql://finance_user:finance_pass@postgres:5432/finance_db"
+    secret_key: str = Field(default="change-this-to-a-long-random-string")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Cấu hình Gemini AI (Lấy từ .env)
+    gemini_api_key: str | None = None
+    gemini_model_name: str = "gemini-1.5-flash"
+    gemini_api_base: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_timeout_seconds: int = 15
+
+    # Cấu hình OTP / Email (Đồ án FoodFast)
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 465
     smtp_user: str | None = None
@@ -15,17 +23,16 @@ class Settings(BaseSettings):
     smtp_from: str | None = None
     otp_expire_minutes: int = 10
     dev_return_otp: bool = False
-    dify_api_base: str | None = None
-    dify_api_key: str | None = None
-    dify_timeout_seconds: int = 30
-    dify_force_json: bool = False
+    
+    # OCR Provider
     ocr_provider: str = "tesseract"
-    gemini_api_base: str | None = None
-    gemini_api_key: str | None = None
-    gemini_model: str | None = None
-    gemini_model_name: str | None = None
-    gemini_timeout_seconds: int = 30
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    # Tự động load từ file .env
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        env_file_encoding="utf-8", 
+        extra="ignore"
+    )
 
 
 settings = Settings()
