@@ -1339,19 +1339,37 @@ def _daily_expense_totals(transactions: list[Transaction]) -> dict[DateType, flo
         totals[tx.date] = totals.get(tx.date, 0.0) + float(tx.amount or 0.0)
     return totals
 
-
-def _detect_spend_anomalies(transactions: list[Transaction]) -> list[tuple[DateType, float]]:
-    totals = _daily_expense_totals(transactions)
-    values = list(totals.values())
-    if len(values) < 5:
-        return []
-    mean = sum(values) / len(values)
-    variance = sum((value - mean) ** 2 for value in values) / len(values)
-    std = math.sqrt(variance)
-    threshold = mean + 2 * std
-    anomalies = [(day, amount) for day, amount in totals.items() if amount > threshold]
-    anomalies.sort(key=lambda item: item[1], reverse=True)
-    return anomalies
+def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomalies: list[tuple[DateType, float]], all_txs: list[Transaction]) -> dict[str, dict]:
+    """Sử dụng AI để phân tích tính hợp lý của các điểm bất thường thống kê."""
+    if not candidate_anomalies or not settings.gemini_api_key:
+        return {}
+    
+    # Chuẩn bị dữ liệu cho AI
+    context = []
+    for day, amount in candidate_anomalies:
+        day_txs = [tx for tx in all_txs if tx.date == day]
+        tx_details = ", ".join([f"{tx.description} ({tx.amount:,.0f}đ)" for tx in day_txs])
+        context.append(f"- Ngày {day}: Tổng {amount:,.0f}đ. Các giao dịch: {tx_details}")
+    
+    prompt = (
+        "Bạn là chuyên gia phân tích tài chính. Hệ thống phát hiện các ngày có chi tiêu cao bất thường sau đây.\n"
+        "Hãy phân tích từng ngày và cho biết:\n"
+        "1. Đây là bất thường thực sự (chi tiêu hoang phí, đột xuất) hay là chi tiêu định kỳ hợp lý (tiền nhà, hóa đơn, học phí)?\n"
+        "2. Đưa ra một câu giải thích ngắn gọn, tinh tế (tiếng Việt).\n"
+        "3. Xác định mức độ nghiêm trọng (low, medium, high).\n\n"
+        "Dữ liệu:\n" + "\n".join(context) + "\n\n"
+        "Trả về DUY NHẤT JSON dạng: {\"YYYY-MM-DD\": {\"reason\": \"...\", \"severity\": \"...\", \"is_structural\": true/false}}"
+    )
+    
+    try:
+        genai.configure(api_key=settings.gemini_api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        text_val = getattr(response, "text", "{}")
+        return _extract_json(text_val) or {}
+    except Exception as e:
+        print(f"AI Anomaly Analysis failed: {e}")
+        return {}
 
 
 def get_spending_anomalies(db: Session, current_user: User) -> list[finance_schemas.AnomalyAlert]:
@@ -1360,27 +1378,36 @@ def get_spending_anomalies(db: Session, current_user: User) -> list[finance_sche
     start = today - timedelta(days=30)
     txs = finance_service.list_transactions(db, current_user, start_date=start, end_date=today, transaction_type="expense", limit=500)[0]
     
-    anomalies = _detect_spend_anomalies(txs)
+    candidates = _detect_spend_anomalies(txs)
+    if not candidates:
+        return []
+
+    # AI Phân tích tính hợp lý
+    ai_analysis = _analyze_anomalies_with_ai(db, current_user, candidates, txs)
+    
     alerts = []
-    for day, amount in anomalies:
-        # Try to get AI-enhanced explanation
-        day_txs = [tx for tx in txs if tx.date == day]
-        categories = list({tx.category_id for tx in day_txs if tx.category_id})
-        cat_names_raw = (
-            db.query(Category)
-            .filter(Category.id.in_(categories), Category.user_id == current_user.id)
-            .all()
-        ) if categories else []
-        cat_label = ", ".join(c.name for c in cat_names_raw) if cat_names_raw else "nhiều danh mục"
+    for day, amount in candidates:
+        day_str = day.isoformat()
+        analysis = ai_analysis.get(day_str, {})
         
+        reason = analysis.get("reason")
+        severity = analysis.get("severity") or "medium"
+        
+        if not reason:
+            # Fallback nếu AI lỗi
+            day_txs = [tx for tx in txs if tx.date == day]
+            top_tx = sorted(day_txs, key=lambda x: x.amount, reverse=True)[0]
+            reason = f"Chi tiêu cao bất thường, chủ yếu từ '{top_tx.description}' ({top_tx.amount:,.0f}đ)."
+
         alerts.append(finance_schemas.AnomalyAlert(
             id=f"anomaly-{day}",
             date=day,
             amount=amount,
-            description=f"Chi tiêu ngày {day} cao bất thường ({cat_label})",
-            reason=f"Vượt ngưỡng trung bình 30 ngày qua (> 2 độ lệch chuẩn), các danh mục: {cat_label}",
-            severity="high" if amount > 1_000_000 else "medium"
+            description=f"Chi tiêu {amount:,.0f}đ vào ngày {day.strftime('%d/%m')}",
+            reason=reason,
+            severity=severity
         ))
+    
     return alerts
 
 
@@ -2481,16 +2508,18 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=(
-                "Bạn là hệ thống nhận diện hóa đơn OCR tài chính. "
-                "Trích xuất thông tin thành JSON chuẩn xác. Yêu cầu:\n"
-                "- date: Ngày trên hóa đơn có định dạng 'YYYY-MM-DD', nếu không có trả về null.\n"
-                "- merchant: Tên cửa hàng, siêu thị. Ngắn gọn, chuẩn hóa, bỏ bớt địa chỉ.\n"
-                "- total: Tổng tiền thanh toán cuối cùng (kiểu số nguyên).\n"
-                "- vat: Tiền thuế (nếu có, kiểu số nguyên).\n"
-                "- estimated: Tiền hàng trước thuế hoặc giảm giá (nếu có, kiểu số nguyên).\n"
-                "- note: Ghi chú mô tả ngắn về hóa đơn.\n"
-                "- text: Các chi tiết chữ thô nhận diện được.\n"
-                "TRẢ VỀ DUY NHẤT ĐỊNH DẠNG JSON, KHÔNG XUẤT MARKDOWN, KHÔNG GIẢI THÍCH."
+                "Bạn là chuyên gia OCR hóa đơn tài chính chuyên nghiệp tại Việt Nam. "
+                "Nhiệm vụ của bạn là trích xuất thông tin từ ảnh hóa đơn sang định dạng JSON chuẩn xác.\n\n"
+                "Quy tắc trích xuất:\n"
+                "- date: Ngày hóa đơn (YYYY-MM-DD). Nếu không thấy năm, giả định năm hiện tại 2026. Nếu không có ngày, trả về null.\n"
+                "- merchant: Tên cửa hàng/siêu thị/nhà cung cấp. Bỏ qua địa chỉ chi tiết, chỉ lấy tên thương hiệu (VD: 'WinMart', 'Highlands Coffee').\n"
+                "- total: Tổng số tiền cuối cùng khách phải trả (kiểu số nguyên). Lưu ý các hóa đơn Việt Nam thường dùng dấu chấm '.' làm phân cách hàng nghìn (VD: 100.000 -> 100000).\n"
+                "- vat: Tiền thuế GTGT nếu có (số nguyên).\n"
+                "- estimated: Giá trị hàng hóa trước thuế hoặc trước khi giảm giá (số nguyên).\n"
+                "- items: Danh sách các mặt hàng (nếu có thể đọc được), mỗi item có {name, price, qty}.\n"
+                "- note: Tóm tắt ngắn gọn nội dung hóa đơn (VD: 'Mua nhu yếu phẩm', 'Uống cafe').\n"
+                "- text: Các ký tự thô nhận diện được.\n\n"
+                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH, KHÔNG MARKDOWN."
             )
         )
         response = model.generate_content(

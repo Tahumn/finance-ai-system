@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { chatWithAi } from "../../api/ai.js";
+import { chatWithAi, getForecast, getAnomalies, getSavingsTips } from "../../api/ai.js";
+import { currency } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
 
 const buildStorageKey = (email) => `finance_chat_history:${email || "guest"}`;
@@ -96,6 +97,34 @@ export default function ChatScreen({ userEmail }) {
   const [messages, setMessages] = useState(seedMessages);
   const [input, setInput] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveOcr = async (data) => {
+    if (!data.total || !onCreateTransaction) return;
+    setIsSaving(true);
+    try {
+      await onCreateTransaction({
+        description: data.note || `Hóa đơn từ ${data.merchant || 'AI'}`,
+        amount: data.total,
+        transaction_type: "expense",
+        date: data.date || new Date().toISOString().split('T')[0]
+      });
+      setMessages(prev => [
+        ...prev,
+        { 
+          id: `save-${Date.now()}`, 
+          role: "assistant", 
+          content: "Đã lưu giao dịch thành công! ✅", 
+          created_at: Date.now() 
+        }
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const threadRef = useRef(null);
 
   const storageKey = useMemo(() => buildStorageKey(userEmail), [userEmail]);
@@ -131,38 +160,177 @@ export default function ChatScreen({ userEmail }) {
     threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages]);
 
-  const handleSend = async (event) => {
-    event.preventDefault();
-    const text = input.trim();
-    if (!text) return;
+  const suggestions = [
+    { text: "Dự đoán xu hướng chi tiêu", icon: "📈" },
+    { text: "Gợi ý tiết kiệm / cắt giảm", icon: "💡" },
+    { text: "Phát hiện bất thường chi tiêu", icon: "🔍" }
+  ];
+
+  const handleSend = async (event, presetText = null, type = "chat") => {
+    if (event) event.preventDefault();
+    const text = typeof presetText === "string" ? presetText : input.trim();
+    if (!text && type === "chat") return;
 
     const now = Date.now();
-    setMessages((current) => [
-      ...current,
-      { id: `u-${now}`, role: "user", content: text, created_at: now }
-    ]);
-    setInput("");
+    if (text) {
+      setMessages((current) => [
+        ...current,
+        { id: `u-${now}`, role: "user", content: text, created_at: now }
+      ]);
+      setInput("");
+    }
 
+    setIsTyping(true);
     let reply = "";
+    let insightData = null;
+
+    // Simulate AI thinking delay for premium feel
+    await new Promise(r => setTimeout(r, text ? 800 : 400));
+
     try {
-      const response = await chatWithAi(text);
-      reply = response?.answer || "";
+      if (type === "forecast") {
+        insightData = await getForecast();
+        reply = insightData.summary || "Dự báo xu hướng chi tiêu của bạn dựa trên dữ liệu 6 tháng qua.";
+      } else if (type === "savings") {
+        insightData = await getSavingsTips();
+        reply = insightData.summary || "Tôi đã phân tích và tìm ra một số cách giúp bạn tối ưu ngân sách.";
+      } else if (type === "anomaly") {
+        insightData = await getAnomalies();
+        reply = insightData.summary || "Tôi phát hiện một vài điểm chi tiêu bất thường cần bạn lưu ý.";
+      } else {
+        const response = await chatWithAi(text);
+        reply = response?.answer || "";
+      }
     } catch {
       reply = "";
     }
+
     if (!reply) {
       reply = buildMockReply(text);
     }
 
+    setIsTyping(false);
     setMessages((current) => [
       ...current,
       {
         id: `a-${now}`,
         role: "assistant",
         content: reply,
-        created_at: now + 1
+        created_at: now + 50,
+        insightType: type,
+        insightData: insightData
       }
     ]);
+  };
+
+  const renderInsightData = (item) => {
+    if (!item.insightData) return null;
+
+    if (item.insightType === "forecast") {
+      const { points = [], risk_level = "low", top_growing_categories = [] } = item.insightData;
+      return (
+        <div className="premium-insight-card forecast-card">
+          <div className="card-header-ai">
+            <span className="icon">📈</span>
+            <strong>{t("reports.forecast_title", null, "Dự báo 3 tháng tới")}</strong>
+          </div>
+          <div className="forecast-grid-premium">
+            {points.map((pt) => (
+              <div key={pt.month} className="forecast-item-premium">
+                <span className="label">{pt.month}</span>
+                <span className="val">{currency(pt.predicted_expense)}</span>
+                <div className="progress-track"><div className="progress-fill" style={{width: '70%', background: 'var(--primary)'}}></div></div>
+              </div>
+            ))}
+          </div>
+          {top_growing_categories.length > 0 && (
+            <div className="growing-categories">
+              <span className="muted">Tăng mạnh:</span>
+              <div className="tags">
+                {top_growing_categories.map(c => <span key={c} className="premium-tag warn">{c}</span>)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (item.insightType === "savings") {
+      const { tips = [], total_potential_saving = 0 } = item.insightData;
+      return (
+        <div className="premium-insight-card saving-card">
+          <div className="card-header-ai">
+            <span className="icon">💡</span>
+            <strong>{t("reports.saving_title", null, "Gợi ý tiết kiệm")}</strong>
+          </div>
+          <div className="saving-summary-premium">
+            <div className="save-total">
+              <span>Tiềm năng:</span>
+              <strong>{currency(total_potential_saving)}</strong>
+            </div>
+          </div>
+          <div className="tips-list-premium">
+            {tips.map((tip, i) => (
+              <div key={i} className="tip-row-premium">
+                <div className="tip-info">
+                  <span className="cat">{tip.category}</span>
+                  <span className="amt">-{currency(tip.potential_saving)}</span>
+                </div>
+                <p className="note">{tip.note}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (item.insightType === "anomaly") {
+      const anomalies = item.insightData.alerts || item.insightData.anomalies || [];
+      return (
+        <div className="premium-insight-card anomaly-card">
+          <div className="card-header-ai">
+            <span className="icon">🔍</span>
+            <strong>{t("reports.anomaly_title", null, "Phát hiện bất thường")}</strong>
+          </div>
+          <div className="anomaly-list-premium">
+            {anomalies.map((a, i) => (
+              <div key={i} className={`anomaly-item-premium ${a.severity}`}>
+                <div className="anomaly-meta">
+                  <span className="date">{new Date(a.date).toLocaleDateString('vi-VN')}</span>
+                  <span className="amt">{currency(a.amount)}</span>
+                </div>
+                <p className="reason">{a.reason || a.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (item.insightType === "ocr_result") {
+      const data = item.insightData;
+      return (
+        <div className="premium-insight-card ocr-confirm-card">
+          <div className="card-header-ai">
+            <span className="icon">📄</span>
+            <strong>Xác nhận hóa đơn</strong>
+          </div>
+          <div className="ocr-details">
+            <div className="ocr-row"><span>Cửa hàng:</span> <strong>{data.merchant}</strong></div>
+            <div className="ocr-row"><span>Ngày:</span> <strong>{data.date}</strong></div>
+            <div className="ocr-row"><span>Tổng tiền:</span> <strong className="primary">{currency(data.total)}</strong></div>
+          </div>
+          <button 
+            className="premium-btn save-btn" 
+            onClick={() => handleSaveOcr(data)}
+          >
+            Lưu vào sổ cái
+          </button>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const handleClear = () => {
@@ -185,28 +353,65 @@ export default function ChatScreen({ userEmail }) {
       </div>
 
       <div className="chat-thread" ref={threadRef}>
+        {messages.length <= 1 && (
+          <div className="chat-starter-card">
+            <div className="insight-badge-ai">
+              <span>✦ AI</span>
+            </div>
+            <div className="starter-header">
+              <h4>TIK-TIK AI Insights</h4>
+              <p>Phân tích thông minh dựa trên dữ liệu tài chính của bạn</p>
+            </div>
+          </div>
+        )}
+
         {messages.map((item) => (
           <div
             key={item.id}
             className={`chat-bubble ${item.role === "user" ? "is-user" : "is-bot"}`}
           >
-            <p>{item.content}</p>
-            {item.created_at && <span>{formatTimestamp(item.created_at)}</span>}
+            <div className="bubble-content">
+              <p>{item.content}</p>
+              {renderInsightData(item)}
+              {item.created_at && <span className="timestamp">{formatTimestamp(item.created_at)}</span>}
+            </div>
           </div>
         ))}
+
+        {isTyping && (
+          <div className="chat-bubble is-bot typing">
+            <div className="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        )}
       </div>
 
-      <form className="chat-input" onSubmit={handleSend}>
-        <input
-          type="text"
-          placeholder={t("chat.placeholder")}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-        />
-        <button className="primary" type="submit" disabled={!input.trim()}>
-          {t("chat.send")}
-        </button>
-      </form>
+      <div className="chat-input-wrapper">
+        <div className="chat-suggestions sticky">
+          <button type="button" className="suggestion-chip" onClick={() => handleSend(null, "Dự báo", "forecast")}>
+            <span className="chip-icon">📈</span> Dự báo
+          </button>
+          <button type="button" className="suggestion-chip" onClick={() => handleSend(null, "Tiết kiệm", "savings")}>
+            <span className="chip-icon">💡</span> Tiết kiệm
+          </button>
+          <button type="button" className="suggestion-chip" onClick={() => handleSend(null, "Bất thường", "anomaly")}>
+            <span className="chip-icon">🔍</span> Bất thường
+          </button>
+        </div>
+
+        <form className="chat-input" onSubmit={handleSend}>
+          <input
+            type="text"
+            placeholder={t("chat.placeholder")}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+          />
+          <button className="primary" type="submit" disabled={!input.trim()}>
+            {t("chat.send")}
+          </button>
+        </form>
+      </div>
     </section>
   );
 }
