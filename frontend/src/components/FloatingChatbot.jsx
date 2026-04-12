@@ -10,7 +10,7 @@ const QUICK_ACTIONS = [
   { label: "Lương tháng này", query: "Ghi nhận lương tháng này 15 triệu" },
 ];
 
-const buildStorageKey = (email) => `finance_floating_chat_history:${email || "guest"}`;
+const buildStorageKey = (email) => `finance_chat_history:${email || "guest"}`;
 
 const resolveEmailKey = (userEmail, isAuthed) => {
   if (isAuthed && userEmail) {
@@ -44,33 +44,27 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
   useEffect(() => {
     let cancelled = false;
     const resolvedEmail = resolveEmailKey(userEmail, isAuthed);
-    const storageKey = buildStorageKey(resolvedEmail);
-    const fallbackToLocal = () => {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) {
-        setMessages([
-          { role: "assistant", content: "Xin chào! Tôi là trợ lý tài chính AI. Tôi có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách hoặc tìm kiếm giao dịch. Bạn cần giúp gì nào?" }
-        ]);
-        return;
-      }
-      try {
-        const parsed = JSON.parse(raw);
-        const normalized = normalizeMessages(parsed);
-        if (normalized) {
-          setMessages(normalized);
-        } else {
+    
+    const load = async () => {
+      const storageKey = buildStorageKey(resolvedEmail);
+      
+      const fallbackToLocal = () => {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) {
           setMessages([
             { role: "assistant", content: "Xin chào! Tôi là trợ lý tài chính AI. Tôi có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách hoặc tìm kiếm giao dịch. Bạn cần giúp gì nào?" }
           ]);
+          return;
         }
-      } catch {
-        setMessages([
-          { role: "assistant", content: "Xin chào! Tôi là trợ lý tài chính AI. Tôi có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách hoặc tìm kiếm giao dịch. Bạn cần giúp gì nào?" }
-        ]);
-      }
-    };
+        try {
+          const parsed = JSON.parse(raw);
+          const normalized = normalizeMessages(parsed);
+          if (normalized) {
+            setMessages(normalized);
+          }
+        } catch {}
+      };
 
-    const load = async () => {
       if (!isAuthed) {
         fallbackToLocal();
         return;
@@ -78,21 +72,27 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
       try {
         const response = await getChatHistory(50);
         const normalized = normalizeMessages(response?.messages);
-        if (!cancelled && normalized) {
+        if (!cancelled && normalized && normalized.length > 0) {
           setMessages(normalized);
           return;
         }
-      } catch {
-        // ignore and fallback
-      }
-      if (!cancelled) {
-        fallbackToLocal();
-      }
+      } catch {}
+      if (!cancelled) fallbackToLocal();
     };
 
     load();
+
+    const handleUpdate = () => {
+      load();
+    };
+
+    window.addEventListener("finance:chat_update", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+
     return () => {
       cancelled = true;
+      window.removeEventListener("finance:chat_update", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
     };
   }, [userEmail, isAuthed]);
 
@@ -100,8 +100,15 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
     const resolvedEmail = resolveEmailKey(userEmail, isAuthed);
     const storageKey = buildStorageKey(resolvedEmail);
     const normalized = normalizeMessages(messages);
-    if (!normalized) return;
-    localStorage.setItem(storageKey, JSON.stringify(normalized));
+    if (!normalized || normalized.length <= 1) return;
+    
+    const existing = localStorage.getItem(storageKey);
+    const serialized = JSON.stringify(normalized);
+    if (existing !== serialized) {
+      localStorage.setItem(storageKey, serialized);
+      // Dispatch update to sync with ChatScreen
+      window.dispatchEvent(new CustomEvent("finance:chat_update"));
+    }
   }, [messages, userEmail, isAuthed]);
 
   useEffect(() => {

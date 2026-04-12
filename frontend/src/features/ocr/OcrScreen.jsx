@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState, useRef } from "react";
 import { extractOcr } from "../../api/ai.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
+import "./ocr.css";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
   merchant: "",
   total: "",
   vat: "",
-  estimated: "",
+  subtotal: "",
   categoryId: "",
+  invoice_id: "",
   note: ""
 });
 
@@ -19,29 +20,19 @@ const baseConfidence = {
   merchant: 0,
   total: 0,
   vat: 0,
-  estimated: 0
+  subtotal: 0
 };
 
-const sanitizeName = (name) =>
-  name
-    .replace(/\.[^/.]+$/, "")
-    .replace(/[_-]+/g, " ")
-    .trim();
-
-const toFormattedNumber = (value, fallback = "") => {
-  if (value === null || value === undefined || value === "") return fallback;
-  return formatNumberInput(String(value));
-};
-
-export default function OcrScreen({ categories, onCreateTransaction, loading }) {
+export default function OcrScreen({ categories, onCreateTransaction, loading: globalLoading }) {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsed, setParsed] = useState(baseParsedState);
   const [confidence, setConfidence] = useState(baseConfidence);
   const [ocrState, setOcrState] = useState("idle");
+  const [isDragging, setIsDragging] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [warnings, setWarnings] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!file) {
@@ -60,7 +51,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
 
   const handleExtract = async () => {
     if (!file) {
-      setError(t("ocr.error.no_file", null, "Please select a receipt image first."));
+      setError(t("ocr.error.no_file", null, "Vui lòng chọn hoặc kéo thả ảnh hóa đơn trước."));
       return;
     }
 
@@ -72,40 +63,40 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
       const result = await extractOcr(file);
       setParsed((current) => ({
         ...current,
-        merchant: result.merchant || current.merchant || sanitizeName(file.name) || t("ocr.merchant_guess"),
-        total: toFormattedNumber(result.total, current.total),
-        vat: toFormattedNumber(result.vat, current.vat),
-        estimated: toFormattedNumber(result.estimated, current.estimated),
-        note: result.note || (result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note),
-        date: result.date || current.date
+        merchant: result.merchant || current.merchant || t("ocr.merchant_guess"),
+        total: result.total ? formatNumberInput(String(result.total)) : current.total,
+        vat: result.vat ? formatNumberInput(String(result.vat)) : current.vat,
+        subtotal: result.subtotal ? formatNumberInput(String(result.subtotal)) : current.subtotal,
+        invoice_id: result.invoice_id || "",
+        note: result.text ? `ID: ${result.invoice_id || '---'}` : current.note,
+        date: result.date || current.date,
+        categoryId: result.category ? (categories.find(c => c.name.toLowerCase() === result.category.toLowerCase())?.id || "") : current.categoryId
       }));
+      
       setConfidence({
-        date: result.date ? 0.8 : 0.3,
-        merchant: result.merchant ? 0.8 : 0.3,
-        total: result.total ? 0.9 : 0.3,
-        vat: result.vat ? 0.7 : 0.2,
-        estimated: result.estimated ? 0.6 : 0.2
+        date: result.date ? 0.9 : 0.4,
+        merchant: result.merchant ? 0.85 : 0.4,
+        total: result.total ? 0.95 : 0.3,
+        vat: result.vat ? 0.8 : 0.2,
+        subtotal: result.subtotal ? 0.8 : 0.2
       });
-      setWarnings(result.warnings || []);
-      setNotice(t("ocr.notice.extracted", null, "OCR done. Review and confirm before creating transaction."));
+      
+      setNotice(t("ocr.notice.extracted", null, "Đã trích xuất xong. Vui lòng kiểm tra lại số liệu."));
       setOcrState("done");
     } catch (err) {
-      setError(err.message || t("ocr.error.extract_failed", null, "OCR failed."));
+      setError(err.message || t("ocr.error.extract_failed", null, "Không thể trích xuất dữ liệu."));
       setOcrState("idle");
     }
   };
 
   const handleCreate = async (event) => {
     event.preventDefault();
-    if (!canCreate) {
-      setError(t("ocr.error.missing", null, "Missing required data: date and total amount."));
-      return;
-    }
+    if (!canCreate) return;
 
     setError("");
     setNotice("");
 
-    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.note]
+    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.invoice_id]
       .filter(Boolean)
       .join(" - ");
 
@@ -115,186 +106,190 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
         amount: parseNumberInput(parsed.total),
         transaction_type: "expense",
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
-        date: parsed.date
+        date: parsed.date,
+        note: parsed.note
       });
-      setNotice(t("ocr.notice.created", null, "Transaction created from OCR."));
+      setNotice(t("ocr.notice.created", null, "Giao dịch đã được tạo thành công!"));
       setParsed(baseParsedState());
       setConfidence(baseConfidence);
       setFile(null);
       setOcrState("idle");
-      setWarnings([]);
     } catch {
-      setError(t("ocr.error.create_failed", null, "Failed to create transaction from OCR."));
+      setError(t("ocr.error.create_failed", null, "Không thể tạo giao dịch."));
+    }
+  };
+
+  const getConfClass = (val) => {
+    if (val >= 0.8) return "high";
+    if (val >= 0.5) return "med";
+    return "low";
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && f.type.startsWith("image/")) {
+      setFile(f);
     }
   };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
-        <span className="badge">OCR + transaction</span>
+    <div className={`ocr-container-pro ${ocrState}`}>
+      <div className="ocr-header-pro">
+        <h1>{t("ocr.title", null, "Nhập Hóa Đơn AI")}</h1>
+        <div className="badge-pro">BETA V4 (Auditor)</div>
       </div>
 
-      <div className="receipt-grid">
-        <div className="receipt-uploader">
-          <label className="field">
-            <span>{t("ocr.form.image", null, "Receipt image")}</span>
-            <input
-              type="file"
+      <div className="ocr-grid-pro">
+        <div className="ocr-uploader-card">
+          <div 
+            className={`dropzone-pro ${isDragging ? 'dragging' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              hidden 
               accept="image/*"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
-          </label>
-
-          <button className="ghost" type="button" onClick={handleExtract}>
-            {ocrState === "running"
-              ? t("ocr.action.running", null, "Processing...")
-              : t("ocr.action.extract", null, "Run OCR")}
-          </button>
-
-          <div className="receipt-preview">
-            {previewUrl ? (
-              <img src={previewUrl} alt="Receipt preview" />
-            ) : (
-              <p className="empty">{t("ocr.empty", null, "No image selected.")}</p>
-            )}
+            <span className="dropzone-icon">📷</span>
+            <p>{file ? file.name : "Kéo thả hoặc bấm để chọn ảnh hóa đơn"}</p>
           </div>
+
+          {previewUrl && (
+            <div className="preview-container">
+              <div className="scanner-line"></div>
+              <img src={previewUrl} alt="Receipt preview" />
+            </div>
+          )}
+
+          <button 
+            className="extract-btn-pro glow-effect" 
+            onClick={handleExtract}
+            disabled={!file || ocrState === "running" || globalLoading}
+          >
+            {ocrState === "running" ? (
+              <><span>🌀</span> Đang quét...</>
+            ) : (
+              <><span>✨</span> Trích xuất dữ liệu AI</>
+            )}
+          </button>
         </div>
 
-        <form className="form" onSubmit={handleCreate}>
-          <div className="row">
-            <label className="field">
-              <span>{t("ocr.form.date", null, "Date")}</span>
-              <input
-                type="date"
-                value={parsed.date}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, date: event.target.value }))
-                }
-                required
-              />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.date * 100) }, `Confidence: ${
-                  Math.round(confidence.date * 100)
-                }%`)}
-              </small>
-            </label>
-
-            <label className="field">
-              <span>{t("ocr.form.merchant", null, "Merchant")}</span>
-              <input
-                type="text"
+        <form className="ocr-form-card" onSubmit={handleCreate}>
+          <div className="form-section-title">Thông tin giao dịch</div>
+          
+          <div className="field-pro">
+            <label>Cửa hàng (Merchant)</label>
+            <div className="input-wrapper-pro">
+              <input 
+                className="input-pro" 
                 value={parsed.merchant}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, merchant: event.target.value }))
-                }
-                placeholder={t("ocr.form.merchant_placeholder", null, "Example: Circle K")}
+                onChange={(e) => setParsed(p => ({...p, merchant: e.target.value}))}
+                placeholder="VD: Lotte Mart, Highland Coffee..."
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.merchant * 100) }, `Confidence: ${
-                  Math.round(confidence.merchant * 100)
-                }%`)}
-              </small>
-            </label>
+              <div className={`confidence-dot ${getConfClass(confidence.merchant)}`} title="Độ tin cậy của AI"></div>
+            </div>
           </div>
 
-          <div className="row">
-            <label className="field">
-              <span>{t("ocr.form.total", null, "Total")}</span>
-              <input
-                type="text"
-                inputMode="numeric"
+          <div className="grid two" style={{gap: '15px'}}>
+            <div className="field-pro">
+              <label>Ngày hóa đơn</label>
+              <div className="input-wrapper-pro">
+                <input 
+                  type="date"
+                  className="input-pro" 
+                  value={parsed.date}
+                  onChange={(e) => setParsed(p => ({...p, date: e.target.value}))}
+                />
+                <div className={`confidence-dot ${getConfClass(confidence.date)}`}></div>
+              </div>
+            </div>
+            <div className="field-pro">
+              <label>Mã hóa đơn / ID</label>
+              <div className="input-wrapper-pro">
+                <input 
+                  className="input-pro" 
+                  value={parsed.invoice_id}
+                  onChange={(e) => setParsed(p => ({...p, invoice_id: e.target.value}))}
+                  placeholder="Mã số từ hóa đơn..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section-title">Kiểm toán tài chính</div>
+
+          <div className="grid two" style={{gap: '15px'}}>
+            <div className="field-pro">
+              <label>Tạm tính (Subtotal)</label>
+              <div className="input-wrapper-pro">
+                <input 
+                  className="input-pro" 
+                  value={parsed.subtotal}
+                  onChange={(e) => setParsed(p => ({...p, subtotal: formatNumberInput(e.target.value)}))}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="field-pro">
+              <label>Thuế (VAT)</label>
+              <div className="input-wrapper-pro">
+                <input 
+                  className="input-pro" 
+                  value={parsed.vat}
+                  onChange={(e) => setParsed(p => ({...p, vat: formatNumberInput(e.target.value)}))}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="field-pro">
+            <label>TỔNG THANH TOÁN (Grand Total)</label>
+            <div className="input-wrapper-pro">
+              <input 
+                className="input-pro" 
+                style={{fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)'}}
                 value={parsed.total}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    total: formatNumberInput(event.target.value)
-                  }))
-                }
+                onChange={(e) => setParsed(p => ({...p, total: formatNumberInput(e.target.value)}))}
                 placeholder="0"
                 required
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.total * 100) }, `Confidence: ${
-                  Math.round(confidence.total * 100)
-                }%`)}
-              </small>
-            </label>
-
-            <label className="field">
-              <span>VAT</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.vat}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    vat: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-              />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.vat * 100) }, `Confidence: ${
-                  Math.round(confidence.vat * 100)
-                }%`)}
-              </small>
-            </label>
+              <div className={`confidence-dot ${getConfClass(confidence.total)}`} style={{width: '12px', height: '12px'}}></div>
+            </div>
+            <small style={{color: 'var(--muted)', textAlign: 'right', display: 'block'}}>
+              {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
+            </small>
           </div>
 
-          <div className="row">
-            <label className="field">
-              <span>{t("ocr.form.category", null, "Category")}</span>
-              <select
-                value={parsed.categoryId}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, categoryId: event.target.value }))
-                }
-              >
-                <option value="">{t("ocr.form.category_placeholder", null, "Select category")}</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>{t("ocr.form.preview_total", null, "Preview total")}</span>
-              <input
-                type="text"
-                value={parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
-                readOnly
-              />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.estimated * 100) }, `Confidence: ${
-                  Math.round(confidence.estimated * 100)
-                }%`)}
-              </small>
-            </label>
+          <div className="field-pro">
+            <label>Danh mục dự đoán</label>
+            <select
+              className="input-pro"
+              value={parsed.categoryId}
+              onChange={(e) => setParsed(p => ({...p, categoryId: e.target.value}))}
+            >
+              <option value="">-- Chọn danh mục --</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <label className="field">
-            <span>{t("ocr.form.note", null, "Notes")}</span>
-            <textarea
-              rows="3"
-              value={parsed.note}
-              onChange={(event) =>
-                setParsed((current) => ({ ...current, note: event.target.value }))
-              }
-              placeholder={t("ocr.form.note_placeholder", null, "OCR text summary or custom note")}
-            />
-          </label>
+          {notice && <p style={{color: '#27ae60', fontSize: '14px', margin: '10px 0'}}>{notice}</p>}
+          {error && <p style={{color: '#e74c3c', fontSize: '14px', margin: '10px 0'}}>{error}</p>}
 
-          {warnings.length > 0 && <p className="form-error">{warnings.join(" ")}</p>}
-          {notice && <p className="form-note">{notice}</p>}
-          {error && <p className="form-error">{error}</p>}
-
-          <div className="row-actions">
-            <button
-              className="ghost"
+          <div className="row-actions" style={{marginTop: '20px'}}>
+             <button 
+              className="ghost" 
               type="button"
               onClick={() => {
                 setFile(null);
@@ -302,17 +297,17 @@ export default function OcrScreen({ categories, onCreateTransaction, loading }) 
                 setConfidence(baseConfidence);
                 setNotice("");
                 setError("");
-                setWarnings([]);
               }}
+              disabled={ocrState === "running"}
             >
-              {t("ocr.action.reset", null, "Reset")}
+              Làm lại
             </button>
-            <button className="primary" type="submit" disabled={!canCreate || loading}>
-              {t("ocr.action.create", null, "Create transaction")}
+            <button className="primary" type="submit" style={{flex: 1}} disabled={!canCreate || ocrState === "running" || globalLoading}>
+              {globalLoading ? "Đang xử lý..." : "Xác nhận & Lưu Giao Dịch"}
             </button>
           </div>
         </form>
       </div>
-    </section>
+    </div>
   );
 }

@@ -1352,13 +1352,14 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
         context.append(f"- Ngày {day}: Tổng {amount:,.0f}đ. Các giao dịch: {tx_details}")
     
     prompt = (
-        "Bạn là chuyên gia phân tích tài chính. Hệ thống phát hiện các ngày có chi tiêu cao bất thường sau đây.\n"
-        "Hãy phân tích từng ngày và cho biết:\n"
-        "1. Đây là bất thường thực sự (chi tiêu hoang phí, đột xuất) hay là chi tiêu định kỳ hợp lý (tiền nhà, hóa đơn, học phí)?\n"
-        "2. Đưa ra một câu giải thích ngắn gọn, tinh tế (tiếng Việt).\n"
-        "3. Xác định mức độ nghiêm trọng (low, medium, high).\n\n"
-        "Dữ liệu:\n" + "\n".join(context) + "\n\n"
-        "Trả về DUY NHẤT JSON dạng: {\"YYYY-MM-DD\": {\"reason\": \"...\", \"severity\": \"...\", \"is_structural\": true/false}}"
+        "Bạn là chuyên gia phân tích tài chính thông minh. Hệ thống phát hiện các ngày có chi tiêu cao bất thường.\n"
+        "Hãy phân tích từng ngày dựa trên danh sách giao dịch và cho biết liệu đây là bất thường thực sự hay chi tiêu định kỳ hợp lý.\n\n"
+        "Nguyên tắc phân loại:\n"
+        "1. Chi tiêu định kỳ (Structural/Fixed): Tiền nhà, điện nước, mạng, bảo hiểm, học phí, nợ định kỳ. -> Severity: low.\n"
+        "2. Chi tiêu đột biến (Anomaly/Volatile): Ăn uống tăng vọt, mua sắm xa xỉ, giải trí tốn kém, các khoản chi không lặp lại. -> Severity: medium hoặc high.\n"
+        "3. So sánh: Nếu giao dịch đó thuộc danh mục mà tháng trước cũng có mức tương tự, hãy coi là bình thường.\n\n"
+        "Dữ liệu giao dịch cần phân tích:\n" + "\n".join(context) + "\n\n"
+        "Trả về JSON dạng: {\"YYYY-MM-DD\": {\"reason\": \"Lời giải thích ngắn gọn, tinh tế bằng tiếng Việt\", \"severity\": \"low/medium/high\", \"is_structural\": true/false}}"
     )
     
     try:
@@ -1929,9 +1930,9 @@ def _call_gemini_freeform(text: str) -> str | None:
     )
 
     system_instruction = (
-        "Ban la tro ly tai chinh than thien cho nguoi dung Viet Nam. "
-        "Tra loi ngan gon, ro rang, dung tieng Viet tu nhien. "
-        "Neu cau hoi lien quan den giao dich/ngan sach trong he thong, huong dan nguoi dung mo ta ro hon."
+        "Bạn là trợ lý tài chính thân thiện cho người dùng Việt Nam. "
+        "Trả lời ngắn gọn, rõ ràng, dùng tiếng Việt có dấu tự nhiên. "
+        "Nếu câu hỏi liên quan đến giao dịch/ngân sách trong hệ thống, hướng dẫn người dùng mô tả rõ hơn."
     )
 
     try:
@@ -1981,28 +1982,28 @@ def _fallback_chat_intent_payload(
         return {
             "intent": "ANOMALY_DETECTION",
             "data": {},
-            "friendly_response": "Minh dang kiem tra giao dich bat thuong.",
+            "friendly_response": "Mình đang kiểm tra giao dịch bất thường cho bạn.",
         }
 
     if _is_greeting(text):
         return {
             "intent": "GREETING",
             "data": {},
-            "friendly_response": "Xin chao! Minh co the giup ban ghi chep chi tieu, kiem tra ngan sach, hoac tim giao dich. Ban can gi?",
+            "friendly_response": "Xin chào! Mình có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách, hoặc tìm giao dịch. Bạn cần gì?",
         }
 
     if "ngan sach" in normalized or ("con bao nhieu" in normalized and " cho " in f" {normalized} "):
         return {
             "intent": "CHECK_BUDGET",
             "data": {"category": category_name},
-            "friendly_response": "Minh kiem tra ngan sach cho ban.",
+            "friendly_response": "Mình đang kiểm tra ngân sách cho bạn.",
         }
 
     if _is_question(text):
         return {
             "intent": "QUERY_HISTORY",
             "data": {"range": _infer_fallback_range(text)},
-            "friendly_response": "Duoi day la tong hop thu chi.",
+            "friendly_response": "Dưới đây là tổng hợp thu chi của bạn.",
         }
 
     if amount is not None:
@@ -2015,13 +2016,13 @@ def _fallback_chat_intent_payload(
                 "note": parsed.get("description") or text,
                 "date": parsed.get("date"),
             },
-            "friendly_response": "Da ghi nhan giao dich.",
+            "friendly_response": "Đã ghi nhận giao dịch của bạn.",
         }
 
     return {
         "intent": "UNKNOWN",
         "data": {},
-        "friendly_response": "Minh chua hieu ro yeu cau. Ban co the noi cu the hon duoc khong?",
+        "friendly_response": "Mình chưa hiểu rõ yêu cầu. Bạn có thể nói cụ thể hơn được không?",
     }
 
 
@@ -2046,15 +2047,15 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
         start_date = min(tx_item["date"] for tx_item in created)
         end_date = max(tx_item["date"] for tx_item in created)
-        msg = [f"Da ghi nhan {len(created)} giao dich:"]
+        msg = [f"Đã ghi nhận {len(created)} giao dịch:"]
         for tx_item in created:
             kind = "Thu" if tx_item["transaction_type"] == "income" else "Chi"
             amount = _format_amount(tx_item["amount"])
             cat = tx_item.get("category_name")
             if cat:
-                msg.append(f"- {kind} {amount}d ({cat}) ngay {tx_item['date']}")
+                msg.append(f"- {kind} {amount}đ ({cat}) ngày {tx_item['date']}")
             else:
-                msg.append(f"- {kind} {amount}d ngay {tx_item['date']}")
+                msg.append(f"- {kind} {amount}đ ngày {tx_item['date']}")
 
         response = {
             "answer": "\n".join(msg),
@@ -2073,7 +2074,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
     intent = llm_resp.get("intent", "UNKNOWN")
     data = llm_resp.get("data", {})
-    friendly = llm_resp.get("friendly_response", "Da nhan thong tin.")
+    friendly = llm_resp.get("friendly_response", "Đã nhận thông tin.")
 
     heuristic = parse_transaction_text(
         db,
@@ -2120,7 +2121,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         amount = _coerce_amount(data.get("amount"))
         if not amount:
             return {
-                "answer": "Vui long cho biet so tien cu the de minh ghi chep nhe.",
+                "answer": "Vui lòng cho biết số tiền cụ thể để mình ghi chép nhé.",
                 "intent": "ask_amount",
                 "start_date": None,
                 "end_date": None,
@@ -2171,9 +2172,9 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         response = {
             "answer": (
                 f"{friendly}\n"
-                f"- Tong thu: {sum_data.total_income:,.0f} VND\n"
-                f"- Tong chi: {sum_data.total_expense:,.0f} VND\n"
-                f"- So du: {(sum_data.total_income - sum_data.total_expense):,.0f} VND"
+                f"- Tổng thu: {sum_data.total_income:,.0f} VND\n"
+                f"- Tổng chi: {sum_data.total_expense:,.0f} VND\n"
+                f"- Số dư: {(sum_data.total_income - sum_data.total_expense):,.0f} VND"
             ),
             "intent": "summary",
             "start_date": s,
@@ -2188,7 +2189,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         cat_name = data.get("category")
         if not cat_name:
             return {
-                "answer": "Ban muon kiem tra ngan sach cho danh muc nao?",
+                "answer": "Bạn muốn kiểm tra ngân sách cho danh mục nào?",
                 "intent": "ask_category",
                 "start_date": None,
                 "end_date": None,
@@ -2199,7 +2200,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         cat = _get_category_by_name(db, current_user, cat_name)
         if not cat:
             return {
-                "answer": f"Chua co du lieu cho danh muc '{cat_name}'.",
+                "answer": f"Chưa có dữ liệu cho danh mục '{cat_name}'.",
                 "intent": "not_found",
                 "start_date": None,
                 "end_date": None,
@@ -2222,9 +2223,9 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
             response = {
                 "answer": (
                     f"{friendly}\n"
-                    f"- Ngan sach: {budget_obj.amount:,.0f} VND\n"
-                    f"- Da chi: {spent:,.0f} VND ({percent:.1f}%)\n"
-                    f"- Con lai: {remain:,.0f} VND"
+                    f"- Ngân sách: {budget_obj.amount:,.0f} VND\n"
+                    f"- Đã chi: {spent:,.0f} VND ({percent:.1f}%)\n"
+                    f"- Còn lại: {remain:,.0f} VND"
                 ),
                 "intent": "budget_status",
                 "start_date": s,
@@ -2235,7 +2236,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
             _persist_chat_messages(db, current_user, text, response)
             return response
         response = {
-            "answer": f"{friendly}\nBan da chi {spent:,.0f} VND cho {cat.name} trong thang nay.",
+            "answer": f"{friendly}\nBạn đã chi {spent:,.0f} VND cho {cat.name} trong tháng này.",
             "intent": "category_status",
             "start_date": s,
             "end_date": e,
@@ -2249,7 +2250,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         anomalies = get_spending_anomalies(db, current_user)
         if not anomalies:
             response = {
-                "answer": "Chi tieu 30 ngay qua on dinh, chua co diem bat thuong.",
+                "answer": "Chi tiêu 30 ngày qua ổn định, chưa có điểm bất thường nào.",
                 "intent": "anomaly_status",
                 "start_date": None,
                 "end_date": None,
@@ -2259,7 +2260,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
             _persist_chat_messages(db, current_user, text, response)
             return response
 
-        msg = [friendly, f"Phat hien {len(anomalies)} diem can luu y:"]
+        msg = [friendly, f"Phát hiện {len(anomalies)} điểm cần lưu ý:"]
         for item in anomalies:
             msg.append(f"- {item.date}: {item.amount:,.0f} VND ({item.reason})")
         response = {
@@ -2508,18 +2509,19 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=(
-                "Bạn là chuyên gia OCR hóa đơn tài chính chuyên nghiệp tại Việt Nam. "
-                "Nhiệm vụ của bạn là trích xuất thông tin từ ảnh hóa đơn sang định dạng JSON chuẩn xác.\n\n"
-                "Quy tắc trích xuất:\n"
-                "- date: Ngày hóa đơn (YYYY-MM-DD). Nếu không thấy năm, giả định năm hiện tại 2026. Nếu không có ngày, trả về null.\n"
-                "- merchant: Tên cửa hàng/siêu thị/nhà cung cấp. Bỏ qua địa chỉ chi tiết, chỉ lấy tên thương hiệu (VD: 'WinMart', 'Highlands Coffee').\n"
-                "- total: Tổng số tiền cuối cùng khách phải trả (kiểu số nguyên). Lưu ý các hóa đơn Việt Nam thường dùng dấu chấm '.' làm phân cách hàng nghìn (VD: 100.000 -> 100000).\n"
-                "- vat: Tiền thuế GTGT nếu có (số nguyên).\n"
-                "- estimated: Giá trị hàng hóa trước thuế hoặc trước khi giảm giá (số nguyên).\n"
-                "- items: Danh sách các mặt hàng (nếu có thể đọc được), mỗi item có {name, price, qty}.\n"
-                "- note: Tóm tắt ngắn gọn nội dung hóa đơn (VD: 'Mua nhu yếu phẩm', 'Uống cafe').\n"
-                "- text: Các ký tự thô nhận diện được.\n\n"
-                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH, KHÔNG MARKDOWN."
+                "Bạn là chuyên gia Kiểm toán hóa đơn (OCR Auditor) hàng đầu Việt Nam. "
+                "Nhiệm vụ của bạn là đọc hiểu ảnh hóa đơn và thực hiện 'Kiểm toán số liệu' cực kỳ khắt khe.\n\n"
+                "Quy trình kiểm toán nâng cao:\n"
+                "1. XÁC ĐỊNH SỐ TIỀN: Phân biệt rõ ràng giữa 'Tiền hàng (Subtotal)', 'Thuế (VAT)', 'Giảm giá' và 'TỔNG THANH TOÁN'.\n"
+                "2. KIỂM TRÁO CHÉO: Tính thử Subtotal + VAT - Giảm giá. Nếu kết quả KHÁC với số 'TỔNG CỘNG' đọc được, hãy ưu tiên con số lớn nhất nằm sau các từ khóa như 'Thanh toán', 'Tổng cộng', 'Total'.\n"
+                "3. MÃ HÓA ĐƠN: Luôn tìm kiếm các chuỗi như 'Số HĐ', 'Inv No', 'Mã tra cứu'.\n"
+                "4. DỰ ĐOÁN DANH MỤC: Dựa trên tên cửa hàng và mặt hàng để gợi ý 1 trong: Food, Coffee, Transport, Shopping, Housing, Health, Entertainment, Education, Salary, Investment.\n\n"
+                "VÍ DỤ MẪU (FEW-SHOT):\n"
+                "- Input: Hóa đơn WinMart có 'Cộng tiền hàng: 100.000, VAT 10%: 10.000, Tổng thanh toán: 110.000, Tiền mặt: 200.000, Trả lại: 90.000'.\n"
+                "- Output: total=110000, subtotal=100000, vat=10000, merchant='WinMart', category='Shopping'.\n\n"
+                "Cấu trúc JSON yêu cầu:\n"
+                "- total, subtotal, vat, merchant, invoice_id, date, category, items, qr_data, text.\n\n"
+                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH."
             )
         )
         response = model.generate_content(
@@ -2757,10 +2759,24 @@ def _extract_merchant_from_lines(lines: list[str]) -> str | None:
 
 def extract_ocr(image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
-
+    
+    # --- PHASE 1: AI VISION PRIMARY ---
     gemini_result = None
     if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
         gemini_result = _call_gemini_ocr(image_bytes)
+        
+    # --- PHASE 2: AI RETRY WITH BASIC IMAGE CORRECTION (If primary fails) ---
+    # Nếu Gemini không trả về total, có thể do ảnh tối/nghiêng -> thử chỉnh và gửi lại
+    if not gemini_result or not gemini_result.get("total"):
+        try:
+            enhanced_img = _preprocess_ocr_image(image)
+            buf = io.BytesIO()
+            enhanced_img.save(buf, format="JPEG", quality=95)
+            retry_result = _call_gemini_ocr(buf.getvalue())
+            if retry_result and retry_result.get("total"):
+                gemini_result = retry_result
+        except Exception:
+            pass
 
     text = ""
     merchant = None
@@ -2773,13 +2789,27 @@ def extract_ocr(image_bytes: bytes) -> dict:
     if gemini_result:
         text = gemini_result.get("text") or ""
         merchant = gemini_result.get("merchant")
-        total = _coerce_amount(gemini_result.get("total"))
+        
+        # Auditor Logic: Ưu tiên Total từ tính toán nếu có chênh lệch nhỏ
+        g_total = _coerce_amount(gemini_result.get("total"))
+        g_subtotal = _coerce_amount(gemini_result.get("subtotal"))
+        g_vat = _coerce_amount(gemini_result.get("vat"))
+        
+        total = g_total
+        vat_amount = g_vat
+        estimated = g_subtotal
+        
+        # Nếu AI tìm thấy mã hóa đơn hoặc danh mục gợi ý
+        note = gemini_result.get("invoice_id") or gemini_result.get("note")
+        category_hint = gemini_result.get("category")
+        qr_data = gemini_result.get("qr_data")
+        
         date_value = _coerce_date_value(gemini_result.get("date"))
-        vat_amount = _coerce_amount(gemini_result.get("vat"))
-        estimated = _coerce_amount(gemini_result.get("estimated"))
-        note = gemini_result.get("note")
 
-    if not text.strip():
+    # --- PHASE 3: HYBRID FALLBACK (Tesseract/Regex) ---
+    # Chỉ chạy nếu AI Vision thực sự không tìm thấy thông tin cốt lõi
+    if not total or not text.strip():
+        fallback_text = ""
         try:
             from app.ai_agent.ocr_preprocessing import OCRProcessor
             np_arr = np.frombuffer(image_bytes, np.uint8)
@@ -2789,34 +2819,33 @@ def extract_ocr(image_bytes: bytes) -> dict:
                 processed_cv = processor.process(cv_img)
                 lang = _choose_tesseract_lang()
                 custom_config = r'--oem 3 --psm 6'
-                text = pytesseract.image_to_string(processed_cv, lang=lang, config=custom_config)
-        except Exception as e:
-            print(f"OCR Pipeline failed: {e}")
+                fallback_text = pytesseract.image_to_string(processed_cv, lang=lang, config=custom_config)
+        except Exception:
+            pass
 
-        if not text.strip():
-            text = _ocr_best_text(image)
-        if not text.strip():
-            text = _ocr_to_text(image.convert("L"), psm=6)
-
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if merchant is None:
-        merchant = _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
-    if total is None:
-        total = _extract_total_from_lines(lines)
-        if total is None:
-            total = _parse_amount(_normalize_ocr_numeric_tokens(text))
-    if date_value is None:
-        date_value = _extract_date_from_lines(lines) or _parse_date(text)
-    if vat_amount is None:
-        vat_amount = _extract_amount_for_keywords(lines, OCR_VAT_KEYWORDS)
-    if estimated is None:
-        estimated = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
-    if note is None:
-        note = _extract_note_from_lines(lines)
+        if not fallback_text.strip():
+            fallback_text = _ocr_best_text(image)
+        
+        if fallback_text.strip():
+            text = f"{text}\n\n[Fallback OCR]:\n{fallback_text}"
+            lines = [line.strip() for line in fallback_text.splitlines() if line.strip()]
+            if not merchant:
+                merchant = _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
+            if not total:
+                total = _extract_total_from_lines(lines) or _parse_amount(_normalize_ocr_numeric_tokens(fallback_text))
+            if not date_value:
+                date_value = _extract_date_from_lines(lines) or _parse_date(fallback_text)
+            if not vat_amount:
+                vat_amount = _extract_amount_for_keywords(lines, OCR_VAT_KEYWORDS)
+            if not estimated:
+                estimated = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
+            if not note:
+                note = _extract_note_from_lines(lines)
 
     computed_total, total_delta, is_total_consistent, warnings = _validate_ocr_totals(
         total, estimated, vat_amount
     )
+    
     return {
         "merchant": merchant,
         "total": total,
