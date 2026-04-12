@@ -25,6 +25,29 @@ copy .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### PostgreSQL note (when running without Docker)
+
+If you run the API/seed scripts on Windows without Docker, make sure your local PostgreSQL has the user/database in `DB_URL`.
+
+Default local config used by this project:
+- user: `finance_user`
+- password: `finance_pass`
+- database: `finance_db`
+
+Create them quickly (in `psql` as a superuser):
+
+```sql
+CREATE USER finance_user WITH PASSWORD 'finance_pass';
+CREATE DATABASE finance_db OWNER finance_user;
+GRANT ALL PRIVILEGES ON DATABASE finance_db TO finance_user;
+```
+
+Alternative (recommended): start the bundled Postgres container only:
+
+```powershell
+docker compose up -d postgres
+```
+
 ## Run Frontend (Web/Mobile)
 
 ```powershell
@@ -45,6 +68,51 @@ npm run dev:mobile
 ```
 
 Open the app on your phone using `http://<LAN-IP>:5173`. The frontend will call the same API at `http://<LAN-IP>:8000/api/v1`.
+
+## Seed 6-Month Demo Transactions
+
+Create realistic income/expense data in DB (categories + tags + account + transactions) so charts/reports have full data immediately.
+
+```powershell
+python -m app.scripts.seed_recent_transactions --months 6
+```
+
+If you're running the stack with Docker, the most reliable way is to run the seed **inside** the API container (avoids Windows driver / port conflicts):
+
+```powershell
+docker compose exec api python -m app.scripts.seed_recent_transactions --months 6
+```
+
+Or run a dedicated one-off seed container:
+
+```powershell
+docker compose --profile tools run --rm seed
+```
+
+Seed a specific email (PowerShell):
+
+```powershell
+$env:SEED_EMAIL="your_email@example.com"
+docker compose --profile tools run --rm seed
+```
+
+Seed a specific user:
+
+```powershell
+python -m app.scripts.seed_recent_transactions --email your_email@example.com --months 6
+```
+
+If user already has transactions in the seeded period, script skips by default. Use `--force` to replace last N months:
+
+```powershell
+python -m app.scripts.seed_recent_transactions --email your_email@example.com --months 6 --force
+```
+
+Create demo user and seed immediately (if not existing):
+
+```powershell
+python -m app.scripts.seed_recent_transactions --email demo@financeai.local --create-demo-user
+```
 
 ## Environment Variables
 
@@ -75,4 +143,3 @@ If you run the bundled Dify stack, open:
 - `http://localhost:5001` (Dify API)
 
 See `docs/LLM_PROMPTS.md` for recommended prompt templates.
-

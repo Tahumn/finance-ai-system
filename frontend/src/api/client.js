@@ -38,11 +38,19 @@ export async function request(path, options = {}) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: options.method || "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+  } catch (err) {
+    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
+    error.cause = err;
+    throw error;
+  }
 
   if (response.status === 204) return null;
 
@@ -72,11 +80,19 @@ export async function requestForm(path, formData) {
   const token = getToken();
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: formData
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers,
+      body: formData
+    });
+  } catch (err) {
+    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
+    error.cause = err;
+    throw error;
+  }
 
   if (response.status === 204) return null;
 

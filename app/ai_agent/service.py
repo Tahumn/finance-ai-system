@@ -1339,9 +1339,38 @@ def _daily_expense_totals(transactions: list[Transaction]) -> dict[DateType, flo
         totals[tx.date] = totals.get(tx.date, 0.0) + float(tx.amount or 0.0)
     return totals
 
+def _detect_spend_anomalies(transactions: list[Transaction]) -> list[tuple[DateType, float]]:
+    """
+    Simple statistical anomaly detection for daily spend totals.
+
+    Returns a list of (date, total_spent) for days that look unusually high compared to the recent window.
+    Designed to be robust and fast (no external deps).
+    """
+
+    totals = _daily_expense_totals(transactions)
+    if len(totals) < 7:
+        return []
+
+    values = [v for v in totals.values() if v and v > 0]
+    if len(values) < 7:
+        return []
+
+    mean = sum(values) / len(values)
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    std = math.sqrt(variance)
+
+    # Threshold: high relative to average and also above a z-score cutoff.
+    z_cutoff = 2.0
+    threshold = mean + z_cutoff * std
+    threshold = max(threshold, mean * 2)
+
+    candidates = [(day, amount) for day, amount in totals.items() if amount >= threshold]
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return candidates[:10]
+
 def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomalies: list[tuple[DateType, float]], all_txs: list[Transaction]) -> dict[str, dict]:
     """Sử dụng AI để phân tích tính hợp lý của các điểm bất thường thống kê."""
-    if not candidate_anomalies or not settings.gemini_api_key:
+    if not candidate_anomalies or not settings.gemini_api_key or genai is None:
         return {}
     
     # Chuẩn bị dữ liệu cho AI

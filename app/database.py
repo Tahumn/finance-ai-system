@@ -3,7 +3,38 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.db_url, future=True)
+
+def _normalize_db_url(db_url: str) -> str:
+    """
+    Ensure a working SQLAlchemy driver is selected.
+
+    - If the URL already specifies a driver (e.g. postgresql+psycopg2://), keep it.
+    - If the URL is postgresql://, prefer psycopg2 when available; otherwise fall back to psycopg (v3).
+    """
+
+    if not db_url.startswith("postgresql://"):
+        return db_url
+    if db_url.startswith("postgresql+"):
+        return db_url
+
+    # Prefer psycopg2 if it can actually be imported (on Windows it may be installed but missing DLLs).
+    try:
+        import psycopg2  # noqa: F401
+
+        return db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    except Exception:
+        pass
+
+    try:
+        import psycopg  # noqa: F401
+
+        return db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    except Exception:
+        # Keep original URL so SQLAlchemy can raise a clear error message downstream.
+        return db_url
+
+
+engine = create_engine(_normalize_db_url(settings.db_url), future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

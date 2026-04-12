@@ -472,7 +472,16 @@ export default function App() {
         limit: 20,
         offset: 0
       };
-      const [cats, tagsList, txs, sum, catsBreakdown] = await Promise.all([
+      const [
+        cats,
+        tagsList,
+        txs,
+        sum,
+        expenseBreakdown,
+        incomeBreakdownData,
+        chartData,
+        anomalyData
+      ] = await Promise.all([
         listCategories(),
         listTags(),
         listTransactions(params),
@@ -486,14 +495,17 @@ export default function App() {
       setTags(tagsList);
       setTransactions(txs);
       setSummary(sum);
-      setBreakdown(catsBreakdown);
+      setBreakdown(expenseBreakdown);
+      setIncomeBreakdown(incomeBreakdownData);
+      setMonthlySeries(chartData?.series || []);
+      setAnomalies(anomalyData?.alerts || []);
       const email = authState.user?.email || "guest";
       await mergeNotifications(
         email,
         buildNotificationsFromData({
           email,
           summary: sum,
-          breakdown: catsBreakdown,
+          breakdown: expenseBreakdown,
           transactions: txs
         })
       );

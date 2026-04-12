@@ -3,7 +3,13 @@ import TransactionRow from "../../components/TransactionRow.jsx";
 import CategoriesScreen from "../categories/CategoriesScreen.jsx";
 import TagsScreen from "../tags/TagsScreen.jsx";
 import OcrScreen from "../ocr/OcrScreen.jsx";
-import { formatNumberInput, parseNumberInput, toInputDate, currency } from "../../utils/format.js";
+import {
+  formatDateFull,
+  formatNumberInput,
+  parseNumberInput,
+  toInputDate,
+  currency
+} from "../../utils/format.js";
 import { colorFor, onColor } from "../../utils/colors.js";
 import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
@@ -97,6 +103,7 @@ export default function TransactionsScreen({
   const [dateMode, setDateMode] = useState(() =>
     filters.start && filters.end && String(filters.start) === String(filters.end) ? "single" : "range"
   );
+  const [calendarPopup, setCalendarPopup] = useState(null);
   const [calendarCursor, setCalendarCursor] = useState(() =>
     parseDateInput(filters.end || filters.start || toInputDate(new Date()))
   );
@@ -351,10 +358,22 @@ export default function TransactionsScreen({
     transactions.forEach((item) => {
       const key = String(item.date || "").slice(0, 10);
       if (!key) return;
-      const entry = map.get(key) || { incomeCount: 0, expenseCount: 0, count: 0 };
+      const entry = map.get(key) || {
+        incomeCount: 0,
+        expenseCount: 0,
+        incomeTotal: 0,
+        expenseTotal: 0,
+        count: 0
+      };
+      const amount = Math.max(0, Number(item.amount) || 0);
       entry.count += 1;
-      if (item.transaction_type === "income") entry.incomeCount += 1;
-      else entry.expenseCount += 1;
+      if (item.transaction_type === "income") {
+        entry.incomeCount += 1;
+        entry.incomeTotal += amount;
+      } else {
+        entry.expenseCount += 1;
+        entry.expenseTotal += amount;
+      }
       map.set(key, entry);
     });
     return map;
@@ -362,6 +381,9 @@ export default function TransactionsScreen({
 
   const selectedDay =
     filters.start && filters.end && String(filters.start) === String(filters.end) ? String(filters.start) : "";
+  const selectedDayStats = selectedDay
+    ? txByDate.get(selectedDay) || { incomeTotal: 0, expenseTotal: 0, count: 0 }
+    : null;
 
   const monthStart = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), 1);
   const monthLabel = `${monthStart.getMonth() + 1}/${monthStart.getFullYear()}`;
@@ -423,9 +445,10 @@ export default function TransactionsScreen({
             <button
               className="ghost"
               type="button"
-              onClick={() =>
-                setCalendarCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
-              }
+              onClick={() => {
+                setCalendarPopup(null);
+                setCalendarCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1));
+              }}
               aria-label={t("transactions.calendar_prev", null, "Tháng trước")}
             >
               ←
@@ -433,9 +456,10 @@ export default function TransactionsScreen({
             <button
               className="ghost"
               type="button"
-              onClick={() =>
-                setCalendarCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
-              }
+              onClick={() => {
+                setCalendarPopup(null);
+                setCalendarCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1));
+              }}
               aria-label={t("transactions.calendar_next", null, "Tháng sau")}
             >
               →
@@ -446,6 +470,7 @@ export default function TransactionsScreen({
               onClick={() => {
                 const today = toInputDate(new Date());
                 setDateMode("single");
+                setCalendarPopup(null);
                 onFiltersChange({ ...filters, start: today, end: today });
               }}
             >
@@ -463,6 +488,9 @@ export default function TransactionsScreen({
         <div className="calendar-grid">
           {calendarDays.map(({ date, inMonth, key }) => {
             const info = txByDate.get(key);
+            const hasIncome = Boolean(info?.incomeTotal);
+            const hasExpense = Boolean(info?.expenseTotal);
+            const hasBoth = hasIncome && hasExpense;
             const active = selectedDay && selectedDay === key;
             const isToday = key === toInputDate(new Date());
             return (
@@ -475,29 +503,123 @@ export default function TransactionsScreen({
                 onClick={() => {
                   setDateMode("single");
                   onFiltersChange({ ...filters, start: key, end: key });
+                  if (info?.count) {
+                    setCalendarPopup({
+                      key,
+                      incomeTotal: info.incomeTotal,
+                      expenseTotal: info.expenseTotal,
+                      count: info.count
+                    });
+                  } else {
+                    setCalendarPopup(null);
+                  }
                 }}
                 aria-label={
                   info?.count
-                    ? `${key}: ${info.count} giao dịch (Chi ${info.expenseCount}, Thu ${info.incomeCount})`
+                    ? `${key}: ${info.count} giao dịch (Thu ${currency(info.incomeTotal)}, Chi ${currency(
+                        info.expenseTotal
+                      )})`
                     : `${key}: Không có giao dịch`
                 }
               >
                 <span className="calendar-day">{date.getDate()}</span>
                 {info?.count ? (
-                  <span className="calendar-bar" aria-hidden="true">
-                    {info.incomeCount ? (
-                      <span className="calendar-seg income">{info.incomeCount}</span>
-                    ) : null}
-                    {info.expenseCount ? (
-                      <span className="calendar-seg expense">{info.expenseCount}</span>
-                    ) : null}
+                  <span className={`calendar-metrics line-only ${hasBoth ? "dual" : "single"}`} aria-hidden="true">
+                    <span className={`calendar-line ${hasBoth ? "dual" : hasIncome ? "income" : "expense"}`}>
+                      {hasBoth ? (
+                        <>
+                          <span
+                            className="calendar-line-seg income"
+                            style={{ flex: Math.max(info.incomeTotal, 1) }}
+                          />
+                          <span
+                            className="calendar-line-seg expense"
+                            style={{ flex: Math.max(info.expenseTotal, 1) }}
+                          />
+                        </>
+                      ) : (
+                        <span className={`calendar-line-seg ${hasIncome ? "income" : "expense"}`} />
+                      )}
+                    </span>
                   </span>
                 ) : null}
               </button>
             );
           })}
         </div>
+
+        {selectedDayStats ? (
+          <div className="calendar-summary-card" role="status" aria-live="polite">
+            <p className="calendar-summary-date">{formatDateFull(selectedDay)}</p>
+            <div className="calendar-summary-metrics">
+              <p className="calendar-summary-item income">
+                Thu: <strong>{currency(selectedDayStats.incomeTotal)}</strong>
+              </p>
+              <p className="calendar-summary-item expense">
+                Chi: <strong>{currency(selectedDayStats.expenseTotal)}</strong>
+              </p>
+              <p className="calendar-summary-item count">{selectedDayStats.count} giao dịch</p>
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      {calendarPopup ? (
+        <div
+          className="sheet calendar-popup-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("transactions.calendar", null, "Lịch")}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setCalendarPopup(null);
+          }}
+        >
+          <div className="sheet-body calendar-popup-body">
+            <div className="sheet-header-row">
+              <h3>{formatDateFull(calendarPopup.key)}</h3>
+              <button className="ghost" type="button" onClick={() => setCalendarPopup(null)}>
+                {t("common.close", null, "Đóng")}
+              </button>
+            </div>
+
+            <div className="calendar-popup-content">
+              <p className="calendar-tip-row income">
+                ↗ Thu: +{formatNumberInput(calendarPopup.incomeTotal)}
+              </p>
+              <p className="calendar-tip-row expense">
+                ↘ Chi: -{formatNumberInput(calendarPopup.expenseTotal)}
+              </p>
+              <div
+                className={`calendar-tip-line ${
+                  calendarPopup.incomeTotal > 0 && calendarPopup.expenseTotal > 0
+                    ? "dual"
+                    : calendarPopup.incomeTotal > 0
+                    ? "income"
+                    : "expense"
+                }`}
+              >
+                {calendarPopup.incomeTotal > 0 && calendarPopup.expenseTotal > 0 ? (
+                  <>
+                    <span
+                      className="calendar-line-seg income"
+                      style={{ flex: Math.max(calendarPopup.incomeTotal, 1) }}
+                    />
+                    <span
+                      className="calendar-line-seg expense"
+                      style={{ flex: Math.max(calendarPopup.expenseTotal, 1) }}
+                    />
+                  </>
+                ) : (
+                  <span
+                    className={`calendar-line-seg ${calendarPopup.incomeTotal > 0 ? "income" : "expense"}`}
+                  />
+                )}
+              </div>
+              <p className="calendar-popup-count">{calendarPopup.count} giao dịch</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="transactions-crud-grid">
         <div ref={categoryRef}>
