@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Cấu hình Cơ sở dữ liệu (PostgreSQL)
-    db_url: str = "postgresql://finance_user:finance_pass@postgres:5432/finance_db"
+    db_url: str = "postgresql://finance_user:finance_pass@localhost:5432/finance_db"
     secret_key: str = Field(default="change-this-to-a-long-random-string")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60

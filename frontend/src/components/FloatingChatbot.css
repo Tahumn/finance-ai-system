@@ -257,6 +257,40 @@
   color: #2d3748;
 }
 
+/* General Insight Mini Cards */
+.insight-mini {
+  border-left: 3px solid var(--primary);
+}
+
+.insight-mini.success { border-left-color: #27ae60; }
+.insight-mini.warning { border-left-color: #f39c12; }
+.insight-mini.danger { border-left-color: #e74c3c; }
+.insight-mini.info { border-left-color: var(--primary); }
+
+.card-header-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.card-header-mini .icon {
+  font-size: 16px;
+}
+
+.card-header-mini .title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.insight-text-mini {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* OCR Card */
 .receipt-preview {
   background: #f8fafc;

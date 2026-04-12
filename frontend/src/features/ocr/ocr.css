@@ -57,7 +57,8 @@
   overflow: hidden;
 }
 
-.dropzone-pro:hover, .dropzone-pro.dragging {
+.dropzone-pro:hover,
+.dropzone-pro.dragging {
   border-color: var(--primary);
   background: var(--card-soft);
   transform: translateY(-2px);
@@ -74,7 +75,7 @@
   position: relative;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   background: #000;
   min-height: 200px;
   display: flex;
@@ -107,9 +108,17 @@
 }
 
 @keyframes scan {
-  0% { top: 0% }
-  50% { top: 100% }
-  100% { top: 0% }
+  0% {
+    top: 0%
+  }
+
+  50% {
+    top: 100%
+  }
+
+  100% {
+    top: 0%
+  }
 }
 
 /* --- Right: Smart Form --- */
@@ -187,9 +196,20 @@
   border-radius: 50%;
 }
 
-.confidence-dot.high { background: #27ae60; box-shadow: 0 0 8px #27ae60; }
-.confidence-dot.med { background: #f1c40f; box-shadow: 0 0 8px #f1c40f; }
-.confidence-dot.low { background: #e74c3c; box-shadow: 0 0 8px #e74c3c; }
+.confidence-dot.high {
+  background: #27ae60;
+  box-shadow: 0 0 8px #27ae60;
+}
+
+.confidence-dot.med {
+  background: #f1c40f;
+  box-shadow: 0 0 8px #f1c40f;
+}
+
+.confidence-dot.low {
+  background: #e74c3c;
+  box-shadow: 0 0 8px #e74c3c;
+}
 
 .extract-btn-pro {
   width: 100%;
@@ -245,6 +265,13 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

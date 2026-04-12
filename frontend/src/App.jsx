@@ -131,6 +131,7 @@ export default function App() {
   const [authState, setAuthState] = useState({ status: "checking", user: null });
   const [uiPrefs, setUiPrefs] = useState(() => getUiPrefs());
   const [view, setView] = useState("dashboard");
+  const [initialChatQuery, setInitialChatQuery] = useState(null);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
@@ -309,7 +310,7 @@ export default function App() {
     setView("auth");
   };
 
-  const handleChangeView = (nextView) => {
+  const handleChangeView = (nextView, query = null) => {
     if (view === "onboarding") return;
     if (!isAuthed && !["dashboard", "settings"].includes(nextView)) {
       setAuthMode("login");
@@ -322,6 +323,9 @@ export default function App() {
       return;
     }
     setView(nextView);
+    if ((nextView === "chat" || nextView === "dashboard") && query) {
+      setInitialChatQuery(query);
+    }
   };
 
   const handleAuthSubmit = async ({
@@ -523,7 +527,7 @@ export default function App() {
 
   useEffect(() => {
     const socket = io(getSocketBase(), {
-      path: "/ws/socket.io/",
+      path: "/ws/socket.io",
       transports: ["websocket", "polling"]
     });
     socket.on("finance:update", (payload) => {
@@ -916,6 +920,11 @@ export default function App() {
       <FloatingChatbot
         isAuthed={authState.status === "authed"}
         userEmail={authState.user?.email}
+        summary={summary}
+        transactions={transactionsWithLabels}
+        breakdown={breakdownWithShare}
+        initialQuery={initialChatQuery}
+        onClearInitialQuery={() => setInitialChatQuery(null)}
       />
     </div>
   );

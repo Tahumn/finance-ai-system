@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { chatWithAi, getChatHistory } from "../api/ai.js";
 import { currency } from "../utils/format.js";
+import { buildAiInsights } from "../utils/insights.js";
 import "./FloatingChatbot.css";
 
 const QUICK_ACTIONS = [
@@ -32,7 +33,16 @@ const normalizeMessages = (messages) => {
   return trimmed.length ? trimmed : null;
 };
 
-export default function FloatingChatbot({ isAuthed, userEmail }) {
+export default function FloatingChatbot({ 
+  isAuthed, 
+  userEmail, 
+  summary, 
+  transactions, 
+  breakdown,
+  initialQuery,
+  onClearInitialQuery,
+  onCreateTransaction
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Xin chào! Tôi là trợ lý tài chính AI. Tôi có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách hoặc tìm kiếm giao dịch. Bạn cần giúp gì nào?" }
@@ -117,6 +127,13 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
     }
   }, [messages, isOpen, loading]);
 
+  useEffect(() => {
+    if (initialQuery && isOpen && !loading) {
+      handleSend(initialQuery);
+      if (onClearInitialQuery) onClearInitialQuery();
+    }
+  }, [initialQuery, isOpen, loading]);
+
   const renderInsightData = (msg) => {
     if (!msg.insightData) return null;
     const data = msg.insightData;
@@ -178,6 +195,7 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
     }
 
     if (msg.insightType === "ocr_result") {
+      // ... existing ocr code ...
       return (
         <div className="ai-insight-card ocr-mini">
           <div className="card-tag success">Kết quả quét hóa đơn</div>
@@ -190,10 +208,6 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
               <span className="label">Tổng tiền:</span>
               <strong className="amt">{currency(data.total || 0)}</strong>
             </div>
-            <div className="receipt-row">
-              <span className="label">Ngày:</span>
-              <span>{data.date || "---"}</span>
-            </div>
           </div>
           <button 
             className="save-tx-btn"
@@ -202,6 +216,18 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
           >
             {loading ? "Đang lưu..." : "Xác nhận & Lưu"}
           </button>
+        </div>
+      );
+    }
+
+    if (msg.insightType === "general_insight") {
+      return (
+        <div className={`ai-insight-card insight-mini ${data.type}`}>
+          <div className="card-header-mini">
+            <span className="icon">{data.icon}</span>
+            <span className="title">{data.title}</span>
+          </div>
+          <p className="insight-text-mini">{data.text}</p>
         </div>
       );
     }
@@ -290,6 +316,14 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
     }
   };
 
+  const dynamicActions = [
+    ...QUICK_ACTIONS,
+    ...buildAiInsights(summary, transactions, breakdown).map(ins => ({
+      label: ins.title,
+      query: ins.query
+    }))
+  ];
+
   return (
     <div className={`chatbot-container ${isOpen ? "is-open" : ""}`}>
       {isOpen ? (
@@ -337,7 +371,7 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
             ) : (
               <>
                 <div className="quick-actions-bar">
-                  {QUICK_ACTIONS.map((action, i) => (
+                  {dynamicActions.map((action, i) => (
                     <button 
                       key={i} 
                       className="action-chip"
@@ -369,7 +403,7 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
       ) : (
         <button className="chatbot-launcher" onClick={() => setIsOpen(true)}>
           <div className="launcher-icon">💬</div>
-          <div className="launcher-label">Hỏi AI</div>
+          <div className="launcher-label">Trợ lý Tài chính</div>
         </button>
       )}
     </div>

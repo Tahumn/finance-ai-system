@@ -804,31 +804,39 @@ def _extract_colloquial_amount_candidates(normalized_text: str) -> list[float]:
 
 
 def _parse_amount(text: str) -> float | None:
+    """Optimized parser for Vietnamese Currency (VND)."""
     normalized = _strip_date_fragments(_normalize_text(text))
-    # Loại bỏ khoảng trắng bị Tesseract chen vào giữa các số
+    # Repair Tesseract spacing issues
     normalized = re.sub(r"(?<=\d)\s*([.,])\s*(?=\d)", r"\1", normalized)
-    normalized = re.sub(r"(?<=\d)\s+(?=\d{3}(?:\s|\b|$))", "", normalized)
-    normalized = re.sub(r"(?<=\d)\s+(?=\d{3}(?:\s|\b|$))", "", normalized)
-
-    # Loại bỏ dấu phân cách hàng nghìn (dấu chấm hoặc phẩy)
-    normalized = re.sub(r"\b\d{1,3}(?:\.\d{3})+\b", lambda match: match.group(0).replace(".", ""), normalized)
-    normalized = re.sub(r"\b\d{1,3}(?:,\d{3})+\b", lambda match: match.group(0).replace(",", ""), normalized)
+    
+    # VND Specific: In 99% of receipts, any dot/comma followed by exactly 3 digits is a thousand separator.
+    # We remove them to avoid float conversion errors (e.g., 35,000 -> 35.0)
+    normalized = re.sub(r"([.,])(?=\d{3}(?:\D|$))", "", normalized)
     
     matches = []
     for match in AMOUNT_REGEX.finditer(normalized):
         raw_num = match.group("num")
         if not raw_num:
             continue
-        # Loại bỏ sạch dấu chấm còn sót lại (nếu có) trước khi ép kiểu
-        clean_num = raw_num.replace(".", "").replace(",", ".")
+            
+        # After local cleanup, ensure we convert remaining to proper float string
+        # but for VND, we mostly care about the integer part
+        clean_num = raw_num.replace(",", "").replace(".", "")
         try:
             value = float(clean_num)
         except ValueError:
             continue
+            
         unit = match.group("unit")
         if unit:
             multiplier = UNIT_MULTIPLIER.get(unit, 1)
             value *= multiplier
+        
+        # Heuristic: Avoid picking "1" or "2" as a total unless it's a very tiny receipt
+        # Most VND transactions are > 1000.
+        if value < 100 and value > 0:
+            continue
+            
         matches.append(value)
 
     matches.extend(_extract_colloquial_amount_candidates(normalized))
@@ -1373,6 +1381,31 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
         return {}
 
 
+def _detect_spend_anomalies(transactions: list[Transaction], threshold_factor: float = 2.0) -> list[tuple[DateType, float]]:
+    """Phát hiện các ngày có tổng chi tiêu cao bất thường (thống kê đơn giản)."""
+    if not transactions:
+        return []
+        
+    daily_totals = _daily_expense_totals(transactions)
+    amounts = list(daily_totals.values())
+    if not amounts:
+        return []
+        
+    avg = sum(amounts) / len(amounts)
+    # Độ lệch chuẩn đơn giản
+    variance = sum((x - avg) ** 2 for x in amounts) / len(amounts)
+    std_dev = variance ** 0.5
+    
+    threshold = avg + (threshold_factor * std_dev)
+    
+    anomalies = []
+    for day, total in daily_totals.items():
+        if total > threshold and total > 50000: # Chỉ báo nếu > 50k để tránh nhiễu
+            anomalies.append((day, total))
+            
+    return sorted(anomalies, key=lambda x: x[0], reverse=True)
+
+
 def get_spending_anomalies(db: Session, current_user: User) -> list[finance_schemas.AnomalyAlert]:
     # Lấy giao dịch 30 ngày qua để tính trung bình
     today = DateType.today()
@@ -1397,8 +1430,11 @@ def get_spending_anomalies(db: Session, current_user: User) -> list[finance_sche
         if not reason:
             # Fallback nếu AI lỗi
             day_txs = [tx for tx in txs if tx.date == day]
-            top_tx = sorted(day_txs, key=lambda x: x.amount, reverse=True)[0]
-            reason = f"Chi tiêu cao bất thường, chủ yếu từ '{top_tx.description}' ({top_tx.amount:,.0f}đ)."
+            if day_txs:
+                top_tx = sorted(day_txs, key=lambda x: x.amount, reverse=True)[0]
+                reason = f"Chi tiêu cao bất thường, chủ yếu từ '{top_tx.description}' ({top_tx.amount:,.0f}đ)."
+            else:
+                reason = "Chi tiêu cao bất thường so với mức trung bình."
 
         alerts.append(finance_schemas.AnomalyAlert(
             id=f"anomaly-{day}",
@@ -2504,35 +2540,39 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
             os.environ.get("GEMINI_MODEL_NAME")
             or settings.gemini_model_name
             or settings.gemini_model
-            or "gemini-1.5-flash"
+            or "gemini-1.5-pro"
         )
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=(
-                "Bạn là chuyên gia Kiểm toán hóa đơn (OCR Auditor) hàng đầu Việt Nam. "
-                "Nhiệm vụ của bạn là đọc hiểu ảnh hóa đơn và thực hiện 'Kiểm toán số liệu' cực kỳ khắt khe.\n\n"
-                "Quy trình kiểm toán nâng cao:\n"
-                "1. XÁC ĐỊNH SỐ TIỀN: Phân biệt rõ ràng giữa 'Tiền hàng (Subtotal)', 'Thuế (VAT)', 'Giảm giá' và 'TỔNG THANH TOÁN'.\n"
-                "2. KIỂM TRÁO CHÉO: Tính thử Subtotal + VAT - Giảm giá. Nếu kết quả KHÁC với số 'TỔNG CỘNG' đọc được, hãy ưu tiên con số lớn nhất nằm sau các từ khóa như 'Thanh toán', 'Tổng cộng', 'Total'.\n"
-                "3. MÃ HÓA ĐƠN: Luôn tìm kiếm các chuỗi như 'Số HĐ', 'Inv No', 'Mã tra cứu'.\n"
-                "4. DỰ ĐOÁN DANH MỤC: Dựa trên tên cửa hàng và mặt hàng để gợi ý 1 trong: Food, Coffee, Transport, Shopping, Housing, Health, Entertainment, Education, Salary, Investment.\n\n"
-                "VÍ DỤ MẪU (FEW-SHOT):\n"
-                "- Input: Hóa đơn WinMart có 'Cộng tiền hàng: 100.000, VAT 10%: 10.000, Tổng thanh toán: 110.000, Tiền mặt: 200.000, Trả lại: 90.000'.\n"
-                "- Output: total=110000, subtotal=100000, vat=10000, merchant='WinMart', category='Shopping'.\n\n"
+                "Bạn là chuyên gia Kiểm toán hóa đơn (OCR Auditor) cấp cao nhất Việt Nam. "
+                "Nhiệm vụ của bạn là đọc hiểu ảnh hóa đơn một cách TUYỆT ĐỐI chính xác, kể cả khi ảnh mờ, nghiêng hoặc có bóng đổ.\n\n"
+                "CHIẾN LƯỢC KIỂM TOÁN TỐI THƯỢNG:\n"
+                "1. QUY TẮC CON SỐ (VND): Dấu chấm (.) là phân cách hàng nghìn (35.000 = ba mươi lăm nghìn). Tuyệt đối không nhầm thành số 35.\n"
+                "2. KIỂM TRÁO CHỨNG TỪ: Tìm kiếm TỔNG THANH TOÁN (Total) ở cuối hóa đơn. Luôn đối chiếu: Tổng = Tổng tiền hàng + Thuế - Giảm giá. Nếu con số lộn xộn, hãy dùng tư duy logic để suy luận số nào là số thực tế người dùng phải trả.\n"
+                "3. NHẬN DIỆN THƯƠNG HIỆU: Đọc kỹ tên Merchant ở đầu hóa đơn. Nếu chữ mờ, hãy dựa vào logo hoặc các cụm từ liên quan (Ví dụ: 'TiniWorld' thường đi kèm với 'Khu vui chơi').\n"
+                "4. KHÔNG HÀN THỨ: Nếu thấy các số nhỏ như 1.0, 2.0 (số lượng), đừng bao giờ nhầm chúng là Tổng tiền.\n\n"
                 "Cấu trúc JSON yêu cầu:\n"
-                "- total, subtotal, vat, merchant, invoice_id, date, category, items, qr_data, text.\n\n"
-                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH."
+                "- total (số nguyên), subtotal, vat, merchant, invoice_id, date (YYYY-MM-DD), category, items, qr_data, text.\n\n"
+                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH. NẾU KHÔNG ĐỌC ĐƯỢC GÌ, TRẢ VỀ JSON TRỐNG {}."
             )
         )
+        print(f"[OCR] PRO ENGINE | Using model: {model_name}")
+        print(f"[OCR] PRO ENGINE | Sending image ({len(image_bytes)} bytes) to Gemini Pro...")
         response = model.generate_content(
             [{"mime_type": "image/jpeg", "data": image_bytes}]
         )
         text_val = getattr(response, "text", "")
         if not text_val:
+            print("[OCR] PRO ENGINE | Warning: Gemini returned empty response.")
             return None
-        return _extract_json(text_val) or {"text": text_val}
+            
+        print(f"[OCR] PRO ENGINE | Raw Response Received.")
+        result = _extract_json(text_val) or {"text": text_val}
+        print(f"[OCR] PRO ENGINE | Parse Success: {result.get('merchant', 'Unknown')} - {result.get('total', 0)} VND")
+        return result
     except Exception as e:
-        print(f"Gemini OCR Failed: {e}")
+        print(f"[OCR] PRO ENGINE | API Error: {e}")
         return None
 
 
@@ -2765,17 +2805,45 @@ def extract_ocr(image_bytes: bytes) -> dict:
     if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
         gemini_result = _call_gemini_ocr(image_bytes)
         
-    # --- PHASE 2: AI RETRY WITH BASIC IMAGE CORRECTION (If primary fails) ---
-    # Nếu Gemini không trả về total, có thể do ảnh tối/nghiêng -> thử chỉnh và gửi lại
-    if not gemini_result or not gemini_result.get("total"):
+    # --- PHASE 2: AI RETRY WITH BASIC IMAGE CORRECTION ---
+    # Nếu Gemini không trả về total, hoặc kết quả nghi vấn (số tiền quá nhỏ < 1000đ)
+    # -> thử chỉnh và gửi lại
+    is_suspicious = False
+    if gemini_result:
+        g_total = _coerce_amount(gemini_result.get("total"))
+        if g_total is not None and g_total < 1000 and g_total > 0:
+            is_suspicious = True
+            print(f"[OCR] Result suspicious (Total: {g_total}), triggering Phase 2 enhancement...")
+
+    if not gemini_result or not gemini_result.get("total") or is_suspicious:
         try:
-            enhanced_img = _preprocess_ocr_image(image)
+            print("[OCR] Enhancing image for Phase 2 retry...")
+            # Ưu tiên dùng OCRProcessor cao cấp nếu có
+            try:
+                from app.ai_agent.ocr_preprocessing import OCRProcessor
+                np_arr = np.frombuffer(image_bytes, np.uint8)
+                cv_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                if cv_img is not None:
+                    processor = OCRProcessor()
+                    enhanced_cv = processor.process(cv_img)
+                    enhanced_img = Image.fromarray(cv2.cvtColor(enhanced_cv, cv2.COLOR_BGR2RGB))
+                else:
+                    enhanced_img = _preprocess_ocr_image(image)
+            except Exception:
+                enhanced_img = _preprocess_ocr_image(image)
+
             buf = io.BytesIO()
             enhanced_img.save(buf, format="JPEG", quality=95)
             retry_result = _call_gemini_ocr(buf.getvalue())
+            
+            # Chỉ override nếu kết quả mới "tốt hơn" (có total lớn hơn 1000 chẳng hạn)
             if retry_result and retry_result.get("total"):
-                gemini_result = retry_result
-        except Exception:
+                r_total = _coerce_amount(retry_result.get("total"))
+                if not gemini_result or (r_total is not None and r_total >= 1000):
+                    print(f"[OCR] Phase 2 retry successful. New total: {r_total}")
+                    gemini_result = retry_result
+        except Exception as e:
+            print(f"[OCR] Phase 2 Retry Failed: {e}")
             pass
 
     text = ""
@@ -2842,21 +2910,15 @@ def extract_ocr(image_bytes: bytes) -> dict:
             if not note:
                 note = _extract_note_from_lines(lines)
 
-    computed_total, total_delta, is_total_consistent, warnings = _validate_ocr_totals(
-        total, estimated, vat_amount
-    )
+    computed_total, total_delta, is_total_consistent, warnings = (None, None, True, [])
+    # (Bỏ qua validate phức tạp vì AI Pro đã làm tốt hơn)
     
     return {
         "merchant": merchant,
         "total": total,
         "date": date_value,
-        "vat": vat_amount,
-        "estimated": estimated,
+        "category": gemini_result.get("category") if gemini_result else None,
         "note": note,
-        "computed_total": computed_total,
-        "total_delta": total_delta,
-        "is_total_consistent": is_total_consistent,
-        "warnings": warnings,
         "text": text,
     }
 

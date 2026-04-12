@@ -3,6 +3,7 @@ import TransactionRow from "../../components/TransactionRow.jsx";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
+import { buildAiInsights } from "../../utils/insights.js";
 
 const buildDonutItems = (breakdown, limit, otherLabel) => {
   const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
@@ -122,65 +123,6 @@ const buildWaveSeries = (transactions, fallbackSeries) => {
   return { series, mode: useDaily ? "day" : "month" };
 };
 
-const normalizeText = (value) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-const buildAiInsights = (summary, transactions, breakdown) => {
-  const safeTransactions = Array.isArray(transactions) ? transactions : [];
-  const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
-  const insights = [];
-
-  const topCategory = safeBreakdown[0];
-  if (topCategory) {
-    insights.push(
-      t("dashboard.insight.top_category", {
-        category: topCategory.category,
-        amount: currency(topCategory.spent)
-      })
-    );
-  }
-
-  const now = new Date();
-  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, "0")}`;
-
-  const coffeeSpendingByMonth = safeTransactions
-    .filter((item) => item.transaction_type === "expense")
-    .filter((item) => {
-      const text = normalizeText(item.description || "");
-      return text.includes("coffee") || text.includes("cafe") || text.includes("ca phe");
-    })
-    .reduce((acc, item) => {
-      const key = String(item.date || "").slice(0, 7);
-      if (!key) return acc;
-      acc[key] = (acc[key] || 0) + Number(item.amount || 0);
-      return acc;
-    }, {});
-
-  const currentCoffee = coffeeSpendingByMonth[currentKey] || 0;
-  const previousCoffee = coffeeSpendingByMonth[previousKey] || 0;
-  if (previousCoffee > 0 && currentCoffee > previousCoffee) {
-    const delta = ((currentCoffee - previousCoffee) / previousCoffee) * 100;
-    insights.push(
-      t("dashboard.insight.coffee_up", {
-        delta: Math.round(delta),
-        prev: currency(previousCoffee),
-        current: currency(currentCoffee)
-      })
-    );
-  }
-
-  if ((summary?.total_expense || 0) > (summary?.total_income || 0)) {
-    insights.push(t("dashboard.insight.over_spend"));
-  }
-
-  if (!insights.length) insights.push(t("dashboard.insight.stable"));
-  return insights.slice(0, 3);
-};
 
 export default function DashboardScreen({
   summary,
@@ -256,7 +198,7 @@ export default function DashboardScreen({
               {t("dashboard.reports")}
             </button>
             <button className="ghost qa-ocr" type="button" onClick={onGoOcr}>
-              {t("dashboard.ocr")}
+              📸 {t("dashboard.ocr", null, "Nhập hóa đơn AI")}
             </button>
           </div>
         )}
@@ -381,15 +323,27 @@ export default function DashboardScreen({
         </div>
       </section>
 
-      <section className="panel list">
+      <section className="panel insights-section">
         <div className="panel-header">
-          <h3>{t("dashboard.ai_hints")}</h3>
+          <h3>{t("dashboard.ai_hints", null, "Trợ lý Phân tích AI")}</h3>
+          <span className="badge ai-badge">AI Powered</span>
         </div>
-        {insights.map((insight) => (
-          <p key={insight} className="insight-item">
-            {insight}
-          </p>
-        ))}
+        <div className="insight-grid">
+          {insights.map((insight) => (
+            <button 
+              key={insight.id} 
+              className={`insight-card ${insight.type}`}
+              onClick={() => onGoChat(insight.query)}
+              type="button"
+            >
+              <div className="insight-icon">{insight.icon}</div>
+              <div className="insight-content">
+                <h4>{insight.title}</h4>
+                <p>{insight.text}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="panel list">
