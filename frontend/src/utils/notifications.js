@@ -189,6 +189,7 @@ export const buildNotificationsFromData = ({ email, summary, breakdown, transact
   const items = [];
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const txList = Array.isArray(transactions) ? transactions : transactions?.items || [];
 
   if (summary && summary.total_expense > summary.total_income && settings.thresholdAlerts) {
     items.push({
@@ -214,7 +215,7 @@ export const buildNotificationsFromData = ({ email, summary, breakdown, transact
     });
   }
 
-  const recentExpenses = (transactions || [])
+  const recentExpenses = txList
     .filter((item) => item.transaction_type === "expense")
     .filter((item) => {
       const date = new Date(item.date);
@@ -243,7 +244,7 @@ export const buildNotificationsFromData = ({ email, summary, breakdown, transact
     []
   );
   budgetPlans.forEach((plan) => {
-    const spent = computeSpent(plan, transactions || []);
+    const spent = computeSpent(plan, txList);
     const budget = Number(plan.amount) || 0;
     if (!budget) return;
     const progress = (spent / budget) * 100;
@@ -269,7 +270,7 @@ export const buildNotificationsFromData = ({ email, summary, breakdown, transact
     });
   });
 
-  if (!items.length && transactions?.length) {
+  if (!items.length && txList.length) {
     items.push({
       key: `insight:stable:${monthKey}`,
       type: "insight",

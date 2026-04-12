@@ -98,3 +98,4 @@ class SavingTipsResponse(BaseModel):
     tips: list[SavingsTip] = []
     total_potential_saving: float = 0.0
     general_advice: list[str] = []
+

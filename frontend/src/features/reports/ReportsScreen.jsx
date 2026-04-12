@@ -1,9 +1,8 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState } from "react";
+import { getAnomalies, getForecast, getSavingsTips } from "../../api/ai.js";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
-import { getForecast, getSavingsTips, getAnomalies } from "../../api/ai.js";
-
 
 const buildDonutItems = (breakdown, limit, otherLabel) => {
   if (!breakdown.length) return [];
@@ -212,56 +211,15 @@ export default function ReportsScreen({
   const [showForecast, setShowForecast] = useState(false);
   const [showSavingTips, setShowSavingTips] = useState(false);
   const [showAnomaly, setShowAnomaly] = useState(false);
-
-  // AI Insights data & loading states
-  const [forecastData, setForecastData] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
-  const [forecastError, setForecastError] = useState(null);
-
-  const [savingTipsData, setSavingTipsData] = useState(null);
-  const [savingTipsLoading, setSavingTipsLoading] = useState(false);
-  const [savingTipsError, setSavingTipsError] = useState(null);
-
-  const [anomalyData, setAnomalyData] = useState(null);
+  const [savingsLoading, setSavingsLoading] = useState(false);
   const [anomalyLoading, setAnomalyLoading] = useState(false);
-  const [anomalyError, setAnomalyError] = useState(null);
-
-  const handleToggleForecast = useCallback(async () => {
-    const next = !showForecast;
-    setShowForecast(next);
-    if (next && !forecastData && !forecastLoading) {
-      setForecastLoading(true);
-      setForecastError(null);
-      try { const data = await getForecast(); setForecastData(data); }
-      catch { setForecastError("Không thể tải dữ liệu AI."); }
-      finally { setForecastLoading(false); }
-    }
-  }, [showForecast, forecastData, forecastLoading]);
-
-  const handleToggleSavingTips = useCallback(async () => {
-    const next = !showSavingTips;
-    setShowSavingTips(next);
-    if (next && !savingTipsData && !savingTipsLoading) {
-      setSavingTipsLoading(true);
-      setSavingTipsError(null);
-      try { const data = await getSavingsTips(); setSavingTipsData(data); }
-      catch { setSavingTipsError("Không thể tải dữ liệu AI."); }
-      finally { setSavingTipsLoading(false); }
-    }
-  }, [showSavingTips, savingTipsData, savingTipsLoading]);
-
-  const handleToggleAnomaly = useCallback(async () => {
-    const next = !showAnomaly;
-    setShowAnomaly(next);
-    if (next && !anomalyData && !anomalyLoading) {
-      setAnomalyLoading(true);
-      setAnomalyError(null);
-      try { const data = await getAnomalies(); setAnomalyData(data); }
-      catch { setAnomalyError("Không thể tải dữ liệu AI."); }
-      finally { setAnomalyLoading(false); }
-    }
-  }, [showAnomaly, anomalyData, anomalyLoading]);
-
+  const [forecastError, setForecastError] = useState("");
+  const [savingsError, setSavingsError] = useState("");
+  const [anomalyError, setAnomalyError] = useState("");
+  const [forecastData, setForecastData] = useState(null);
+  const [savingsData, setSavingsData] = useState(null);
+  const [anomalyData, setAnomalyData] = useState(null);
   const [donutTooltip, setDonutTooltip] = useState(null);
   const [trendHoverIndex, setTrendHoverIndex] = useState(null);
   const donutRef = useRef(null);
@@ -335,14 +293,69 @@ export default function ReportsScreen({
     setTrendHoverIndex(index);
   };
 
+  const loadForecast = async () => {
+    if (forecastLoading) return;
+    setForecastError("");
+    setForecastLoading(true);
+    try {
+      const data = await getForecast();
+      setForecastData(data || null);
+    } catch (err) {
+      setForecastError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  const loadSavingsTips = async () => {
+    if (savingsLoading) return;
+    setSavingsError("");
+    setSavingsLoading(true);
+    try {
+      const data = await getSavingsTips();
+      setSavingsData(data || null);
+    } catch (err) {
+      setSavingsError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setSavingsLoading(false);
+    }
+  };
+
+  const loadAnomalies = async () => {
+    if (anomalyLoading) return;
+    setAnomalyError("");
+    setAnomalyLoading(true);
+    try {
+      const data = await getAnomalies();
+      const items = Array.isArray(data) ? data : data?.alerts || data?.items || data || [];
+      setAnomalyData(Array.isArray(items) ? items : []);
+    } catch (err) {
+      setAnomalyError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setAnomalyLoading(false);
+    }
+  };
+
+  const riskLabel = (risk) => {
+    if (risk === "high") return t("reports.risk.high", null, "Cao");
+    if (risk === "medium") return t("reports.risk.medium", null, "Trung bình");
+    return t("reports.risk.low", null, "Thấp");
+  };
+
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h3>{t("reports.title")}</h3>
-        <button className="ghost" onClick={onBack} type="button">
-          {t("common.back")}
-        </button>
-      </div>
+    <section className="panel report-page">
+      <header className="transactions-header" style={{ marginBottom: 14 }}>
+        <div>
+          <p className="eyebrow">Finance Workspace</p>
+          <h2>{t("reports.title")}</h2>
+        </div>
+
+        <div className="transactions-actions">
+          <button className="ghost" onClick={onBack} type="button">
+            {t("common.back")}
+          </button>
+        </div>
+      </header>
       <div className="report-grid report-grid-summary">
         {summaryRows.map((row) => (
           <div key={row.label} className="report-card">
@@ -692,74 +705,89 @@ export default function ReportsScreen({
         </div>
       </div>
 
-      <div className="panel insight-panel">
-        <div className="insight-panel-header">
-          <span className="insight-badge-ai">✶ AI</span>
-          <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
-          <p className="insight-subtitle muted">{t("reports.ai_subtitle", null, "Phân tích thông minh dựa trên dữ liệu tài chính thực tế của bạn")}</p>
-        </div>
-        <div className="insight-actions">
+      <div className="panel">
+        <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
+        <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
           <button
-            className={`insight-btn${showForecast ? " active" : ""}`}
+            className="ghost"
             type="button"
-            onClick={handleToggleForecast}
+            onClick={() => {
+              setShowForecast((v) => {
+                const next = !v;
+                if (next && !forecastData) loadForecast();
+                return next;
+              });
+            }}
           >
-            <span>{t("reports.ai_forecast", null, "Dự đoán xu hướng")}</span>
-            {forecastLoading && <span className="insight-spinner" />}
+            {t("reports.ai_forecast", null, "Dự đoán xu hướng chi tiêu")}
           </button>
           <button
-            className={`insight-btn${showSavingTips ? " active" : ""}`}
+            className="ghost"
             type="button"
-            onClick={handleToggleSavingTips}
+            onClick={() => {
+              setShowSavingTips((v) => {
+                const next = !v;
+                if (next && !savingsData) loadSavingsTips();
+                return next;
+              });
+            }}
           >
-            <span>{t("reports.ai_saving", null, "Gợi ý tiết kiệm")}</span>
-            {savingTipsLoading && <span className="insight-spinner" />}
+            {t("reports.ai_saving", null, "Gợi ý tiết kiệm / cắt giảm")}
           </button>
           <button
-            className={`insight-btn${showAnomaly ? " active" : ""}`}
+            className="ghost"
             type="button"
-            onClick={handleToggleAnomaly}
+            onClick={() => {
+              setShowAnomaly((v) => {
+                const next = !v;
+                if (next && !anomalyData) loadAnomalies();
+                return next;
+              });
+            }}
           >
-            <span>{t("reports.ai_anomaly", null, "Phát hiện bất thường")}</span>
-            {anomalyLoading && <span className="insight-spinner" />}
+            {t("reports.ai_anomaly", null, "Phát hiện bất thường chi tiêu")}
           </button>
         </div>
 
         {showForecast && (
-          <div className="insight-card forecast-card">
-            <div className="insight-card-header">
-              <h4>{t("reports.forecast_title", null, "Dự báo xu hướng 3 tháng tới")}</h4>
-            </div>
-            {forecastLoading && (
-              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích dữ liệu của bạn...</p></div>
-            )}
-            {forecastError && <p className="insight-error">{forecastError}</p>}
-            {forecastData && !forecastLoading && (
+          <div className="insight-card">
+            <h4>{t("reports.forecast_title", null, "Xu hướng 3 tháng tới")}</h4>
+            {forecastLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!forecastLoading && forecastError && <p className="status error">{forecastError}</p>}
+            {!forecastLoading && !forecastError && forecastData && (
               <>
-                <p className="insight-summary">{forecastData.summary}</p>
-                {forecastData.points && forecastData.points.length > 0 && (
-                  <div className="forecast-points">
-                    {forecastData.points.map((pt) => (
-                      <div key={pt.month} className={`forecast-point risk-${forecastData.risk_level || "low"}`}>
-                        <span className="forecast-month">{pt.month}</span>
-                        <span className="forecast-value">{currency(pt.predicted_expense)}</span>
-                        {pt.note && <span className="forecast-note muted">{pt.note}</span>}
-                      </div>
+                {forecastData.summary && <p className="muted">{forecastData.summary}</p>}
+                {Array.isArray(forecastData.points) && forecastData.points.length > 0 && (
+                  <ul>
+                    {forecastData.points.map((point) => (
+                      <li key={point.month || `${point.predicted_expense}`}>
+                        <strong>{point.month}</strong>: {currency(point.predicted_expense || 0)}
+                        {point.note ? ` • ${point.note}` : ""}
+                      </li>
                     ))}
-                  </div>
-                )}
-                {forecastData.top_growing_categories && forecastData.top_growing_categories.length > 0 && (
-                  <div className="insight-tags">
-                    <span className="muted">Danh mục tăng mạnh: </span>
-                    {forecastData.top_growing_categories.map((cat) => (
-                      <span key={cat} className="insight-tag warn">{cat}</span>
-                    ))}
-                  </div>
-                )}
-                {forecastData.tips && forecastData.tips.length > 0 && (
-                  <ul className="insight-tips">
-                    {forecastData.tips.map((tip, i) => <li key={i}>{tip}</li>)}
                   </ul>
+                )}
+                {Array.isArray(forecastData.top_growing_categories) &&
+                  forecastData.top_growing_categories.length > 0 && (
+                    <p className="hint">
+                      {t("reports.top_growing", null, "Danh mục nổi bật")}:{" "}
+                      {forecastData.top_growing_categories.join(", ")}
+                    </p>
+                  )}
+                {forecastData.risk_level && (
+                  <p className="hint">
+                    {t("reports.risk", null, "Mức rủi ro")}: {riskLabel(forecastData.risk_level)}
+                  </p>
+                )}
+                {Array.isArray(forecastData.tips) && forecastData.tips.length > 0 && (
+                  <>
+                    <p className="hint">{t("reports.recommend", null, "Gợi ý")}</p>
+                    <ul>
+                      {forecastData.tips.map((tip, index) => (
+                        <li key={`forecast-tip-${index}`}>{tip}</li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </>
             )}
@@ -767,57 +795,46 @@ export default function ReportsScreen({
         )}
 
         {showSavingTips && (
-          <div className="insight-card saving-card">
-            <div className="insight-card-header">
-              <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm & cắt giảm")}</h4>
-            </div>
-            {savingTipsLoading && (
-              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích dữ liệu của bạn...</p></div>
-            )}
-            {savingTipsError && <p className="insight-error">{savingTipsError}</p>}
-            {savingTipsData && !savingTipsLoading && (
+          <div className="insight-card">
+            <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm")}</h4>
+            {savingsLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!savingsLoading && savingsError && <p className="status error">{savingsError}</p>}
+            {!savingsLoading && !savingsError && savingsData && (
               <>
-                <p className="insight-summary">{savingTipsData.summary}</p>
-                {savingTipsData.total_potential_saving > 0 && (
-                  <div className="saving-highlight">
-                    <span>Có thể tiết kiệm thêm:</span>
-                    <strong className="income">{currency(savingTipsData.total_potential_saving)}/tháng</strong>
-                  </div>
-                )}
-                {savingTipsData.tips && savingTipsData.tips.length > 0 && (
-                  <div className="saving-tips-list">
-                    {savingTipsData.tips.map((tip, i) => (
-                      <div key={i} className="saving-tip-item">
-                        <div className="saving-tip-category">
-                          <strong>{tip.category}</strong>
-                          <span className={`insight-tag ${tip.potential_saving > 500000 ? "danger" : "warn"}`}>
-                            -{currency(tip.potential_saving)}
-                          </span>
-                        </div>
-                        <div className="saving-tip-bar-row">
-                          <div className="saving-tip-bars">
-                            <div className="saving-tip-bar-track"><span className="saving-tip-bar-current" /></div>
-                            <div className="saving-tip-bar-track">
-                              <span
-                                className="saving-tip-bar-target"
-                                style={{ width: `${Math.min((tip.suggested_limit / (tip.current_spend || 1)) * 100, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="saving-tip-amounts">
-                            <span className="muted">Hiện: <strong>{currency(tip.current_spend)}</strong></span>
-                            <span className="muted">Mục tiêu: <strong className="income">{currency(tip.suggested_limit)}</strong></span>
-                          </div>
-                        </div>
-                        <p className="saving-tip-text">{tip.tip}</p>
-                      </div>
+                {savingsData.summary && <p className="muted">{savingsData.summary}</p>}
+                {Array.isArray(savingsData.tips) && savingsData.tips.length > 0 ? (
+                  <ul>
+                    {savingsData.tips.map((tip) => (
+                      <li key={`${tip.category}-${tip.suggested_limit}`}>
+                        <strong>{tip.category}</strong>: {currency(tip.current_spend || 0)} →{" "}
+                        {currency(tip.suggested_limit || 0)}
+                        {typeof tip.potential_saving === "number"
+                          ? ` (${t("reports.potential_save", null, "tiết kiệm")}: ${currency(
+                              tip.potential_saving
+                            )})`
+                          : ""}
+                        {tip.tip ? ` • ${tip.tip}` : ""}
+                      </li>
                     ))}
-                  </div>
-                )}
-                {savingTipsData.general_advice && savingTipsData.general_advice.length > 0 && (
-                  <ul className="insight-tips">
-                    {savingTipsData.general_advice.map((advice, i) => <li key={i}>{advice}</li>)}
                   </ul>
+                ) : (
+                  <p className="empty">{t("reports.empty", null, "Chưa có dữ liệu.")}</p>
+                )}
+                {typeof savingsData.total_potential_saving === "number" && (
+                  <p className="hint">
+                    {t("reports.total_potential", null, "Tổng tiết kiệm tiềm năng")}:{" "}
+                    {currency(savingsData.total_potential_saving)}
+                  </p>
+                )}
+                {Array.isArray(savingsData.general_advice) && savingsData.general_advice.length > 0 && (
+                  <>
+                    <p className="hint">{t("reports.general_advice", null, "Lời khuyên chung")}</p>
+                    <ul>
+                      {savingsData.general_advice.map((item, index) => (
+                        <li key={`advice-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </>
             )}
@@ -825,36 +842,23 @@ export default function ReportsScreen({
         )}
 
         {showAnomaly && (
-          <div className="insight-card anomaly-card">
-            <div className="insight-card-header">
-              <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường chi tiêu")}</h4>
-            </div>
-            {anomalyLoading && (
-              <div className="insight-loading"><span className="insight-spinner large" /><p>AI đang phân tích...</p></div>
-            )}
-            {anomalyError && <p className="insight-error">{anomalyError}</p>}
-            {anomalyData && !anomalyLoading && (
+          <div className="insight-card">
+            <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường")}</h4>
+            {anomalyLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!anomalyLoading && anomalyError && <p className="status error">{anomalyError}</p>}
+            {!anomalyLoading && !anomalyError && Array.isArray(anomalyData) && (
               <>
-                {anomalyData.alerts && anomalyData.alerts.length > 0 ? (
-                  <div className="anomaly-list">
-                    {anomalyData.alerts.map((alert) => (
-                      <div key={alert.id} className={`anomaly-item severity-${alert.severity}`}>
-                        <div className="anomaly-item-header">
-                          <span className={`anomaly-badge ${alert.severity}`}>
-                            {alert.severity === "high" ? "⚠️ Cao" : "ℹ️ Trung bình"}
-                          </span>
-                          <span className="anomaly-date">{alert.date}</span>
-                          <strong className="anomaly-amount expense">{currency(alert.amount)}</strong>
-                        </div>
-                        <p className="anomaly-description">{alert.description}</p>
-                        <p className="anomaly-reason muted">{alert.reason}</p>
-                      </div>
+                {anomalyData.length ? (
+                  <ul>
+                    {anomalyData.slice(0, 10).map((item) => (
+                      <li key={item.id || `${item.date}-${item.amount}`}>
+                        {item.description || t("reports.anomaly_item", null, "Phát hiện bất thường")}
+                        {item.reason ? ` • ${item.reason}` : ""}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 ) : (
-                  <div className="insight-ok">
-                    <p>✅ Chi tiêu 30 ngày qua ổn định, không phát hiện bất thường.</p>
-                  </div>
+                  <p className="empty">{t("reports.anomaly_none", null, "Chưa phát hiện bất thường.")}</p>
                 )}
               </>
             )}

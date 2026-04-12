@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { extractOcr } from "../../api/ai.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
+import { colorFor, onColor } from "../../utils/colors.js";
+import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
 import "./ocr.css";
 
@@ -8,22 +10,39 @@ const baseParsedState = () => ({
   date: toInputDate(new Date()),
   merchant: "",
   total: "",
-  vat: "",
-  subtotal: "",
   categoryId: "",
-  invoice_id: "",
   note: ""
 });
 
 const baseConfidence = {
   date: 0,
   merchant: 0,
-  total: 0,
-  vat: 0,
-  subtotal: 0
+  total: 0
 };
 
-export default function OcrScreen({ categories, onCreateTransaction, loading: globalLoading }) {
+const sanitizeName = (name) =>
+  name
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+
+const toFormattedNumber = (value, fallback = "") => {
+  if (value === null || value === undefined || value === "") return fallback;
+  return formatNumberInput(String(value));
+};
+
+const normalizeTag = (value) => String(value || "").trim().replace(/^#/, "");
+
+export default function OcrScreen({
+  categories,
+  tags = [],
+  userEmail,
+  onCreateTag,
+  onCreateTransaction,
+  loading,
+  embedded = false
+}) {
+  const fileInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsed, setParsed] = useState(baseParsedState);
@@ -32,7 +51,31 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
   const [isDragging, setIsDragging] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const fileInputRef = useRef(null);
+  const [warnings, setWarnings] = useState([]);
+  const [selectedTagIds, setSelectedTagIds] = useState([]);
+  const [tagInput, setTagInput] = useState("");
+
+  const categoryPrefs = useMemo(() => getCategoryPrefs(userEmail), [userEmail]);
+
+  const tagMap = useMemo(() => {
+    const map = {};
+    tags.forEach((tag) => {
+      map[tag.id] = tag;
+    });
+    return map;
+  }, [tags]);
+
+  const tagNameMap = useMemo(() => {
+    const map = {};
+    tags.forEach((tag) => {
+      if (tag?.name) map[tag.name.toLowerCase()] = tag;
+    });
+    return map;
+  }, [tags]);
+
+  useEffect(() => {
+    setSelectedTagIds((current) => current.filter((id) => tagMap[id]));
+  }, [tagMap]);
 
   useEffect(() => {
     if (!file) {
@@ -65,22 +108,17 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
         ...current,
         merchant: result.merchant || current.merchant || t("ocr.merchant_guess"),
         total: result.total ? formatNumberInput(String(result.total)) : current.total,
-        vat: result.vat ? formatNumberInput(String(result.vat)) : current.vat,
-        subtotal: result.subtotal ? formatNumberInput(String(result.subtotal)) : current.subtotal,
-        invoice_id: result.invoice_id || "",
-        note: result.text ? `ID: ${result.invoice_id || '---'}` : current.note,
+        note: result.note || current.note,
         date: result.date || current.date,
         categoryId: result.category ? (categories.find(c => c.name.toLowerCase() === result.category.toLowerCase())?.id || "") : current.categoryId
       }));
-      
+
       setConfidence({
         date: result.date ? 0.9 : 0.4,
         merchant: result.merchant ? 0.85 : 0.4,
-        total: result.total ? 0.95 : 0.3,
-        vat: result.vat ? 0.8 : 0.2,
-        subtotal: result.subtotal ? 0.8 : 0.2
+        total: result.total ? 0.95 : 0.3
       });
-      
+
       setNotice(t("ocr.notice.extracted", null, "Đã trích xuất xong. Vui lòng kiểm tra lại số liệu."));
       setOcrState("done");
     } catch (err) {
@@ -96,7 +134,7 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
     setError("");
     setNotice("");
 
-    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.invoice_id]
+    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.note]
       .filter(Boolean)
       .join(" - ");
 
@@ -107,13 +145,16 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
         transaction_type: "expense",
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
         date: parsed.date,
-        note: parsed.note
+        tag_ids: selectedTagIds
       });
       setNotice(t("ocr.notice.created", null, "Giao dịch đã được tạo thành công!"));
       setParsed(baseParsedState());
       setConfidence(baseConfidence);
       setFile(null);
       setOcrState("idle");
+      setWarnings([]);
+      setSelectedTagIds([]);
+      setTagInput("");
     } catch {
       setError(t("ocr.error.create_failed", null, "Không thể tạo giao dịch."));
     }
@@ -134,26 +175,58 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
     }
   };
 
+  const addTagByName = async (value) => {
+    const normalized = normalizeTag(value);
+    if (!normalized) return;
+
+    const existing = tagNameMap[normalized.toLowerCase()];
+    if (existing) {
+      setSelectedTagIds((current) =>
+        current.includes(existing.id) ? current : [...current, existing.id]
+      );
+      setTagInput("");
+      return;
+    }
+
+    if (!onCreateTag) return;
+    const created = await onCreateTag({ name: normalized, color: "#1565c0" });
+    if (created?.id) {
+      setSelectedTagIds((current) => [...current, created.id]);
+    }
+    setTagInput("");
+  };
+
+  const toggleSuggestedTag = (tagId) => {
+    setSelectedTagIds((current) =>
+      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
+    );
+  };
+
+  const removeTag = (tagId) => setSelectedTagIds((current) => current.filter((id) => id !== tagId));
+
+  const Shell = embedded ? "div" : "section";
+
   return (
-    <div className={`ocr-container-pro ${ocrState}`}>
-      <div className="ocr-header-pro">
-        <h1>{t("ocr.title", null, "Nhập Hóa Đơn AI")}</h1>
-        <div className="badge-pro">BETA V4 (Auditor)</div>
-      </div>
+    <Shell className={embedded ? "ocr-embedded" : "panel"}>
+      {!embedded && (
+        <div className="panel-header">
+          <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
+        </div>
+      )}
 
       <div className="ocr-grid-pro">
         <div className="ocr-uploader-card">
-          <div 
+          <div
             className={`dropzone-pro ${isDragging ? 'dragging' : ''}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
           >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              hidden 
+            <input
+              type="file"
+              ref={fileInputRef}
+              hidden
               accept="image/*"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
@@ -168,10 +241,10 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
             </div>
           )}
 
-          <button 
-            className="extract-btn-pro glow-effect" 
+          <button
+            className="extract-btn-pro glow-effect"
             onClick={handleExtract}
-            disabled={!file || ocrState === "running" || globalLoading}
+            disabled={!file || ocrState === "running" || loading}
           >
             {ocrState === "running" ? (
               <><span>🌀</span> Đang quét...</>
@@ -183,113 +256,161 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
 
         <form className="ocr-form-card" onSubmit={handleCreate}>
           <div className="form-section-title">Thông tin giao dịch</div>
-          
+
           <div className="field-pro">
             <label>Cửa hàng (Merchant)</label>
             <div className="input-wrapper-pro">
-              <input 
-                className="input-pro" 
+              <input
+                className="input-pro"
                 value={parsed.merchant}
-                onChange={(e) => setParsed(p => ({...p, merchant: e.target.value}))}
+                onChange={(e) => setParsed(p => ({ ...p, merchant: e.target.value }))}
                 placeholder="VD: Lotte Mart, Highland Coffee..."
               />
               <div className={`confidence-dot ${getConfClass(confidence.merchant)}`} title="Độ tin cậy của AI"></div>
             </div>
           </div>
 
-          <div className="grid two" style={{gap: '15px'}}>
             <div className="field-pro">
               <label>Ngày hóa đơn</label>
               <div className="input-wrapper-pro">
-                <input 
+                <input
                   type="date"
-                  className="input-pro" 
+                  className="input-pro"
                   value={parsed.date}
-                  onChange={(e) => setParsed(p => ({...p, date: e.target.value}))}
+                  onChange={(e) => setParsed(p => ({ ...p, date: e.target.value }))}
                 />
                 <div className={`confidence-dot ${getConfClass(confidence.date)}`}></div>
               </div>
             </div>
-            <div className="field-pro">
-              <label>Mã hóa đơn / ID</label>
-              <div className="input-wrapper-pro">
-                <input 
-                  className="input-pro" 
-                  value={parsed.invoice_id}
-                  onChange={(e) => setParsed(p => ({...p, invoice_id: e.target.value}))}
-                  placeholder="Mã số từ hóa đơn..."
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="form-section-title">Kiểm toán tài chính</div>
-
-          <div className="grid two" style={{gap: '15px'}}>
-            <div className="field-pro">
-              <label>Tạm tính (Subtotal)</label>
-              <div className="input-wrapper-pro">
-                <input 
-                  className="input-pro" 
-                  value={parsed.subtotal}
-                  onChange={(e) => setParsed(p => ({...p, subtotal: formatNumberInput(e.target.value)}))}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="field-pro">
-              <label>Thuế (VAT)</label>
-              <div className="input-wrapper-pro">
-                <input 
-                  className="input-pro" 
-                  value={parsed.vat}
-                  onChange={(e) => setParsed(p => ({...p, vat: formatNumberInput(e.target.value)}))}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-          </div>
 
           <div className="field-pro">
             <label>TỔNG THANH TOÁN (Grand Total)</label>
             <div className="input-wrapper-pro">
-              <input 
-                className="input-pro" 
-                style={{fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)'}}
+              <input
+                className="input-pro"
+                style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--primary)' }}
                 value={parsed.total}
-                onChange={(e) => setParsed(p => ({...p, total: formatNumberInput(e.target.value)}))}
+                onChange={(e) => setParsed(p => ({ ...p, total: formatNumberInput(e.target.value) }))}
                 placeholder="0"
                 required
               />
-              <div className={`confidence-dot ${getConfClass(confidence.total)}`} style={{width: '12px', height: '12px'}}></div>
+              <div className={`confidence-dot ${getConfClass(confidence.total)}`} style={{ width: '12px', height: '12px' }}></div>
             </div>
-            <small style={{color: 'var(--muted)', textAlign: 'right', display: 'block'}}>
+            <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block' }}>
               {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
             </small>
           </div>
 
-          <div className="field-pro">
-            <label>Danh mục dự đoán</label>
-            <select
-              className="input-pro"
-              value={parsed.categoryId}
-              onChange={(e) => setParsed(p => ({...p, categoryId: e.target.value}))}
-            >
-              <option value="">-- Chọn danh mục --</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+          <label className="field">
+            <span>{t("ocr.form.category", null, "Category")}</span>
+            <div className="category-picker">
+              <button
+                type="button"
+                className={`category-pill ${!parsed.categoryId ? "selected" : ""}`}
+                onClick={() => setParsed((current) => ({ ...current, categoryId: "" }))}
+                aria-pressed={!parsed.categoryId}
+              >
+                {t("transactions.none", null, "Không")}
+              </button>
+              {categories.map((category) => {
+                const bg = colorFor(category.name, userEmail);
+                const selected = String(parsed.categoryId) === String(category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`category-pill color-pill ${selected ? "selected" : ""}`}
+                    onClick={() => setParsed((current) => ({ ...current, categoryId: String(category.id) }))}
+                    aria-pressed={selected}
+                    style={{ "--pill-bg": bg, "--pill-fg": onColor(bg) }}
+                  >
+                    <span className="pill-icon" aria-hidden="true">
+                      {categoryPrefs[category.name]?.icon || "🏷️"}
+                    </span>
+                    <span className="pill-text">{category.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </label>
+
+
+          {notice && <p style={{ color: '#27ae60', fontSize: '14px', margin: '10px 0' }}>{notice}</p>}
+          {error && <p style={{ color: '#e74c3c', fontSize: '14px', margin: '10px 0' }}>{error}</p>}
+
+          <div className="tag-section">
+            <label className="field">
+              <span>{t("transactions.field.tags")}</span>
+              <div className="tag-input-row">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(event) => setTagInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === ",") {
+                      event.preventDefault();
+                      addTagByName(tagInput);
+                    }
+                  }}
+                  placeholder={t("transactions.tags.placeholder", null, "Nhập nhãn và nhấn Enter")}
+                />
+                <button className="ghost" type="button" onClick={() => addTagByName(tagInput)}>
+                  {t("transactions.tags.add", null, "Thêm nhãn")}
+                </button>
+              </div>
+            </label>
+
+            {tags.length ? (
+              <div className="tag-options">
+                {tags.map((tag) => {
+                  const active = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id || tag.name}
+                      type="button"
+                      className={`tag-option color-pill ${active ? "active" : ""}`}
+                      onClick={() => toggleSuggestedTag(tag.id)}
+                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
+                    >
+                      <span className="pill-text">{tag.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="tag-selected">
+              {selectedTagIds.length ? (
+                selectedTagIds.map((tagId) => {
+                  const tag = tagMap[tagId];
+                  if (!tag) return null;
+                  return (
+                    <button
+                      key={tagId}
+                      type="button"
+                      className="tag-chip removable color-pill"
+                      onClick={() => removeTag(tagId)}
+                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
+                    >
+                      <span className="pill-text">{tag.name}</span>
+                      <span className="tag-remove">×</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <span className="muted">{t("transactions.tags.empty", null, "Chưa có nhãn nào")}</span>
+              )}
+            </div>
           </div>
 
-          {notice && <p style={{color: '#27ae60', fontSize: '14px', margin: '10px 0'}}>{notice}</p>}
-          {error && <p style={{color: '#e74c3c', fontSize: '14px', margin: '10px 0'}}>{error}</p>}
+          {warnings.length > 0 && <p className="form-error">{warnings.join(" ")}</p>}
+          {notice && <p className="form-note">{notice}</p>}
+          {error && <p className="form-error">{error}</p>}
 
-          <div className="row-actions" style={{marginTop: '20px'}}>
-             <button 
-              className="ghost" 
+          <div className="row-actions">
+            <button
+              className="ghost"
               type="button"
               onClick={() => {
                 setFile(null);
@@ -297,17 +418,20 @@ export default function OcrScreen({ categories, onCreateTransaction, loading: gl
                 setConfidence(baseConfidence);
                 setNotice("");
                 setError("");
+                setWarnings([]);
+                setSelectedTagIds([]);
+                setTagInput("");
               }}
               disabled={ocrState === "running"}
             >
               Làm lại
             </button>
-            <button className="primary" type="submit" style={{flex: 1}} disabled={!canCreate || ocrState === "running" || globalLoading}>
-              {globalLoading ? "Đang xử lý..." : "Xác nhận & Lưu Giao Dịch"}
+            <button className="primary" type="submit" style={{ flex: 1 }} disabled={!canCreate || ocrState === "running" || loading}>
+              {loading ? "Đang xử lý..." : "Xác nhận & Lưu Giao Dịch"}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </Shell>
   );
 }

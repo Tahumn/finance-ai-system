@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.ai_agent import schemas, service
 from app.auth.models import User
-from app.auth.service import get_current_user, get_current_active_user
+from app.auth.service import get_current_active_user
 from app.database import get_db
 from app.finance import schemas as finance_schemas
 from app.finance import service as finance_service
@@ -17,21 +17,16 @@ def parse_transaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    result = service.parse_transaction_text(
+    return service.parse_transaction_text(
         db=db,
         current_user=current_user,
         text=payload.text,
         default_date=payload.default_date,
         auto_create_category=payload.auto_create_category,
     )
-    return result
 
 
-@router.post(
-    "/transactions",
-    # response_model=finance_schemas.TransactionRead,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/transactions", status_code=status.HTTP_201_CREATED)
 def create_transaction_from_text(
     payload: schemas.ParseTransactionRequest,
     db: Session = Depends(get_db),
@@ -44,7 +39,7 @@ def create_transaction_from_text(
         default_date=payload.default_date,
         auto_create_category=payload.auto_create_category,
     )
-    if result["amount"] is None:
+    if result.get("amount") is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unable to detect amount from text",
@@ -54,8 +49,10 @@ def create_transaction_from_text(
         description=result["description"],
         amount=result["amount"],
         transaction_type=result["transaction_type"],
-        category_id=result["category_id"],
-        date=result["date"],
+        category_id=result.get("category_id"),
+        account_id=result.get("account_id"),
+        date=result.get("date"),
+        tag_ids=result.get("tag_ids") or [],
     )
     return finance_service.create_transaction(db, current_user, tx_payload)
 
@@ -66,7 +63,6 @@ def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    # Sử dụng chatbot mới ổn định và có fallback chuyên nghiệp
     return service.answer_chat(db, current_user, payload.text)
 
 
@@ -112,3 +108,4 @@ def get_savings_tips(
     current_user: User = Depends(get_current_active_user),
 ):
     return service.get_savings_suggestions(db, current_user)
+

@@ -1,7 +1,7 @@
 /* Floating Chatbot Premium Styles */
 .chatbot-container {
   position: fixed;
-  bottom: 84px;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
   right: 24px;
   z-index: 1000;
   font-family: inherit;

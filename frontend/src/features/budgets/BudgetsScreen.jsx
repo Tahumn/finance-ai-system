@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { colorFor } from "../../utils/colors.js";
+import { colorFor, onColor } from "../../utils/colors.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
+import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
 
 const emptyForm = () => ({
@@ -46,6 +47,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
   const [form, setForm] = useState(emptyForm);
   const [plans, setPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const categoryPrefs = useMemo(() => getCategoryPrefs(userEmail), [userEmail]);
   const categoryMap = useMemo(() => {
     const map = {};
     categories.forEach((category) => {
@@ -159,10 +161,13 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
   };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h3>{t("budgets.title")}</h3>
-      </div>
+    <section className="panel budgets-page">
+      <header className="transactions-header" style={{ marginBottom: 14 }}>
+        <div>
+          <p className="eyebrow">Finance Workspace</p>
+          <h2>{t("budgets.title")}</h2>
+        </div>
+      </header>
 
       <form className="form" onSubmit={handleSubmit}>
         <div className="row">
@@ -202,16 +207,20 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
                 categories.map((category) => {
                   const id = String(category.id);
                   const active = form.categoryIds.includes(id);
+                  const bg = colorFor(category.name, userEmail);
                   return (
                     <button
                       key={category.id}
                       type="button"
-                      className={`category-pill ${active ? "active" : ""}`}
+                      className={`category-pill color-pill ${active ? "active" : ""}`}
                       onClick={() => toggleCategory(id)}
                       aria-pressed={active}
+                      style={{ "--pill-bg": bg, "--pill-fg": onColor(bg) }}
                     >
-                      <span className="dot" style={{ background: colorFor(category.name, userEmail) }} />
-                      <span>{category.name}</span>
+                      <span className="pill-icon" aria-hidden="true">
+                        {categoryPrefs[category.name]?.icon || "🏷️"}
+                      </span>
+                      <span className="pill-text">{category.name}</span>
                     </button>
                   );
                 })

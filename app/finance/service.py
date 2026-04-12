@@ -85,11 +85,7 @@ def create_tag(db: Session, current_user: User, payload: schemas.TagCreate) -> T
     if not tag_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag name is required")
 
-    exists = (
-        db.query(Tag)
-        .filter(Tag.user_id == current_user.id, Tag.name == tag_name)
-        .first()
-    )
+    exists = db.query(Tag).filter(Tag.user_id == current_user.id, Tag.name == tag_name).first()
     if exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag already exists")
 
@@ -111,17 +107,13 @@ def list_tags(db: Session, current_user: User) -> list[Tag]:
 
 
 def update_tag(db: Session, current_user: User, tag_id: int, payload: schemas.TagUpdate) -> Tag:
-    db_tag = (
-        db.query(Tag)
-        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
-        .first()
-    )
+    db_tag = db.query(Tag).filter(Tag.id == tag_id, Tag.user_id == current_user.id).first()
     if not db_tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
 
     data = payload.model_dump(exclude_unset=True)
     if "name" in data:
-        name = data["name"].strip()
+        name = (data.get("name") or "").strip()
         if not name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag name is required")
         exists = (
@@ -143,24 +135,15 @@ def update_tag(db: Session, current_user: User, tag_id: int, payload: schemas.Ta
 
 
 def delete_tag(db: Session, current_user: User, tag_id: int) -> None:
-    db_tag = (
-        db.query(Tag)
-        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
-        .first()
-    )
+    db_tag = db.query(Tag).filter(Tag.id == tag_id, Tag.user_id == current_user.id).first()
     if not db_tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
-
     db.delete(db_tag)
     db.commit()
     emit_finance_update("tags", current_user.id, tag_id)
 
 
-def create_transaction(
-    db: Session,
-    current_user: User,
-    payload: schemas.TransactionCreate,
-) -> Transaction:
+def create_transaction(db: Session, current_user: User, payload: schemas.TransactionCreate) -> Transaction:
     _validate_category_ownership(db, current_user, payload.category_id)
     _validate_account_ownership(db, current_user, payload.account_id)
     tags = _load_tags(db, current_user, payload.tag_ids)
@@ -213,7 +196,12 @@ def list_transactions(
         query = query.filter(Transaction.transaction_type == transaction_type)
 
     total = query.count()
-    items = query.order_by(Transaction.date.desc(), Transaction.id.desc()).offset(offset).limit(limit).all()
+    items = (
+        query.order_by(Transaction.date.desc(), Transaction.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     return items, total
 
 
@@ -225,6 +213,7 @@ def update_transaction(
 ) -> Transaction:
     db_tx = (
         db.query(Transaction)
+        .options(selectinload(Transaction.tags))
         .filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
         .first()
     )
@@ -236,7 +225,7 @@ def update_transaction(
         _validate_category_ownership(db, current_user, data["category_id"])
     if "account_id" in data:
         _validate_account_ownership(db, current_user, data["account_id"])
-    if "description" in data and not data["description"].strip():
+    if "description" in data and not (data.get("description") or "").strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Description is required")
     if "tag_ids" in data:
         db_tx.tags = _load_tags(db, current_user, data["tag_ids"])
@@ -255,14 +244,9 @@ def update_transaction(
 
 
 def delete_transaction(db: Session, current_user: User, transaction_id: int) -> None:
-    db_tx = (
-        db.query(Transaction)
-        .filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
-        .first()
-    )
+    db_tx = db.query(Transaction).filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id).first()
     if not db_tx:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
-
     db.delete(db_tx)
     db.commit()
     emit_finance_update("transactions", current_user.id, transaction_id)
@@ -321,7 +305,7 @@ def get_summary(
         period_net_flow=period_net,
         total_income=period_income,
         total_expense=period_expense,
-        balance=period_net,
+        balance=total_balance,
     )
 
 
@@ -398,3 +382,4 @@ def get_chart_data(
         for month in sorted_months
     ]
     return schemas.GroupedChartData(series=series)
+

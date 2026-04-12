@@ -1,3 +1,4 @@
+import { useState } from "react";
 import TransactionRow from "../../components/TransactionRow.jsx";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
@@ -52,8 +53,7 @@ const buildLineSeries = (series) => {
   const padding = 6;
   const scaleX = (index) =>
     length === 1 ? width / 2 : padding + (index / (length - 1)) * (width - padding * 2);
-  const scaleY = (value) =>
-    height - padding - ((value - min) / range) * (height - padding * 2);
+  const scaleY = (value) => height - padding - ((value - min) / range) * (height - padding * 2);
   const mapPoints = (valuesList) =>
     valuesList.map((value, index) => ({
       x: scaleX(index),
@@ -61,9 +61,7 @@ const buildLineSeries = (series) => {
       value
     }));
   const buildSmoothPath = (points) => {
-    if (points.length <= 1) {
-      return points.length ? `M ${points[0].x} ${points[0].y}` : "";
-    }
+    if (points.length <= 1) return points.length ? `M ${points[0].x} ${points[0].y}` : "";
     let d = `M ${points[0].x} ${points[0].y}`;
     for (let i = 1; i < points.length; i += 1) {
       const prev = points[i - 1];
@@ -76,14 +74,12 @@ const buildLineSeries = (series) => {
     d += ` T ${last.x} ${last.y}`;
     return d;
   };
+
   const incomePoints = mapPoints(income);
   const expensePoints = mapPoints(expense);
-  if (incomePoints.length === 1) {
-    incomePoints.push({ ...incomePoints[0], x: incomePoints[0].x + 1 });
-  }
-  if (expensePoints.length === 1) {
-    expensePoints.push({ ...expensePoints[0], x: expensePoints[0].x + 1 });
-  }
+  if (incomePoints.length === 1) incomePoints.push({ ...incomePoints[0], x: incomePoints[0].x + 1 });
+  if (expensePoints.length === 1) expensePoints.push({ ...expensePoints[0], x: expensePoints[0].x + 1 });
+
   return {
     width,
     height,
@@ -133,9 +129,11 @@ const normalizeText = (value) =>
     .replace(/[\u0300-\u036f]/g, "");
 
 const buildAiInsights = (summary, transactions, breakdown) => {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
   const insights = [];
 
-  const topCategory = breakdown[0];
+  const topCategory = safeBreakdown[0];
   if (topCategory) {
     insights.push(
       t("dashboard.insight.top_category", {
@@ -150,14 +148,15 @@ const buildAiInsights = (summary, transactions, breakdown) => {
   const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, "0")}`;
 
-  const coffeeSpendingByMonth = transactions
+  const coffeeSpendingByMonth = safeTransactions
     .filter((item) => item.transaction_type === "expense")
     .filter((item) => {
       const text = normalizeText(item.description || "");
       return text.includes("coffee") || text.includes("cafe") || text.includes("ca phe");
     })
     .reduce((acc, item) => {
-      const key = item.date.slice(0, 7);
+      const key = String(item.date || "").slice(0, 7);
+      if (!key) return acc;
       acc[key] = (acc[key] || 0) + Number(item.amount || 0);
       return acc;
     }, {});
@@ -175,22 +174,21 @@ const buildAiInsights = (summary, transactions, breakdown) => {
     );
   }
 
-  if (summary.total_expense > summary.total_income) {
+  if ((summary?.total_expense || 0) > (summary?.total_income || 0)) {
     insights.push(t("dashboard.insight.over_spend"));
   }
 
-  if (!insights.length) {
-    insights.push(t("dashboard.insight.stable"));
-  }
-
+  if (!insights.length) insights.push(t("dashboard.insight.stable"));
   return insights.slice(0, 3);
 };
 
 export default function DashboardScreen({
   summary,
   breakdown = [],
+  incomeBreakdown,
   transactions = [],
   monthlySeries = [],
+  anomalies = [],
   onViewTransactions,
   onGoOcr,
   onGoChat,
@@ -200,8 +198,11 @@ export default function DashboardScreen({
   onSelectPreset,
   userEmail
 }) {
-  const slicedTransactions = transactions.slice(0, 4);
-  const insights = buildAiInsights(summary, transactions, breakdown);
+  const [actionsOpen, setActionsOpen] = useState(true);
+  const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
+  const maxVal = Math.max(1, ...safeMonthly.flatMap((item) => [item.income, item.expense]));
+  const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 4);
+  const insights = buildAiInsights(summary || {}, transactions, breakdown);
   const donutItems = buildDonutItems(breakdown, 4, t("reports.other", null, "Khác"));
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
   const { series: waveSource } = buildWaveSeries(transactions, monthlySeries);
@@ -212,7 +213,27 @@ export default function DashboardScreen({
     <>
       <section className="panel dashboard-actions">
         <div className="panel-header">
-          <h3>{t("dashboard.quick_actions")}</h3>
+          <div className="dashboard-actions-header">
+            <h3>{t("dashboard.quick_actions")}</h3>
+            <button
+              className="chevron-btn"
+              type="button"
+              aria-label={t("common.toggle", null, "Toggle")}
+              aria-expanded={actionsOpen}
+              onClick={() => setActionsOpen((value) => !value)}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+                <path
+                  d="M6 9l6 6 6-6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
           <div className="range-selector">
             {["today", "week", "month", "year"].map((preset) => (
               <button
@@ -226,21 +247,39 @@ export default function DashboardScreen({
             ))}
           </div>
         </div>
-        <div className="quick-actions">
-          <button className="ghost" type="button" onClick={onGoAddTransaction}>
-            {t("dashboard.add_tx")}
-          </button>
-          <button className="ghost" type="button" onClick={onGoOcr}>
-            {t("dashboard.ocr")}
-          </button>
-          <button className="ghost" type="button" onClick={onGoChat}>
-            {t("dashboard.chat")}
-          </button>
-          <button className="ghost" type="button" onClick={onGoReports}>
-            {t("dashboard.reports")}
-          </button>
-        </div>
+        {actionsOpen && (
+          <div className="quick-actions quick-actions-dashboard">
+            <button className="ghost qa-add" type="button" onClick={onGoAddTransaction}>
+              {t("dashboard.add_tx")}
+            </button>
+            <button className="ghost qa-reports" type="button" onClick={onGoReports}>
+              {t("dashboard.reports")}
+            </button>
+            <button className="ghost qa-ocr" type="button" onClick={onGoOcr}>
+              {t("dashboard.ocr")}
+            </button>
+          </div>
+        )}
       </section>
+
+      {Array.isArray(anomalies) && anomalies.length > 0 && (
+        <section className="panel anomalies">
+          <div className="panel-header">
+            <h3 style={{ color: "var(--danger)" }}>⚠️ Cảnh báo chi tiêu (Anomaly)</h3>
+          </div>
+          <div className="anomaly-list">
+            {anomalies.map((alert) => (
+              <div key={alert.id} className={`anomaly-item ${alert.severity}`}>
+                <div className="anomaly-info">
+                  <strong>{alert.description}</strong>
+                  <p>{alert.reason}</p>
+                </div>
+                <div className="anomaly-amount">{currency(alert.amount)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="grid">
         <div className="panel">
@@ -277,7 +316,7 @@ export default function DashboardScreen({
                 </svg>
                 <div className="donut-center">
                   <span>{t("dashboard.total_expense")}</span>
-                  <strong>{currency(summary.total_expense || donutTotal)}</strong>
+                  <strong>{currency(summary?.total_expense || donutTotal)}</strong>
                 </div>
               </div>
               <div className="donut-legend">
@@ -286,7 +325,9 @@ export default function DashboardScreen({
                     <div className="donut-legend-label">
                       <span
                         className="dot"
-                        style={{ background: item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail) }}
+                        style={{
+                          background: item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail)
+                        }}
                       />
                       <span>{item.category}</span>
                     </div>
@@ -327,24 +368,6 @@ export default function DashboardScreen({
                 />
                 <path className="line-path income" d={trendSeries.incomePath} />
                 <path className="line-path expense" d={trendSeries.expensePath} />
-                {trendSeries.income.map((point, index) => (
-                  <circle
-                    key={`income-${index}`}
-                    className="line-dot income base"
-                    cx={point.x}
-                    cy={point.y}
-                    r="1.8"
-                  />
-                ))}
-                {trendSeries.expense.map((point, index) => (
-                  <circle
-                    key={`expense-${index}`}
-                    className="line-dot expense base"
-                    cx={point.x}
-                    cy={point.y}
-                    r="1.8"
-                  />
-                ))}
               </svg>
               <div className="line-labels">
                 {trendSeries.labels.map((label, index) => (
@@ -380,7 +403,12 @@ export default function DashboardScreen({
           <p className="empty">{t("dashboard.empty_tx")}</p>
         ) : (
           slicedTransactions.map((item) => (
-            <TransactionRow key={item.id} item={item} categoryLabel={item.categoryLabel} />
+            <TransactionRow
+              key={item.id}
+              item={item}
+              categoryLabel={item.categoryLabel}
+              userEmail={userEmail}
+            />
           ))
         )}
       </section>

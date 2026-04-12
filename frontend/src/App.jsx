@@ -24,9 +24,10 @@ import {
   listTags,
   listTransactions,
   updateTag,
-  updateTransaction
+  updateTransaction,
+  getChartData
 } from "./api/finance.js";
-import BottomNav from "./components/BottomNav.jsx";
+import { createTransactionFromText, parseTransaction, getAnomalies } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
 import StatusBanner from "./components/StatusBanner.jsx";
@@ -38,12 +39,12 @@ import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
 import OcrScreen from "./features/ocr/OcrScreen.jsx";
-import FloatingChatbot from "./components/FloatingChatbot.jsx";
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import NotificationsScreen from "./features/notifications/NotificationsScreen.jsx";
+import FloatingChatbot from "./components/FloatingChatbot.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
 import {
@@ -89,6 +90,8 @@ const buildMonthlySeries = (transactions) => {
     .slice(-6);
 };
 
+// monthlySeries is now fetched from the backend
+
 const getRangeFromPreset = (preset) => {
   const now = new Date();
   if (preset === "today") {
@@ -111,7 +114,8 @@ const getRangeFromPreset = (preset) => {
 const defaultFilters = () => ({
   ...getRangeFromPreset("month"),
   type: "",
-  categoryId: ""
+  categoryId: "",
+  tagId: ""
 });
 
 const getSocketBase = () => {
@@ -133,11 +137,18 @@ export default function App() {
   const [tags, setTags] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
+    total_balance: 0,
+    period_total_income: 0,
+    period_total_expense: 0,
+    period_net_flow: 0,
     total_income: 0,
     total_expense: 0,
     balance: 0
   });
   const [breakdown, setBreakdown] = useState([]);
+  const [incomeBreakdown, setIncomeBreakdown] = useState([]);
+  const [monthlySeries, setMonthlySeries] = useState([]);
+  const [anomalies, setAnomalies] = useState([]);
   const [filters, setFilters] = useState(defaultFilters());
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -187,7 +198,6 @@ export default function App() {
     window.addEventListener("finance:ui-prefs", handlePrefs);
     window.addEventListener("finance:logout", handleLogout);
     window.addEventListener("finance:refresh", handleRefresh);
-
     return () => {
       window.removeEventListener("finance:ui-prefs", handlePrefs);
       window.removeEventListener("finance:logout", handleLogout);
@@ -251,7 +261,7 @@ export default function App() {
 
   const transactionsWithLabels = useMemo(
     () =>
-      transactions.map((item) => ({
+      (transactions.items || []).map((item) => ({
         ...item,
         categoryLabel: item.category_id ? categoryMap[item.category_id] || t("transactions.none") : t("transactions.none")
       })),
@@ -266,7 +276,13 @@ export default function App() {
     }));
   }, [breakdown]);
 
-  const monthlySeries = useMemo(() => buildMonthlySeries(transactions), [transactions]);
+  const incomeBreakdownWithShare = useMemo(() => {
+    const total = incomeBreakdown.reduce((sum, item) => sum + item.spent, 0) || 1;
+    return incomeBreakdown.map((item) => ({
+      ...item,
+      share: item.spent / total
+    }));
+  }, [incomeBreakdown]);
 
   const handleLogout = () => {
     clearToken();
@@ -329,6 +345,8 @@ export default function App() {
           phone: phone || null,
           email
         });
+        // Force first-time setup for newly registered accounts (even if this email was used before on this device).
+        setOnboardingDone(email, false);
         return { next: "otp" };
       }
       const token = await login(identifier, password);
@@ -451,20 +469,22 @@ export default function App() {
         end_date: filters.end,
         category_id: filters.categoryId || undefined,
         transaction_type: filters.type || undefined,
-        limit: 500,
+        limit: 20,
         offset: 0
       };
-      const [cats, tagsList, txData, sum, catsBreakdown] = await Promise.all([
+      const [cats, tagsList, txs, sum, catsBreakdown] = await Promise.all([
         listCategories(),
         listTags(),
         listTransactions(params),
         getSummary({ start_date: filters.start, end_date: filters.end }),
-        getCategoryBreakdown({ start_date: filters.start, end_date: filters.end })
+        getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "expense" }),
+        getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "income" }),
+        getChartData({ limit_months: 6 }),
+        getAnomalies()
       ]);
-      const txItems = Array.isArray(txData) ? txData : txData?.items || [];
       setCategories(cats);
       setTags(tagsList);
-      setTransactions(txItems);
+      setTransactions(txs);
       setSummary(sum);
       setBreakdown(catsBreakdown);
       const email = authState.user?.email || "guest";
@@ -474,7 +494,7 @@ export default function App() {
           email,
           summary: sum,
           breakdown: catsBreakdown,
-          transactions: txItems
+          transactions: txs
         })
       );
     } catch (err) {
@@ -503,8 +523,8 @@ export default function App() {
 
   useEffect(() => {
     const socket = io(getSocketBase(), {
-      path: "/ws/socket.io",
-      transports: ["websocket"]
+      path: "/ws/socket.io/",
+      transports: ["websocket", "polling"]
     });
     socket.on("finance:update", (payload) => {
       const currentUserId = authUserIdRef.current;
@@ -568,6 +588,33 @@ export default function App() {
       await loadFinanceData();
     } catch (err) {
       setError(err.message || t("finance.error.create_tx"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateFromText = async (text) => {
+    setLoading(true);
+    setError("");
+    try {
+      await createTransactionFromText(text);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Unable to create transaction from text.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleParseFromText = async (text) => {
+    setLoading(true);
+    setError("");
+    try {
+      return await parseTransaction(text, { auto_create_category: false });
+    } catch (err) {
+      setError(err.message || "Unable to parse text.");
       throw err;
     } finally {
       setLoading(false);
@@ -660,8 +707,7 @@ export default function App() {
     setFilters((current) => ({ ...current, ...nextRange }));
   };
 
-  const showDateFilters =
-    isAuthed && ["dashboard", "transactions", "reports"].includes(view);
+  const showDateFilters = isAuthed && view === "dashboard";
   const notificationCounts = getNotificationCounts(notifications);
 
   if (!isAuthed && view === "auth") {
@@ -726,7 +772,7 @@ export default function App() {
               </div>
             </header>
 
-            <section className="balance-card">
+            <section className={`balance-card ${summary.total_balance < 0 ? "negative" : ""}`}>
               <div>
                 <p className="label">{t("dashboard.balance")}</p>
                 <h2>{currency(summary.balance)}</h2>
@@ -762,6 +808,7 @@ export default function App() {
           <DashboardScreen
             summary={summary}
             breakdown={breakdownWithShare}
+            incomeBreakdown={incomeBreakdownWithShare}
             transactions={transactionsWithLabels}
             monthlySeries={monthlySeries}
             onViewTransactions={() => handleChangeView("transactions")}
@@ -778,11 +825,14 @@ export default function App() {
         {view === "transactions" && (
           <TransactionsScreen
             transactions={transactionsWithLabels}
+            totalCount={transactions.total}
             categories={categories}
             tags={tags}
             filters={filters}
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
+            onCreateFromText={handleCreateFromText}
+            onParseFromText={handleParseFromText}
             onUpdate={handleUpdateTransaction}
             onDelete={handleDeleteTransaction}
             onCreateCategory={handleCreateCategory}
@@ -838,6 +888,9 @@ export default function App() {
         {view === "ocr" && (
           <OcrScreen
             categories={categories}
+            tags={tags}
+            userEmail={authState.user?.email}
+            onCreateTag={handleCreateTag}
             onCreateTransaction={handleCreateTransaction}
             loading={loading}
           />
@@ -847,12 +900,7 @@ export default function App() {
 
         {view === "settings" && <SettingsScreen user={authState.user} />}
 
-        {view === "chat" && (
-          <ChatScreen 
-            userEmail={authState.user?.email} 
-            onCreateTransaction={handleCreateTransaction} 
-          />
-        )}
+        {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
 
         {view === "notifications" && (
           <NotificationsScreen
@@ -864,13 +912,10 @@ export default function App() {
           />
         )}
 
-        <BottomNav active={view} onChange={handleChangeView} />
       </main>
-
-      <FloatingChatbot 
-        isAuthed={isAuthed} 
-        userEmail={authState.user?.email} 
-        onCreateTransaction={handleCreateTransaction}
+      <FloatingChatbot
+        isAuthed={authState.status === "authed"}
+        userEmail={authState.user?.email}
       />
     </div>
   );

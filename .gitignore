@@ -18,6 +18,22 @@ __pycache__/
 
 # Docker volumes
 data/
+# IDE
+.vscode/
+
+# Codex / local agent artifacts
+.agent/
+.codex
+.codex/
+
+# Local scratch kits
+temp-kit/
+
+# Vite cache
+frontend/.vite/
+
+# Docker volumes
+data/
 # Node
 node_modules/
 npm-debug.log*

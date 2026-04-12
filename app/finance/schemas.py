@@ -19,6 +19,7 @@ class TagRead(BaseModel):
     name: str
     color: str
     user_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -52,6 +53,7 @@ class TransactionRead(BaseModel):
     account_id: int | None
     date: DateType
     tags: list[TagRead] = Field(default_factory=list)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -70,6 +72,7 @@ class CategoryRead(BaseModel):
     id: int
     name: str
     user_id: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -105,3 +108,4 @@ class AnomalyAlert(BaseModel):
     description: str
     reason: str
     severity: Literal["low", "medium", "high"]
+

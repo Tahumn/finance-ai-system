@@ -45,6 +45,18 @@ class Tag(Base):
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_tag_name"),)
 
 
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    currency = Column(String, nullable=False, default="VND")
+    opening_balance = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
@@ -59,18 +71,6 @@ class Transaction(Base):
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")
 
 
-class Account(Base):
-    __tablename__ = "accounts"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String, nullable=False)
-    currency = Column(String, nullable=False, default="VND")
-    opening_balance = Column(Float, nullable=False, default=0.0)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
-
-
 class Transfer(Base):
     __tablename__ = "transfers"
 
@@ -81,44 +81,6 @@ class Transfer(Base):
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)
     note = Column(String, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class Debt(Base):
-    __tablename__ = "debts"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    creditor = Column(String, nullable=False)
-    amount = Column(Float, nullable=False)
-    due_date = Column(Date, nullable=True)
-    is_paid = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class Budget(Base):
-    __tablename__ = "budgets"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
-    limit = Column(Float, nullable=False)
-    period = Column(String, nullable=False, default="monthly")
-    start_date = Column(Date, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-
-class Goal(Base):
-    __tablename__ = "goals"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    target = Column(Float, nullable=False)
-    months = Column(Integer, nullable=False)
-    start_date = Column(Date, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class Subscription(Base):
@@ -127,12 +89,40 @@ class Subscription(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
-    amount = Column(Float, nullable=False)
-    day_of_month = Column(Integer, nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True, index=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    start_date = Column(Date, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_subscription_name"),)
+
+
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False, default=0.0)
+    __table_args__ = (UniqueConstraint("user_id", "category_id", name="uq_user_budget_category"),)
+
+
+class Debt(Base):
+    __tablename__ = "debts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    due_date = Column(Date, nullable=True)
+
+
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    target_amount = Column(Float, nullable=False, default=0.0)
+    target_date = Column(Date, nullable=True)
 
 
 class Reminder(Base):
@@ -144,3 +134,4 @@ class Reminder(Base):
     remind_date = Column(Date, nullable=True)
     channel = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
