@@ -110,6 +110,116 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
     }
   }, [messages, isOpen, loading]);
 
+  const renderInsightData = (msg) => {
+    if (!msg.insightData) return null;
+    const data = msg.insightData;
+
+    if (msg.insightType === "forecast") {
+      const { points = [], summary = "" } = data;
+      return (
+        <div className="ai-insight-card forecast-mini">
+          <div className="card-tag">Dự báo chi tiêu</div>
+          <p className="card-summary">{summary}</p>
+          <div className="forecast-chart-mini">
+            {points.slice(0, 3).map((p, i) => (
+              <div key={i} className="forecast-item">
+                <span className="month">{p.month}</span>
+                <span className="amt">{currency(p.predicted_expense)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (msg.insightType === "savings") {
+      const { tips = [], total_potential_saving = 0 } = data;
+      return (
+        <div className="ai-insight-card savings-mini">
+          <div className="card-tag">Gợi ý tiết kiệm</div>
+          <div className="savings-header">
+            <span className="label">Tiềm năng:</span>
+            <span className="amt">{currency(total_potential_saving)}</span>
+          </div>
+          <div className="tips-list-mini">
+            {tips.slice(0, 2).map((t, i) => (
+              <div key={i} className="tip-item">💡 {t.tip}</div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (msg.insightType === "anomaly") {
+      const { alerts = [] } = data;
+      return (
+        <div className="ai-insight-card anomaly-mini">
+          <div className="card-tag alert">Phát hiện bất thường</div>
+          <div className="anomaly-list-mini">
+            {alerts.slice(0, 2).map((a, i) => (
+              <div key={i} className="anomaly-item">
+                <div className="anomaly-header">
+                  <span className="date">{new Date(a.date).toLocaleDateString('vi-VN')}</span>
+                  <span className={`severity ${a.severity}`}>{a.severity}</span>
+                </div>
+                <p className="reason">{a.reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (msg.insightType === "ocr_result") {
+      return (
+        <div className="ai-insight-card ocr-mini">
+          <div className="card-tag success">Kết quả quét hóa đơn</div>
+          <div className="receipt-preview">
+            <div className="receipt-row">
+              <span className="label">Cửa hàng:</span>
+              <strong>{data.merchant || "---"}</strong>
+            </div>
+            <div className="receipt-row">
+              <span className="label">Tổng tiền:</span>
+              <strong className="amt">{currency(data.total || 0)}</strong>
+            </div>
+            <div className="receipt-row">
+              <span className="label">Ngày:</span>
+              <span>{data.date || "---"}</span>
+            </div>
+          </div>
+          <button 
+            className="save-tx-btn"
+            onClick={() => handleSaveOcr(data)}
+            disabled={loading}
+          >
+            {loading ? "Đang lưu..." : "Xác nhận & Lưu"}
+          </button>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const handleSaveOcr = async (data) => {
+    if (!data.total) return;
+    setLoading(true);
+    try {
+      await onCreateTransaction({
+        description: data.note || `Hóa đơn từ ${data.merchant || 'AI'}`,
+        amount: data.total,
+        transaction_type: "expense",
+        date: data.date || new Date().toISOString().split('T')[0]
+      });
+      setMessages(prev => [...prev, { role: "assistant", content: "Đã lưu giao dịch thành công! ✅" }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: "Không thể lưu giao dịch. Vui lòng thử lại." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSend = async (textOverride = null) => {
     const text = (typeof textOverride === "string" ? textOverride : inputValue).trim();
     if (!text || loading) return;
@@ -123,16 +233,34 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
       const response = await chatWithAi(text);
       let content = response.answer;
       
-      // Bổ sung thông tin nếu có total từ backend (intent summary/budget)
-      if (response.intent === "summary" || response.intent === "budget_status") {
-        // Content is formatted in backend service.py
-      }
-
-      setMessages((prev) => [...prev, { 
+      const newMsg = { 
         role: "assistant", 
         content,
         intent: response.intent 
-      }]);
+      };
+
+      // Tự động nhận diện ý định để lấy dữ liệu phong phú (Rich Data)
+      if (response.intent === "forecast") {
+        const forecast = await (await fetch("/api/v1/ai/forecast", {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
+        })).json();
+        newMsg.insightType = "forecast";
+        newMsg.insightData = forecast;
+      } else if (response.intent === "anomalies") {
+        const anomalies = await (await fetch("/api/v1/ai/anomalies", {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
+        })).json();
+        newMsg.insightType = "anomaly";
+        newMsg.insightData = anomalies;
+      } else if (response.intent === "savings") {
+        const savings = await (await fetch("/api/v1/ai/savings-tips", {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
+        })).json();
+        newMsg.insightType = "savings";
+        newMsg.insightData = savings;
+      }
+
+      setMessages((prev) => [...prev, newMsg]);
 
       if (response?.intent === "create_transaction" || response?.intent === "create_transactions") {
         window.dispatchEvent(
@@ -174,10 +302,13 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-row ${msg.role}`}>
                 {msg.role === "assistant" && <div className="msg-avatar">🤖</div>}
-                <div className="message-bubble">
-                  {msg.content.split('\n').map((line, i) => (
-                    <p key={i}>{line}</p>
-                  ))}
+                <div className="message-content-wrapper">
+                  <div className="message-bubble">
+                    {msg.content.split('\n').map((line, i) => (
+                      <p key={i}>{line}</p>
+                    ))}
+                  </div>
+                  {renderInsightData(msg)}
                 </div>
               </div>
             ))}

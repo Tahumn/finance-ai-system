@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 from datetime import date
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -9,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.models import User
 from app.finance import schemas
-from app.finance.models import Category, Tag, Transaction
+from app.finance.models import Account, Category, Tag, Transaction
 from app.realtime import emit_finance_update
 
 
@@ -55,10 +53,23 @@ def _validate_category_ownership(db: Session, current_user: User, category_id: i
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
 
 
+def _validate_account_ownership(db: Session, current_user: User, account_id: int | None) -> None:
+    if account_id is None:
+        return
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.user_id == current_user.id)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+
 def _load_tags(db: Session, current_user: User, tag_ids: list[int] | None) -> list[Tag]:
     if not tag_ids:
         return []
-    unique_ids = list({int(tag_id) for tag_id in tag_ids})
+
+    unique_ids = sorted({int(tag_id) for tag_id in tag_ids})
     tags = (
         db.query(Tag)
         .filter(Tag.user_id == current_user.id, Tag.id.in_(unique_ids))
@@ -74,11 +85,7 @@ def create_tag(db: Session, current_user: User, payload: schemas.TagCreate) -> T
     if not tag_name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag name is required")
 
-    exists = (
-        db.query(Tag)
-        .filter(Tag.user_id == current_user.id, Tag.name == tag_name)
-        .first()
-    )
+    exists = db.query(Tag).filter(Tag.user_id == current_user.id, Tag.name == tag_name).first()
     if exists:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tag already exists")
 
@@ -100,11 +107,7 @@ def list_tags(db: Session, current_user: User) -> list[Tag]:
 
 
 def update_tag(db: Session, current_user: User, tag_id: int, payload: schemas.TagUpdate) -> Tag:
-    db_tag = (
-        db.query(Tag)
-        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
-        .first()
-    )
+    db_tag = db.query(Tag).filter(Tag.id == tag_id, Tag.user_id == current_user.id).first()
     if not db_tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
 
@@ -132,11 +135,7 @@ def update_tag(db: Session, current_user: User, tag_id: int, payload: schemas.Ta
 
 
 def delete_tag(db: Session, current_user: User, tag_id: int) -> None:
-    db_tag = (
-        db.query(Tag)
-        .filter(Tag.id == tag_id, Tag.user_id == current_user.id)
-        .first()
-    )
+    db_tag = db.query(Tag).filter(Tag.id == tag_id, Tag.user_id == current_user.id).first()
     if not db_tag:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
     db.delete(db_tag)
@@ -144,12 +143,9 @@ def delete_tag(db: Session, current_user: User, tag_id: int) -> None:
     emit_finance_update("tags", current_user.id, tag_id)
 
 
-def create_transaction(
-    db: Session,
-    current_user: User,
-    payload: schemas.TransactionCreate,
-) -> Transaction:
+def create_transaction(db: Session, current_user: User, payload: schemas.TransactionCreate) -> Transaction:
     _validate_category_ownership(db, current_user, payload.category_id)
+    _validate_account_ownership(db, current_user, payload.account_id)
     tags = _load_tags(db, current_user, payload.tag_ids)
 
     db_tx = Transaction(
@@ -158,6 +154,7 @@ def create_transaction(
         amount=payload.amount,
         transaction_type=payload.transaction_type,
         category_id=payload.category_id,
+        account_id=payload.account_id,
         date=payload.date or date.today(),
     )
     if tags:
@@ -176,10 +173,11 @@ def list_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     category_id: int | None = None,
+    account_id: int | None = None,
     transaction_type: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> Tuple[List[Transaction], int]:
+) -> Tuple[list[Transaction], int]:
     query = (
         db.query(Transaction)
         .options(selectinload(Transaction.tags))
@@ -192,6 +190,8 @@ def list_transactions(
         query = query.filter(Transaction.date <= end_date)
     if category_id:
         query = query.filter(Transaction.category_id == category_id)
+    if account_id:
+        query = query.filter(Transaction.account_id == account_id)
     if transaction_type:
         query = query.filter(Transaction.transaction_type == transaction_type)
 
@@ -223,6 +223,8 @@ def update_transaction(
     data = payload.model_dump(exclude_unset=True)
     if "category_id" in data:
         _validate_category_ownership(db, current_user, data["category_id"])
+    if "account_id" in data:
+        _validate_account_ownership(db, current_user, data["account_id"])
     if "description" in data and not (data.get("description") or "").strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Description is required")
     if "tag_ids" in data:
@@ -242,16 +244,21 @@ def update_transaction(
 
 
 def delete_transaction(db: Session, current_user: User, transaction_id: int) -> None:
-    db_tx = (
-        db.query(Transaction)
-        .filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
-        .first()
-    )
+    db_tx = db.query(Transaction).filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id).first()
     if not db_tx:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
     db.delete(db_tx)
     db.commit()
     emit_finance_update("transactions", current_user.id, transaction_id)
+
+
+def _base_query(db: Session, current_user: User, start_date: date | None, end_date: date | None):
+    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    if start_date:
+        query = query.filter(Transaction.date >= start_date)
+    if end_date:
+        query = query.filter(Transaction.date <= end_date)
+    return query
 
 
 def get_total_balance(db: Session, user_id: int) -> float:
@@ -274,27 +281,22 @@ def get_summary(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> schemas.FinanceSummary:
-    query = db.query(Transaction).filter(Transaction.user_id == current_user.id)
-    if start_date:
-        query = query.filter(Transaction.date >= start_date)
-    if end_date:
-        query = query.filter(Transaction.date <= end_date)
-
+    base_query = _base_query(db, current_user, start_date, end_date)
     income = (
-        query.filter(Transaction.transaction_type == "income")
+        base_query.filter(Transaction.transaction_type == "income")
         .with_entities(func.coalesce(func.sum(Transaction.amount), 0.0))
         .scalar()
     )
     expense = (
-        query.filter(Transaction.transaction_type == "expense")
+        base_query.filter(Transaction.transaction_type == "expense")
         .with_entities(func.coalesce(func.sum(Transaction.amount), 0.0))
         .scalar()
     )
 
-    total_balance = get_total_balance(db, current_user.id)
     period_income = float(income or 0.0)
     period_expense = float(expense or 0.0)
     period_net = period_income - period_expense
+    total_balance = get_total_balance(db, current_user.id)
 
     return schemas.FinanceSummary(
         total_balance=total_balance,
@@ -314,14 +316,9 @@ def get_category_breakdown(
     end_date: date | None = None,
     transaction_type: str = "expense",
 ) -> list[schemas.CategoryBreakdown]:
-    query = db.query(Transaction).filter(
-        Transaction.user_id == current_user.id,
-        Transaction.transaction_type == transaction_type,
+    query = _base_query(db, current_user, start_date, end_date).filter(
+        Transaction.transaction_type == transaction_type
     )
-    if start_date:
-        query = query.filter(Transaction.date >= start_date)
-    if end_date:
-        query = query.filter(Transaction.date <= end_date)
 
     rows = (
         query.with_entities(Transaction.category_id, func.sum(Transaction.amount))
@@ -353,6 +350,9 @@ def get_chart_data(
     current_user: User,
     limit_months: int = 6,
 ) -> schemas.GroupedChartData:
+    if limit_months <= 0:
+        limit_months = 6
+
     rows = (
         db.query(
             func.to_char(Transaction.date, "YYYY-MM").label("month"),
@@ -369,18 +369,17 @@ def get_chart_data(
     for month, t_type, amount in rows:
         if month not in buckets:
             buckets[month] = {"income": 0.0, "expense": 0.0}
-        buckets[month][t_type] = float(amount or 0.0)
+        if t_type in ("income", "expense"):
+            buckets[month][t_type] = float(amount or 0.0)
 
-    series = []
     sorted_months = sorted(buckets.keys())[-limit_months:]
-    for m in sorted_months:
-        series.append(
-            schemas.ChartPoint(
-                month=m,
-                income=buckets[m]["income"],
-                expense=buckets[m]["expense"],
-            )
+    series = [
+        schemas.ChartPoint(
+            month=month,
+            income=buckets[month]["income"],
+            expense=buckets[month]["expense"],
         )
-
+        for month in sorted_months
+    ]
     return schemas.GroupedChartData(series=series)
 

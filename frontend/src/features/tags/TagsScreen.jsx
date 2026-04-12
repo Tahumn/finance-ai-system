@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { onColor } from "../../utils/colors.js";
 import { t } from "../../utils/i18n.js";
 
 const emptyTag = { name: "", color: "#1565c0" };
@@ -117,28 +118,37 @@ export default function TagsScreen({
             </div>
           </form>
 
-          <div className="list">
-            {!tags.length ? (
-              <p className="empty">{t("tags.empty")}</p>
-            ) : (
-              tags.map((tag) => (
-                <article key={tag.id} className="item-row">
-                  <div className="tag-row">
-                    <span className="dot" style={{ background: tag.color }} />
-                    <strong>{tag.name}</strong>
-                  </div>
-                  <div className="row-actions">
-                    <button className="ghost" type="button" onClick={() => startEdit(tag)}>
-                      {t("tags.action.edit")}
-                    </button>
-                    <button className="ghost danger" type="button" onClick={() => removeTag(tag.id)}>
-                      {t("tags.action.delete")}
-                    </button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+          {!tags.length ? (
+            <p className="empty">{t("tags.empty")}</p>
+          ) : (
+            <div className="tag-cloud" role="list">
+              {tags.map((tag) => (
+                <div
+                  key={tag.id}
+                  role="listitem"
+                  className={`tag-pill color-pill ${editingTagId === tag.id ? "editing" : ""}`}
+                  style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
+                >
+                  <button
+                    className="tag-pill-main"
+                    type="button"
+                    onClick={() => startEdit(tag)}
+                    aria-label={`${t("tags.action.edit")} ${tag.name}`}
+                  >
+                    <span className="pill-text">{tag.name}</span>
+                  </button>
+                  <button
+                    className="tag-pill-remove"
+                    type="button"
+                    onClick={() => removeTag(tag.id)}
+                    aria-label={`${t("tags.action.delete")} ${tag.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </section>

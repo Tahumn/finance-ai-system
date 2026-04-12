@@ -37,12 +37,14 @@ import DashboardScreen from "./features/dashboard/DashboardScreen.jsx";
 import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
+import ChatScreen from "./features/chat/ChatScreen.jsx";
 import OcrScreen from "./features/ocr/OcrScreen.jsx";
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import NotificationsScreen from "./features/notifications/NotificationsScreen.jsx";
+import FloatingChatbot from "./components/FloatingChatbot.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
 import {
@@ -87,7 +89,6 @@ const buildMonthlySeries = (transactions) => {
     .sort((a, b) => a.month.localeCompare(b.month))
     .slice(-6);
 };
-import FloatingChatbot from "./components/FloatingChatbot.jsx";
 
 // monthlySeries is now fetched from the backend
 
@@ -113,7 +114,8 @@ const getRangeFromPreset = (preset) => {
 const defaultFilters = () => ({
   ...getRangeFromPreset("month"),
   type: "",
-  categoryId: ""
+  categoryId: "",
+  tagId: ""
 });
 
 const getSocketBase = () => {
@@ -886,7 +888,9 @@ export default function App() {
         {view === "ocr" && (
           <OcrScreen
             categories={categories}
-            onParseFromText={handleParseFromText}
+            tags={tags}
+            userEmail={authState.user?.email}
+            onCreateTag={handleCreateTag}
             onCreateTransaction={handleCreateTransaction}
             loading={loading}
           />

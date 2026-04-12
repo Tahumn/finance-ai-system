@@ -1,18 +1,20 @@
-from sqlalchemy import Boolean, Column, Date, Float, ForeignKey, Integer, String, Table, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 
 from app.database import Base
-
-
-class Account(Base):
-    __tablename__ = "accounts"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    name = Column(String, nullable=False)
-    currency = Column(String, nullable=False, default="VND")
-    opening_balance = Column(Float, nullable=False, default=0.0)
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
 
 
 class Category(Base):
@@ -41,6 +43,18 @@ class Tag(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     transactions = relationship("Transaction", secondary=transaction_tags, back_populates="tags")
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_tag_name"),)
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    currency = Column(String, nullable=False, default="VND")
+    opening_balance = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
 
 
 class Transaction(Base):
@@ -116,6 +130,8 @@ class Reminder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    title = Column(String, nullable=False)
-    due_date = Column(Date, nullable=True)
-    is_done = Column(Boolean, nullable=False, default=False)
+    label = Column(String, nullable=False)
+    remind_date = Column(Date, nullable=True)
+    channel = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+

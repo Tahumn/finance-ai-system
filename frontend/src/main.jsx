@@ -2,12 +2,19 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./styles.css";
+import "./insight.css";
 
-const appMode = import.meta.env.VITE_APP_MODE || "auto";
+const envAppMode = import.meta.env.VITE_APP_MODE || "auto";
 if (typeof document !== "undefined") {
-  document.body.dataset.appMode = appMode;
-  if (appMode === "mobile") document.title = "Finance AI Mobile";
-  if (appMode === "web") document.title = "Finance AI Web";
+  const resolvedMode =
+    envAppMode === "auto"
+      ? window.matchMedia?.("(max-width: 520px)")?.matches
+        ? "mobile"
+        : "web"
+      : envAppMode;
+  document.body.dataset.appMode = resolvedMode;
+  if (resolvedMode === "mobile") document.title = "Finance AI Mobile";
+  if (resolvedMode === "web") document.title = "Finance AI Web";
 }
 
 createRoot(document.getElementById("root")).render(

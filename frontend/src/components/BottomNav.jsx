@@ -3,6 +3,7 @@ import { t } from "../utils/i18n.js";
 const views = [
   { key: "dashboard", label: "nav.overview" },
   { key: "transactions", label: "nav.add_tx" },
+  { key: "chat", label: "nav.chat" },
   { key: "reports", label: "nav.reports" },
   { key: "notifications", label: "nav.notifications" },
   { key: "settings", label: "nav.settings" }

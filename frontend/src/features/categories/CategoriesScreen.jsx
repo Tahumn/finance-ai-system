@@ -1,4 +1,4 @@
-import { colorFor } from "../../utils/colors.js";
+import { colorFor, onColor } from "../../utils/colors.js";
 import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
 
@@ -68,15 +68,21 @@ export default function CategoriesScreen({
             <p className="empty">{t("categories.empty")}</p>
           ) : embedded ? (
             <div className="category-picker categories-inline">
-              {categories.map((category) => (
-                <div key={category.id} className="category-pill static">
-                  <span className="dot" style={{ background: colorFor(category.name, userEmail) }} />
-                  {categoryPrefs[category.name]?.icon && (
-                    <span className="tag-chip">{categoryPrefs[category.name].icon}</span>
-                  )}
-                  <span>{category.name}</span>
-                </div>
-              ))}
+              {categories.map((category) => {
+                const bg = colorFor(category.name, userEmail);
+                return (
+                  <div
+                    key={category.id}
+                    className="category-pill static color-pill"
+                    style={{ "--pill-bg": bg, "--pill-fg": onColor(bg) }}
+                  >
+                    <span className="pill-icon" aria-hidden="true">
+                      {categoryPrefs[category.name]?.icon || "🏷️"}
+                    </span>
+                    <span className="pill-text">{category.name}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="list">

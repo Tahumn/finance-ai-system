@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_agent import models as ai_models
+from app.ai_agent.router import router as ai_router
 from app.auth import models as auth_models
 from app.auth.router import router as auth_router
 from app.database import Base, engine, ensure_schema
@@ -8,8 +10,6 @@ from app.finance import models as finance_models
 from app.finance.router import router as finance_router
 from app.notifications.router import router as notifications_router
 from app.realtime import socket_app
-from app.ai_agent import models as ai_models
-from app.ai_agent.router import router as ai_router
 
 app = FastAPI(title="Finance AI Monolith")
 
@@ -53,6 +53,6 @@ def on_startup() -> None:
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
 
 app.mount("/ws", socket_app)
-app.include_router(ai_router, prefix="/api/v1")

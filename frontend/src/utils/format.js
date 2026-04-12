@@ -23,6 +23,39 @@ export const formatDate = (value) => {
   }
 };
 
+export const formatDateFull = (value) => {
+  const prefs = getUserPrefs();
+  const locale = getLocaleForLanguage(prefs.language);
+  try {
+    return new Date(value).toLocaleDateString(locale, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: prefs.timezone || "UTC"
+    });
+  } catch {
+    return new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+};
+
+export const formatTime = (value) => {
+  if (!value) return "";
+  const raw = String(value);
+  if (!/T\d{2}:\d{2}/.test(raw) && !/\d{2}:\d{2}/.test(raw)) return "";
+  const prefs = getUserPrefs();
+  const locale = getLocaleForLanguage(prefs.language);
+  try {
+    return new Date(value).toLocaleTimeString(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: prefs.timezone || "UTC"
+    });
+  } catch {
+    return new Date(value).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+};
+
 export const percent = (value) => `${Math.round(value * 100)}%`;
 
 export const toInputDate = (date) => {

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { getAnomalies, getForecast, getSavingsTips } from "../../api/ai.js";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
 import { t } from "../../utils/i18n.js";
@@ -210,6 +211,15 @@ export default function ReportsScreen({
   const [showForecast, setShowForecast] = useState(false);
   const [showSavingTips, setShowSavingTips] = useState(false);
   const [showAnomaly, setShowAnomaly] = useState(false);
+  const [forecastLoading, setForecastLoading] = useState(false);
+  const [savingsLoading, setSavingsLoading] = useState(false);
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [forecastError, setForecastError] = useState("");
+  const [savingsError, setSavingsError] = useState("");
+  const [anomalyError, setAnomalyError] = useState("");
+  const [forecastData, setForecastData] = useState(null);
+  const [savingsData, setSavingsData] = useState(null);
+  const [anomalyData, setAnomalyData] = useState(null);
   const [donutTooltip, setDonutTooltip] = useState(null);
   const [trendHoverIndex, setTrendHoverIndex] = useState(null);
   const donutRef = useRef(null);
@@ -281,6 +291,55 @@ export default function ReportsScreen({
       Math.max(0, Math.round(ratio * (comboSeries.labels.length - 1)))
     );
     setTrendHoverIndex(index);
+  };
+
+  const loadForecast = async () => {
+    if (forecastLoading) return;
+    setForecastError("");
+    setForecastLoading(true);
+    try {
+      const data = await getForecast();
+      setForecastData(data || null);
+    } catch (err) {
+      setForecastError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  const loadSavingsTips = async () => {
+    if (savingsLoading) return;
+    setSavingsError("");
+    setSavingsLoading(true);
+    try {
+      const data = await getSavingsTips();
+      setSavingsData(data || null);
+    } catch (err) {
+      setSavingsError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setSavingsLoading(false);
+    }
+  };
+
+  const loadAnomalies = async () => {
+    if (anomalyLoading) return;
+    setAnomalyError("");
+    setAnomalyLoading(true);
+    try {
+      const data = await getAnomalies();
+      const items = Array.isArray(data) ? data : data?.alerts || data?.items || data || [];
+      setAnomalyData(Array.isArray(items) ? items : []);
+    } catch (err) {
+      setAnomalyError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
+    } finally {
+      setAnomalyLoading(false);
+    }
+  };
+
+  const riskLabel = (risk) => {
+    if (risk === "high") return t("reports.risk.high", null, "Cao");
+    if (risk === "medium") return t("reports.risk.medium", null, "Trung bình");
+    return t("reports.risk.low", null, "Thấp");
   };
 
   return (
@@ -649,13 +708,43 @@ export default function ReportsScreen({
       <div className="panel">
         <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
         <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
-          <button className="ghost" type="button" onClick={() => setShowForecast((v) => !v)}>
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              setShowForecast((v) => {
+                const next = !v;
+                if (next && !forecastData) loadForecast();
+                return next;
+              });
+            }}
+          >
             {t("reports.ai_forecast", null, "Dự đoán xu hướng chi tiêu")}
           </button>
-          <button className="ghost" type="button" onClick={() => setShowSavingTips((v) => !v)}>
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              setShowSavingTips((v) => {
+                const next = !v;
+                if (next && !savingsData) loadSavingsTips();
+                return next;
+              });
+            }}
+          >
             {t("reports.ai_saving", null, "Gợi ý tiết kiệm / cắt giảm")}
           </button>
-          <button className="ghost" type="button" onClick={() => setShowAnomaly((v) => !v)}>
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              setShowAnomaly((v) => {
+                const next = !v;
+                if (next && !anomalyData) loadAnomalies();
+                return next;
+              });
+            }}
+          >
             {t("reports.ai_anomaly", null, "Phát hiện bất thường chi tiêu")}
           </button>
         </div>
@@ -663,32 +752,116 @@ export default function ReportsScreen({
         {showForecast && (
           <div className="insight-card">
             <h4>{t("reports.forecast_title", null, "Xu hướng 3 tháng tới")}</h4>
-            <ul>
-              <li>{t("reports.forecast_1", null, "Chi tiêu dự kiến tăng nhẹ 8–12% nếu giữ thói quen hiện tại.")}</li>
-              <li>{t("reports.forecast_2", null, "Đỉnh chi tiêu dự kiến rơi vào tuần cuối tháng.")}</li>
-              <li>{t("reports.forecast_3", null, "Nhóm danh mục tăng mạnh: ăn uống, di chuyển.")}</li>
-            </ul>
+            {forecastLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!forecastLoading && forecastError && <p className="status error">{forecastError}</p>}
+            {!forecastLoading && !forecastError && forecastData && (
+              <>
+                {forecastData.summary && <p className="muted">{forecastData.summary}</p>}
+                {Array.isArray(forecastData.points) && forecastData.points.length > 0 && (
+                  <ul>
+                    {forecastData.points.map((point) => (
+                      <li key={point.month || `${point.predicted_expense}`}>
+                        <strong>{point.month}</strong>: {currency(point.predicted_expense || 0)}
+                        {point.note ? ` • ${point.note}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {Array.isArray(forecastData.top_growing_categories) &&
+                  forecastData.top_growing_categories.length > 0 && (
+                    <p className="hint">
+                      {t("reports.top_growing", null, "Danh mục nổi bật")}:{" "}
+                      {forecastData.top_growing_categories.join(", ")}
+                    </p>
+                  )}
+                {forecastData.risk_level && (
+                  <p className="hint">
+                    {t("reports.risk", null, "Mức rủi ro")}: {riskLabel(forecastData.risk_level)}
+                  </p>
+                )}
+                {Array.isArray(forecastData.tips) && forecastData.tips.length > 0 && (
+                  <>
+                    <p className="hint">{t("reports.recommend", null, "Gợi ý")}</p>
+                    <ul>
+                      {forecastData.tips.map((tip, index) => (
+                        <li key={`forecast-tip-${index}`}>{tip}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {showSavingTips && (
           <div className="insight-card">
             <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm")}</h4>
-            <ul>
-              <li>{t("reports.saving_1", null, "Giới hạn ngân sách ăn uống ở mức 1.5tr/tháng.")}</li>
-              <li>{t("reports.saving_2", null, "Gộp mua sắm vào 1–2 lần/tuần để giảm phát sinh.")}</li>
-              <li>{t("reports.saving_3", null, "Ưu tiên thanh toán một ví để dễ kiểm soát.")}</li>
-            </ul>
+            {savingsLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!savingsLoading && savingsError && <p className="status error">{savingsError}</p>}
+            {!savingsLoading && !savingsError && savingsData && (
+              <>
+                {savingsData.summary && <p className="muted">{savingsData.summary}</p>}
+                {Array.isArray(savingsData.tips) && savingsData.tips.length > 0 ? (
+                  <ul>
+                    {savingsData.tips.map((tip) => (
+                      <li key={`${tip.category}-${tip.suggested_limit}`}>
+                        <strong>{tip.category}</strong>: {currency(tip.current_spend || 0)} →{" "}
+                        {currency(tip.suggested_limit || 0)}
+                        {typeof tip.potential_saving === "number"
+                          ? ` (${t("reports.potential_save", null, "tiết kiệm")}: ${currency(
+                              tip.potential_saving
+                            )})`
+                          : ""}
+                        {tip.tip ? ` • ${tip.tip}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="empty">{t("reports.empty", null, "Chưa có dữ liệu.")}</p>
+                )}
+                {typeof savingsData.total_potential_saving === "number" && (
+                  <p className="hint">
+                    {t("reports.total_potential", null, "Tổng tiết kiệm tiềm năng")}:{" "}
+                    {currency(savingsData.total_potential_saving)}
+                  </p>
+                )}
+                {Array.isArray(savingsData.general_advice) && savingsData.general_advice.length > 0 && (
+                  <>
+                    <p className="hint">{t("reports.general_advice", null, "Lời khuyên chung")}</p>
+                    <ul>
+                      {savingsData.general_advice.map((item, index) => (
+                        <li key={`advice-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {showAnomaly && (
           <div className="insight-card">
             <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường")}</h4>
-            <ul>
-              <li>{t("reports.anomaly_1", null, "Giao dịch “Cà phê” tuần này tăng 2.1x so với tuần trước.")}</li>
-              <li>{t("reports.anomaly_2", null, "Chi phí di chuyển tăng đột biến trong 3 ngày gần nhất.")}</li>
-            </ul>
+            {anomalyLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            {!anomalyLoading && anomalyError && <p className="status error">{anomalyError}</p>}
+            {!anomalyLoading && !anomalyError && Array.isArray(anomalyData) && (
+              <>
+                {anomalyData.length ? (
+                  <ul>
+                    {anomalyData.slice(0, 10).map((item) => (
+                      <li key={item.id || `${item.date}-${item.amount}`}>
+                        {item.description || t("reports.anomaly_item", null, "Phát hiện bất thường")}
+                        {item.reason ? ` • ${item.reason}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="empty">{t("reports.anomaly_none", null, "Chưa phát hiện bất thường.")}</p>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

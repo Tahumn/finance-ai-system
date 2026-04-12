@@ -68,3 +68,34 @@ class OcrResponse(BaseModel):
 
 class AnomalyListResponse(BaseModel):
     alerts: list[finance_schemas.AnomalyAlert]
+
+
+class ForecastPoint(BaseModel):
+    month: str
+    predicted_expense: float
+    predicted_income: float | None = None
+    note: str | None = None
+
+
+class ForecastResponse(BaseModel):
+    summary: str
+    points: list[ForecastPoint] = []
+    top_growing_categories: list[str] = []
+    risk_level: Literal["low", "medium", "high"] = "low"
+    tips: list[str] = []
+
+
+class SavingsTip(BaseModel):
+    category: str
+    current_spend: float
+    suggested_limit: float
+    potential_saving: float
+    tip: str
+
+
+class SavingTipsResponse(BaseModel):
+    summary: str
+    tips: list[SavingsTip] = []
+    total_potential_saving: float = 0.0
+    general_advice: list[str] = []
+
