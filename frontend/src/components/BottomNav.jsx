@@ -1,9 +1,12 @@
-﻿const views = [
-  { key: "dashboard", label: "Tổng quan" },
-  { key: "transactions", label: "Giao dịch" },
-  { key: "categories", label: "Danh mục" },
-  { key: "reports", label: "Báo cáo" },
-  { key: "chat", label: "Chat AI" }
+import { t } from "../utils/i18n.js";
+
+const views = [
+  { key: "dashboard", label: "nav.overview" },
+  { key: "transactions", label: "nav.add_tx" },
+  { key: "chat", label: "nav.chat" },
+  { key: "reports", label: "nav.reports" },
+  { key: "notifications", label: "nav.notifications" },
+  { key: "settings", label: "nav.settings" }
 ];
 
 export default function BottomNav({ active, onChange }) {
@@ -14,8 +17,9 @@ export default function BottomNav({ active, onChange }) {
           key={item.key}
           className={active === item.key ? "active" : ""}
           onClick={() => onChange(item.key)}
+          type="button"
         >
-          {item.label}
+          {t(item.label)}
         </button>
       ))}
     </nav>

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
@@ -26,6 +27,43 @@ def list_categories(
     current_user: User = Depends(get_current_user),
 ):
     return service.list_categories(db, current_user)
+
+
+@router.post("/tags", response_model=schemas.TagRead, status_code=status.HTTP_201_CREATED)
+def create_tag(
+    payload: schemas.TagCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_tag(db, current_user, payload)
+
+
+@router.get("/tags", response_model=list[schemas.TagRead])
+def list_tags(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_tags(db, current_user)
+
+
+@router.put("/tags/{tag_id}", response_model=schemas.TagRead)
+def update_tag(
+    tag_id: int,
+    payload: schemas.TagUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.update_tag(db, current_user, tag_id, payload)
+
+
+@router.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service.delete_tag(db, current_user, tag_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/categories/{category_id}", response_model=schemas.CategoryRead)
@@ -57,23 +95,33 @@ def create_transaction(
     return service.create_transaction(db, current_user, payload)
 
 
-@router.get("/transactions", response_model=list[schemas.TransactionRead])
+@router.get("/transactions", response_model=schemas.PaginatedTransactions)
 def list_transactions(
     start_date: date | None = None,
     end_date: date | None = None,
     category_id: int | None = None,
     transaction_type: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return service.list_transactions(
+    items, total = service.list_transactions(
         db,
         current_user,
         start_date=start_date,
         end_date=end_date,
         category_id=category_id,
         transaction_type=transaction_type,
+        limit=limit,
+        offset=offset,
     )
+    return {
+        "items": items,
+        "total": total,
+        "page": (offset // limit) + 1,
+        "limit": limit
+    }
 
 
 @router.put("/transactions/{transaction_id}", response_model=schemas.TransactionRead)
@@ -110,10 +158,22 @@ def report_summary(
 def report_category_breakdown(
     start_date: date | None = None,
     end_date: date | None = None,
+    transaction_type: str = "expense",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return service.get_category_breakdown(db, current_user, start_date=start_date, end_date=end_date)
+    return service.get_category_breakdown(
+        db, current_user, start_date=start_date, end_date=end_date, transaction_type=transaction_type
+    )
+
+
+@router.get("/reports/chart", response_model=schemas.GroupedChartData)
+def report_chart(
+    limit_months: int = 6,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.get_chart_data(db, current_user, limit_months=limit_months)
 
 
 @router.get("/reports/cashflow", response_model=list[schemas.CashflowPoint])

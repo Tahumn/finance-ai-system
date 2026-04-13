@@ -13,5 +13,31 @@ __pycache__/
 # IDE
 .vscode/
 
+# Codex / local agent artifacts
+.agent/
+.codex
+.codex/
+
+# Local scratch kits
+temp-kit/
+
+# Vite cache
+frontend/.vite/
+
 # Docker volumes
 data/
+# Node
+node_modules/
+npm-debug.log*
+
+# Expo
+.expo/
+.expo-shared/
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.example/

@@ -1,20 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai_agent import models as ai_models
+from app.ai_agent.router import router as ai_router
 from app.auth import models as auth_models
 from app.auth.router import router as auth_router
-from app.core.config import settings
-from app.database import Base, engine
+from app.database import Base, engine, ensure_schema
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
+from app.notifications.router import router as notifications_router
+from app.realtime import socket_app
 
 app = FastAPI(title="Finance AI Monolith")
 
+# Dev-friendly CORS so the Vite React app can call the API (including when testing on a phone
+# via LAN IP like http://192.168.x.x:5173).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_origin_regex=settings.cors_origin_regex,
-    allow_credentials=True,
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+$",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -28,8 +32,27 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
-    _ = (auth_models.User, finance_models.Category, finance_models.Transaction)
+    ensure_schema()
+    _ = (
+        auth_models.User,
+        auth_models.EmailOTP,
+        finance_models.Category,
+        finance_models.Transaction,
+        finance_models.Tag,
+        finance_models.Account,
+        finance_models.Transfer,
+        finance_models.Debt,
+        finance_models.Budget,
+        finance_models.Goal,
+        finance_models.Subscription,
+        finance_models.Reminder,
+        ai_models.ChatMessage,
+    )
 
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
+
+app.mount("/ws", socket_app)

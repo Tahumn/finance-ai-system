@@ -1,9 +1,9 @@
 import { request } from "./client.js";
 
-export const login = (email, password) =>
+export const login = (identifier, password) =>
   request("/auth/login", {
     method: "POST",
-    body: { email, password }
+    body: { identifier, password }
   });
 
 export const me = () => request("/auth/me");
@@ -30,4 +30,22 @@ export const setPassword = (registration_token, password) =>
   request("/auth/set-password", {
     method: "POST",
     body: { registration_token, password }
+  });
+
+export const resetPasswordStart = (email) =>
+  request("/auth/password/reset/start", {
+    method: "POST",
+    body: { email }
+  });
+
+export const resetPasswordVerify = (email, code) =>
+  request("/auth/password/reset/verify", {
+    method: "POST",
+    body: { email, code }
+  });
+
+export const resetPasswordConfirm = (reset_token, password) =>
+  request("/auth/password/reset/confirm", {
+    method: "POST",
+    body: { reset_token, password }
   });

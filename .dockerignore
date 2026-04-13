@@ -1,7 +1,9 @@
 .git
 .gitignore
 .venv
+**/.venv
 __pycache__
+**/__pycache__
 *.pyc
 *.pyo
 *.pyd
@@ -9,3 +11,6 @@ __pycache__
 .env
 n8n_data
 postgres_data
+frontend/node_modules
+**/node_modules
+frontend/dist

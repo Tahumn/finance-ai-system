@@ -3,20 +3,25 @@ from pydantic import ConfigDict
 
 
 class RegisterStartRequest(BaseModel):
-    first_name: str = Field(..., min_length=1)
-    last_name: str = Field(..., min_length=1)
-    phone: str = Field(..., min_length=6)
+    full_name: str = Field(..., min_length=1, max_length=100)
+    username: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
+    # Allow digits with optional + and spaces/dashes; normalize later.
+    phone: str | None = Field(default=None, pattern=r"^\+?[\d\s-]{6,20}$")
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    identifier: str = Field(..., min_length=1, max_length=100)
     password: str
 
 
 class UserRead(BaseModel):
     id: int
     email: EmailStr
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -32,11 +37,29 @@ class RegisterResponse(BaseModel):
 
 class VerifyOtpRequest(BaseModel):
     email: EmailStr
-    code: str = Field(..., min_length=4, max_length=10)
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class ResendOtpRequest(BaseModel):
     email: EmailStr
+
+
+class PasswordResetStartRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class PasswordResetVerifyResponse(BaseModel):
+    reset_token: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    reset_token: str
+    password: str = Field(..., min_length=8)
 
 
 class VerifyOtpResponse(BaseModel):
@@ -45,5 +68,5 @@ class VerifyOtpResponse(BaseModel):
 
 class SetPasswordRequest(BaseModel):
     registration_token: str
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
 

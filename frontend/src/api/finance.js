@@ -18,6 +18,32 @@ export const createCategory = (name) =>
     body: { name }
   });
 
+export const listTags = async () => {
+  try {
+    return await request("/finance/tags");
+  } catch (err) {
+    if (err.status === 404) return [];
+    throw err;
+  }
+};
+
+export const createTag = (payload) =>
+  request("/finance/tags", {
+    method: "POST",
+    body: payload
+  });
+
+export const updateTag = (tagId, payload) =>
+  request(`/finance/tags/${tagId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteTag = (tagId) =>
+  request(`/finance/tags/${tagId}`, {
+    method: "DELETE"
+  });
+
 export const listTransactions = (params) =>
   request(`/finance/transactions${buildQuery(params)}`);
 
@@ -43,3 +69,6 @@ export const getSummary = (params) =>
 
 export const getCategoryBreakdown = (params) =>
   request(`/finance/reports/category-breakdown${buildQuery(params)}`);
+
+export const getChartData = (params) =>
+  request(`/finance/reports/chart${buildQuery(params)}`);
