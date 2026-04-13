@@ -44,6 +44,11 @@ const buildSmoothPath = (points) => {
   return d;
 };
 
+const buildAreaPath = (points, baseline) => {
+  if (!Array.isArray(points) || !points.length) return "";
+  return `${buildSmoothPath(points)} L ${points[points.length - 1].x} ${baseline} L ${points[0].x} ${baseline} Z`;
+};
+
 const buildHeatmapData = (transactions, weeks = 6) => {
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const totalDays = weeks * 7;
@@ -143,11 +148,14 @@ const buildLineSeries = (items) => {
       height: 62,
       paddingX: 6,
       paddingY: 8,
+      baseline: 54,
       gridLines: [],
       incomePoints: [],
       expensePoints: [],
       incomePath: "",
       expensePath: "",
+      incomeAreaPath: "",
+      expenseAreaPath: "",
       labels: [],
       maxValue: 1,
       items: []
@@ -160,6 +168,7 @@ const buildLineSeries = (items) => {
   const paddingRight = 3;
   const paddingTop = 7;
   const paddingBottom = 8;
+  const baseline = height - paddingBottom;
   const innerWidth = width - paddingLeft - paddingRight;
   const innerHeight = height - paddingTop - paddingBottom;
   const maxValue = Math.max(1, ...safe.flatMap((item) => [Number(item.income || 0), Number(item.expense || 0)]));
@@ -186,11 +195,14 @@ const buildLineSeries = (items) => {
     height,
     paddingX: paddingLeft,
     paddingY: paddingTop,
+    baseline,
     gridLines,
     incomePoints,
     expensePoints,
     incomePath: buildSmoothPath(incomePoints),
     expensePath: buildSmoothPath(expensePoints),
+    incomeAreaPath: buildAreaPath(incomePoints, baseline),
+    expenseAreaPath: buildAreaPath(expensePoints, baseline),
     labels: safe.map((item) => item.label),
     maxValue,
     items: safe
@@ -244,35 +256,36 @@ export default function ReportsScreen({
 
   const kpiCards = [
     {
-      label: t("reports.total_income", null, "Tổng thu"),
+      label: t("reports.total_income"),
       value: currency(safeSummary.total_income),
       delta: calcDelta(currentMonthly.income || safeSummary.total_income || 0, prevMonthly.income || 0),
-      icon: "↑",
+      icon: "\u2197",
       tone: "income"
     },
     {
-      label: t("reports.total_expense", null, "Tổng chi"),
+      label: t("reports.total_expense"),
       value: currency(safeSummary.total_expense),
       delta: calcDelta(currentMonthly.expense || safeSummary.total_expense || 0, prevMonthly.expense || 0),
-      icon: "↓",
+      icon: "\u2198",
       tone: "expense"
     },
     {
-      label: t("reports.balance", null, "Tiết kiệm ròng"),
+      label: t("reports.balance"),
       value: currency(safeSummary.balance),
       delta: calcDelta(currentNet, prevNet),
-      icon: "▣",
+      icon: "\u25C9",
       tone: "balance"
     },
     {
-      label: t("reports.savings_rate", null, "Tỷ lệ tiết kiệm"),
+      label: t("reports.savings_rate"),
       value: `${(currentSavingsRate * 100).toFixed(2)}%`,
       delta: currentSavingsRate - prevSavingsRate,
       icon: "%",
-      tone: "rate"
+      tone: "rate",
+      progress: Math.max(0, Math.min(1, currentSavingsRate))
     }
   ];
-  const donutItems = buildDonutItems(safeBreakdown, 5, t("reports.other", null, "Khác"));
+  const donutItems = buildDonutItems(safeBreakdown, 5, t("reports.other"));
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
   const topCategories = [...safeBreakdown].sort((a, b) => b.spent - a.spent).slice(0, 6);
   const budgetRows = topCategories.slice(0, 5).map((item, index) => {
@@ -300,23 +313,9 @@ export default function ReportsScreen({
   const monthlyBars = safeMonthly.slice(-6).map((item) => ({
     label: formatSeriesLabel(item.month, "month"),
     income: Number(item.income || 0),
-    expense: Number(item.expense || 0),
-    net: Number(item.income || 0) - Number(item.expense || 0)
+    expense: Number(item.expense || 0)
   }));
   const maxMonthlyBar = Math.max(1, ...monthlyBars.flatMap((item) => [item.income, item.expense]));
-  const netSeries = monthlyBars;
-  const maxNetAbs = Math.max(1, ...netSeries.map((item) => Math.abs(item.net)));
-  const netAverage = netSeries.length
-    ? netSeries.reduce((sum, item) => sum + item.net, 0) / netSeries.length
-    : 0;
-  const bestNet = netSeries.reduce((best, item) => (item.net > best.net ? item : best), {
-    label: "-",
-    net: 0
-  });
-  const worstNet = netSeries.reduce((worst, item) => (item.net < worst.net ? item : worst), {
-    label: "-",
-    net: 0
-  });
 
   const largestTransactions = [...safeTransactions]
     .filter((item) => item.transaction_type === "expense")
@@ -429,8 +428,13 @@ export default function ReportsScreen({
                 <strong>{card.value}</strong>
                 <small className={up ? "up" : "down"}>
                   {up ? "+" : ""}
-                  {(Math.abs(card.delta) * 100).toFixed(1)}% so với kỳ trước
+                  {(Math.abs(card.delta) * 100).toFixed(1)}% {t("reports.vs_previous")}
                 </small>
+                {typeof card.progress === "number" ? (
+                  <span className="report-kpi-progress">
+                    <span style={{ width: `${Math.round(card.progress * 100)}%` }} />
+                  </span>
+                ) : null}
               </div>
             </article>
           );
@@ -440,7 +444,7 @@ export default function ReportsScreen({
       <div className="report-premium-row report-premium-main">
         <article className="report-surface report-trend-surface">
           <div className="report-surface-head">
-            <h3>{t("reports.net_trend", null, "Xu hướng dòng tiền")}</h3>
+            <h3>{t("reports.net_trend")}</h3>
             <div className="report-range-tabs">
               {[
                 { key: "week", label: "Week" },
@@ -464,9 +468,9 @@ export default function ReportsScreen({
 
           <div className="report-legend-inline">
             <span className="legend-swatch income" />
-            <span>{t("reports.income", null, "Thu nhập")}</span>
+            <span>{t("reports.income")}</span>
             <span className="legend-swatch expense" />
-            <span>{t("reports.expense", null, "Chi tiêu")}</span>
+            <span>{t("reports.expense")}</span>
           </div>
 
           {trendLine.items.length ? (
@@ -490,6 +494,8 @@ export default function ReportsScreen({
                     </text>
                   </g>
                 ))}
+                <path className="premium-line-area income" d={trendLine.incomeAreaPath} />
+                <path className="premium-line-area expense" d={trendLine.expenseAreaPath} />
                 <path className="premium-line income" d={trendLine.incomePath} />
                 <path className="premium-line expense" d={trendLine.expensePath} />
                 {trendLine.incomePoints.map((point, index) => (
@@ -537,14 +543,38 @@ export default function ReportsScreen({
               </div>
             </div>
           ) : (
-            <p className="empty">{t("reports.empty", null, "Chưa có dữ liệu.")}</p>
+            <p className="empty">{t("reports.empty")}</p>
           )}
+        </article>
+
+        <article className="report-surface report-monthly-surface">
+          <div className="report-surface-head">
+            <h3>{t("reports.monthly_flow")}</h3>
+            <span className="badge">{t("reports.badge.monthly")}</span>
+          </div>
+          <div className="report-legend-inline">
+            <span className="legend-swatch income" />
+            <span>{t("reports.income")}</span>
+            <span className="legend-swatch expense" />
+            <span>{t("reports.expense")}</span>
+          </div>
+          <div className="premium-column-chart">
+            {monthlyBars.map((item) => (
+              <div key={item.label} className="premium-column-group">
+                <div className="premium-column-stack">
+                  <span className="bar-income" style={{ height: `${(item.income / maxMonthlyBar) * 100}%` }} />
+                  <span className="bar-expense" style={{ height: `${(item.expense / maxMonthlyBar) * 100}%` }} />
+                </div>
+                <small>{item.label}</small>
+              </div>
+            ))}
+          </div>
         </article>
 
         <article className="report-surface report-donut-surface">
           <div className="report-surface-head">
-            <h3>{t("reports.category_split", null, "Cơ cấu chi tiêu")}</h3>
-            <span className="badge">6 tháng gần nhất</span>
+            <h3>{t("reports.category_split")}</h3>
+            <span className="badge">{t("reports.badge.monthly")}</span>
           </div>
           {donutItems.length ? (
             <>
@@ -575,7 +605,7 @@ export default function ReportsScreen({
                   })()}
                 </svg>
                 <div className="donut-center">
-                  <span>{t("reports.total_expense", null, "Tổng chi")}</span>
+                  <span>{t("reports.total_expense")}</span>
                   <strong>{currency(safeSummary.total_expense || donutTotal)}</strong>
                 </div>
                 {donutTooltip ? (
@@ -605,7 +635,7 @@ export default function ReportsScreen({
               </div>
             </>
           ) : (
-            <p className="empty">{t("reports.empty_breakdown", null, "Chưa có dữ liệu chi tiêu")}</p>
+            <p className="empty">{t("reports.empty_breakdown")}</p>
           )}
         </article>
       </div>
@@ -613,32 +643,8 @@ export default function ReportsScreen({
       <div className="report-premium-row report-premium-mid">
         <article className="report-surface">
           <div className="report-surface-head">
-            <h3>Thu - Chi theo tháng</h3>
-            <span className="badge">6 tháng gần nhất</span>
-          </div>
-          <div className="report-legend-inline">
-            <span className="legend-swatch income" />
-            <span>Thu</span>
-            <span className="legend-swatch expense" />
-            <span>Chi</span>
-          </div>
-          <div className="premium-column-chart">
-            {monthlyBars.map((item) => (
-              <div key={item.label} className="premium-column-group">
-                <div className="premium-column-stack">
-                  <span className="bar-income" style={{ height: `${(item.income / maxMonthlyBar) * 100}%` }} />
-                  <span className="bar-expense" style={{ height: `${(item.expense / maxMonthlyBar) * 100}%` }} />
-                </div>
-                <small>{item.label}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="report-surface">
-          <div className="report-surface-head">
-            <h3>Ngân sách theo danh mục</h3>
-            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || "Tháng này"}</span>
+            <h3>{t("reports.budget_by_category")}</h3>
+            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || t("reports.this_month")}</span>
           </div>
           {budgetRows.length ? (
             <div className="premium-budget-list">
@@ -662,54 +668,19 @@ export default function ReportsScreen({
                       }}
                     />
                   </div>
-                  <small className={item.ratio > 1 ? "expense" : "muted"}>
-                    {(item.ratio * 100).toFixed(0)}%
-                  </small>
+                  <small className={item.ratio > 1 ? "expense" : "muted"}>{(item.ratio * 100).toFixed(0)}%</small>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="empty">{t("reports.empty_breakdown", null, "Chưa có dữ liệu chi tiêu")}</p>
+            <p className="empty">{t("reports.empty_breakdown")}</p>
           )}
         </article>
 
         <article className="report-surface">
           <div className="report-surface-head">
-            <h3>Top giao dịch lớn nhất</h3>
-            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || "Tháng này"}</span>
-          </div>
-          {largestTransactions.length ? (
-            <div className="premium-top-list">
-              {largestTransactions.map((item) => (
-                <div key={item.id || `${item.date}-${item.amount}-${item.description}`} className="premium-top-item">
-                  <span
-                    className="premium-top-icon"
-                    style={{
-                      background: `${colorFor(item.categoryLabel || item.description || "Khác", userEmail)}22`,
-                      color: colorFor(item.categoryLabel || item.description || "Khác", userEmail)
-                    }}
-                  >
-                    {(item.categoryLabel || item.description || "G").slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="premium-top-meta">
-                    <strong>{item.description || item.categoryLabel || "Giao dịch"}</strong>
-                    <small>{formatDateFull(item.date)}</small>
-                  </div>
-                  <strong className="premium-top-amount">-{currency(Math.abs(Number(item.amount || 0)))}</strong>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="empty">{t("reports.empty", null, "Chưa có dữ liệu.")}</p>
-          )}
-        </article>
-      </div>
-
-      <div className="report-premium-row report-premium-bottom">
-        <article className="report-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.heatmap_spend", null, "Heatmap chi tiêu")}</h3>
-            <span className="badge">6 tháng gần nhất</span>
+            <h3>{t("reports.heatmap_spend")}</h3>
+            <span className="badge">{t("reports.badge.monthly")}</span>
           </div>
           <div className="premium-heatmap-top">
             <span />
@@ -745,7 +716,7 @@ export default function ReportsScreen({
               ))}
             </div>
             <div className="heatmap-legend">
-              <span>{t("reports.heatmap_low", null, "Thấp")}</span>
+              <span>{t("reports.heatmap_low")}</span>
               <div className="heatmap-scale">
                 {Array.from({ length: 6 }).map((_, index) => (
                   <span
@@ -754,52 +725,44 @@ export default function ReportsScreen({
                   />
                 ))}
               </div>
-              <span>{t("reports.heatmap_high", null, "Cao")}</span>
+              <span>{t("reports.heatmap_high")}</span>
             </div>
           </div>
         </article>
 
         <article className="report-surface">
           <div className="report-surface-head">
-            <h3>Tiết kiệm ròng theo tháng</h3>
-            <span className="badge">6 tháng gần nhất</span>
+            <h3>{t("reports.top_transactions")}</h3>
+            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || t("reports.this_month")}</span>
           </div>
-          <div className="premium-net-layout">
-            <div className="premium-net-chart">
-              <div className="premium-net-bars">
-                {netSeries.map((item) => (
-                  <div key={item.label} className="premium-net-bar-item">
-                    <span
-                      className={`premium-net-bar ${item.net >= 0 ? "income" : "expense"}`}
-                      style={{ height: `${(Math.abs(item.net) / maxNetAbs) * 100}%` }}
-                    />
-                    <small>{item.label}</small>
+          {largestTransactions.length ? (
+            <div className="premium-top-list">
+              {largestTransactions.map((item) => (
+                <div key={item.id || `${item.date}-${item.amount}-${item.description}`} className="premium-top-item">
+                  <span
+                    className="premium-top-icon"
+                    style={{
+                      background: `${colorFor(item.categoryLabel || item.description || t("reports.other"), userEmail)}22`,
+                      color: colorFor(item.categoryLabel || item.description || t("reports.other"), userEmail)
+                    }}
+                  >
+                    {(item.categoryLabel || item.description || "G").slice(0, 1).toUpperCase()}
+                  </span>
+                  <div className="premium-top-meta">
+                    <strong>{item.description || item.categoryLabel || t("reports.transaction")}</strong>
+                    <small>{formatDateFull(item.date)}</small>
                   </div>
-                ))}
-              </div>
+                  <strong className="premium-top-amount">-{currency(Math.abs(Number(item.amount || 0)))}</strong>
+                </div>
+              ))}
             </div>
-            <div className="premium-net-stats">
-              <div>
-                <span>Trung bình tiết kiệm</span>
-                <strong>{currency(netAverage)} / tháng</strong>
-              </div>
-              <div>
-                <span>Tháng cao nhất</span>
-                <strong>{currency(bestNet.net)}</strong>
-                <small>{bestNet.label}</small>
-              </div>
-              <div>
-                <span>Tháng thấp nhất</span>
-                <strong>{currency(worstNet.net)}</strong>
-                <small>{worstNet.label}</small>
-              </div>
-            </div>
-          </div>
+          ) : (
+            <p className="empty">{t("reports.empty")}</p>
+          )}
         </article>
       </div>
-
       <div className="panel">
-        <h3>{t("reports.ai_title", null, "AI Insights")}</h3>
+        <h3>{t("reports.ai_title")}</h3>
         <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
           <button
             className="ghost"
@@ -812,7 +775,7 @@ export default function ReportsScreen({
               });
             }}
           >
-            {t("reports.ai_forecast", null, "Dự đoán xu hướng chi tiêu")}
+            {t("reports.ai_forecast")}
           </button>
           <button
             className="ghost"
@@ -825,7 +788,7 @@ export default function ReportsScreen({
               });
             }}
           >
-            {t("reports.ai_saving", null, "Gợi ý tiết kiệm / cắt giảm")}
+            {t("reports.ai_saving")}
           </button>
           <button
             className="ghost"
@@ -838,14 +801,14 @@ export default function ReportsScreen({
               });
             }}
           >
-            {t("reports.ai_anomaly", null, "Phát hiện bất thường chi tiêu")}
+            {t("reports.ai_anomaly")}
           </button>
         </div>
 
         {showForecast && (
           <div className="insight-card">
-            <h4>{t("reports.forecast_title", null, "Xu hướng 3 tháng tới")}</h4>
-            {forecastLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            <h4>{t("reports.forecast_title")}</h4>
+            {forecastLoading && <p className="muted">{t("common.loading")}</p>}
             {!forecastLoading && forecastError && <p className="status error">{forecastError}</p>}
             {!forecastLoading && !forecastError && forecastData && (
               <>
@@ -855,7 +818,7 @@ export default function ReportsScreen({
                     {forecastData.points.map((point) => (
                       <li key={point.month || `${point.predicted_expense}`}>
                         <strong>{point.month}</strong>: {currency(point.predicted_expense || 0)}
-                        {point.note ? ` • ${point.note}` : ""}
+                        {point.note ? ` - ${point.note}` : ""}
                       </li>
                     ))}
                   </ul>
@@ -863,18 +826,18 @@ export default function ReportsScreen({
                 {Array.isArray(forecastData.top_growing_categories) &&
                   forecastData.top_growing_categories.length > 0 && (
                     <p className="hint">
-                      {t("reports.top_growing", null, "Danh mục nổi bật")}:{" "}
+                      {t("reports.top_growing")}:{" "}
                       {forecastData.top_growing_categories.join(", ")}
                     </p>
                   )}
                 {forecastData.risk_level && (
                   <p className="hint">
-                    {t("reports.risk", null, "Mức rủi ro")}: {riskLabel(forecastData.risk_level)}
+                    {t("reports.risk")}: {riskLabel(forecastData.risk_level)}
                   </p>
                 )}
                 {Array.isArray(forecastData.tips) && forecastData.tips.length > 0 && (
                   <>
-                    <p className="hint">{t("reports.recommend", null, "Gợi ý")}</p>
+                    <p className="hint">{t("reports.recommend")}</p>
                     <ul>
                       {forecastData.tips.map((tip, index) => (
                         <li key={`forecast-tip-${index}`}>{tip}</li>
@@ -889,8 +852,8 @@ export default function ReportsScreen({
 
         {showSavingTips && (
           <div className="insight-card">
-            <h4>{t("reports.saving_title", null, "Gợi ý tiết kiệm")}</h4>
-            {savingsLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            <h4>{t("reports.saving_title")}</h4>
+            {savingsLoading && <p className="muted">{t("common.loading")}</p>}
             {!savingsLoading && savingsError && <p className="status error">{savingsError}</p>}
             {!savingsLoading && !savingsError && savingsData && (
               <>
@@ -899,29 +862,29 @@ export default function ReportsScreen({
                   <ul>
                     {savingsData.tips.map((tip) => (
                       <li key={`${tip.category}-${tip.suggested_limit}`}>
-                        <strong>{tip.category}</strong>: {currency(tip.current_spend || 0)} →{" "}
+                        <strong>{tip.category}</strong>: {currency(tip.current_spend || 0)} {"->"}{" "}
                         {currency(tip.suggested_limit || 0)}
                         {typeof tip.potential_saving === "number"
-                          ? ` (${t("reports.potential_save", null, "tiết kiệm")}: ${currency(
+                          ? ` (${t("reports.potential_save")}: ${currency(
                               tip.potential_saving
                             )})`
                           : ""}
-                        {tip.tip ? ` • ${tip.tip}` : ""}
+                        {tip.tip ? ` - ${tip.tip}` : ""}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="empty">{t("reports.empty", null, "Chưa có dữ liệu.")}</p>
+                  <p className="empty">{t("reports.empty")}</p>
                 )}
                 {typeof savingsData.total_potential_saving === "number" && (
                   <p className="hint">
-                    {t("reports.total_potential", null, "Tổng tiết kiệm tiềm năng")}:{" "}
+                    {t("reports.total_potential")}:{" "}
                     {currency(savingsData.total_potential_saving)}
                   </p>
                 )}
                 {Array.isArray(savingsData.general_advice) && savingsData.general_advice.length > 0 && (
                   <>
-                    <p className="hint">{t("reports.general_advice", null, "Lời khuyên chung")}</p>
+                    <p className="hint">{t("reports.general_advice")}</p>
                     <ul>
                       {savingsData.general_advice.map((item, index) => (
                         <li key={`advice-${index}`}>{item}</li>
@@ -936,8 +899,8 @@ export default function ReportsScreen({
 
         {showAnomaly && (
           <div className="insight-card">
-            <h4>{t("reports.anomaly_title", null, "Phát hiện bất thường")}</h4>
-            {anomalyLoading && <p className="muted">{t("common.loading", null, "Đang tải...")}</p>}
+            <h4>{t("reports.anomaly_title")}</h4>
+            {anomalyLoading && <p className="muted">{t("common.loading")}</p>}
             {!anomalyLoading && anomalyError && <p className="status error">{anomalyError}</p>}
             {!anomalyLoading && !anomalyError && Array.isArray(anomalyData) && (
               <>
@@ -945,13 +908,13 @@ export default function ReportsScreen({
                   <ul>
                     {anomalyData.slice(0, 10).map((item) => (
                       <li key={item.id || `${item.date}-${item.amount}`}>
-                        {item.description || t("reports.anomaly_item", null, "Phát hiện bất thường")}
-                        {item.reason ? ` • ${item.reason}` : ""}
+                        {item.description || t("reports.anomaly_item")}
+                        {item.reason ? ` - ${item.reason}` : ""}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="empty">{t("reports.anomaly_none", null, "Chưa phát hiện bất thường.")}</p>
+                  <p className="empty">{t("reports.anomaly_none")}</p>
                 )}
               </>
             )}
@@ -961,3 +924,4 @@ export default function ReportsScreen({
     </section>
   );
 }
+

@@ -770,7 +770,7 @@ export default function App() {
         notificationsCount={notificationCounts.unread}
       />
 
-      <main className="app-shell app-shell-topnav">
+      <main className={`app-shell app-shell-topnav${view === "reports" ? " app-shell-reports" : ""}`}>
         {view === "dashboard" && (
           <>
             <header className="app-header">
