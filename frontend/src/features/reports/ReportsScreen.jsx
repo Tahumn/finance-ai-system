@@ -52,6 +52,18 @@ const buildAreaPath = (points, baseline) => {
 const buildHeatmapData = (transactions, weeks = 6) => {
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const totalDays = weeks * 7;
+  const normalizeDayKey = (value) => {
+    if (!value) return "";
+    const raw = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toISOString().slice(0, 10);
+  };
+  const normalizeAmount = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.abs(parsed) : 0;
+  };
   const dates = safeTransactions.map((item) => item.date).filter(Boolean).sort();
   const end = dates.length ? new Date(dates[dates.length - 1]) : new Date();
   end.setHours(0, 0, 0, 0);
@@ -65,8 +77,9 @@ const buildHeatmapData = (transactions, weeks = 6) => {
     .filter((item) => item.transaction_type === "expense")
     .forEach((item) => {
       if (!item.date) return;
-      const key = item.date;
-      valuesMap[key] = (valuesMap[key] || 0) + Number(item.amount || 0);
+      const key = normalizeDayKey(item.date);
+      if (!key) return;
+      valuesMap[key] = (valuesMap[key] || 0) + normalizeAmount(item.amount);
     });
   let max = 0;
   for (let i = 0; i < totalDays; i += 1) {

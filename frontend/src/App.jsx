@@ -883,7 +883,7 @@ export default function App() {
             summary={summary}
             monthlySeries={monthlySeries}
             breakdown={breakdownWithShare}
-            transactions={transactions}
+            transactions={transactionsWithLabels}
             userEmail={authState.user?.email}
             onBack={() => handleChangeView("dashboard")}
           />
@@ -892,7 +892,7 @@ export default function App() {
         {view === "budgets" && (
           <BudgetsScreen
             categories={categories}
-            transactions={transactions}
+            transactions={transactionsWithLabels}
             userEmail={authState.user?.email}
           />
         )}
