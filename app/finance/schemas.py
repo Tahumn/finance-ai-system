@@ -68,6 +68,10 @@ class CategoryCreate(BaseModel):
     name: str = Field(..., min_length=1)
 
 
+class CategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+
+
 class CategoryRead(BaseModel):
     id: int
     name: str
@@ -99,6 +103,13 @@ class ChartPoint(BaseModel):
 
 class GroupedChartData(BaseModel):
     series: list[ChartPoint]
+
+
+class CashflowPoint(BaseModel):
+    date: DateType
+    income: float
+    expense: float
+    net: float
 
 
 class AnomalyAlert(BaseModel):

@@ -370,18 +370,28 @@ export default function ChatScreen({ userEmail }) {
             key={item.id}
             className={`chat-bubble ${item.role === "user" ? "is-user" : "is-bot"}`}
           >
-            <div className="bubble-content">
-              <p>{item.content}</p>
-              {renderInsightData(item)}
-              {item.created_at && <span className="timestamp">{formatTimestamp(item.created_at)}</span>}
+            {item.role !== "user" && <div className="bubble-avatar">🤖</div>}
+            <div className="bubble-stack">
+              <div className="bubble-label">{item.role === "user" ? "Bạn" : "Trợ lý tài chính"}</div>
+              <div className="bubble-content">
+                <p>{item.content}</p>
+                {renderInsightData(item)}
+                {item.created_at && <span className="timestamp">{formatTimestamp(item.created_at)}</span>}
+              </div>
             </div>
           </div>
         ))}
 
         {isTyping && (
           <div className="chat-bubble is-bot typing">
-            <div className="typing-indicator">
-              <span></span><span></span><span></span>
+            <div className="bubble-avatar">🤖</div>
+            <div className="bubble-stack">
+              <div className="bubble-label">Trợ lý tài chính</div>
+              <div className="bubble-content">
+                <div className="typing-indicator">
+                  <span></span><span></span><span></span>
+                </div>
+              </div>
             </div>
           </div>
         )}

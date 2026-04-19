@@ -41,6 +41,62 @@ def list_categories(db: Session, current_user: User) -> list[Category]:
     )
 
 
+def update_category(
+    db: Session,
+    current_user: User,
+    category_id: int,
+    payload: schemas.CategoryUpdate,
+) -> Category:
+    db_category = (
+        db.query(Category)
+        .filter(Category.id == category_id, Category.user_id == current_user.id)
+        .first()
+    )
+    if not db_category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data:
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category name is required")
+
+        exists = (
+            db.query(Category)
+            .filter(Category.user_id == current_user.id, Category.name == name, Category.id != category_id)
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category already exists")
+
+        db_category.name = name
+
+    db.commit()
+    db.refresh(db_category)
+    emit_finance_update("categories", current_user.id, db_category.id)
+    return db_category
+
+
+def delete_category(db: Session, current_user: User, category_id: int) -> None:
+    db_category = (
+        db.query(Category)
+        .filter(Category.id == category_id, Category.user_id == current_user.id)
+        .first()
+    )
+    if not db_category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    (
+        db.query(Transaction)
+        .filter(Transaction.user_id == current_user.id, Transaction.category_id == category_id)
+        .update({Transaction.category_id: None}, synchronize_session=False)
+    )
+
+    db.delete(db_category)
+    db.commit()
+    emit_finance_update("categories", current_user.id, category_id)
+
+
 def _validate_category_ownership(db: Session, current_user: User, category_id: int | None) -> None:
     if category_id is None:
         return
@@ -382,4 +438,45 @@ def get_chart_data(
         for month in sorted_months
     ]
     return schemas.GroupedChartData(series=series)
+
+
+def get_cashflow(
+    db: Session,
+    current_user: User,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[schemas.CashflowPoint]:
+    rows = (
+        _base_query(db, current_user, start_date, end_date)
+        .with_entities(
+            Transaction.date,
+            Transaction.transaction_type,
+            func.sum(Transaction.amount),
+        )
+        .group_by(Transaction.date, Transaction.transaction_type)
+        .order_by(Transaction.date.asc())
+        .all()
+    )
+
+    buckets: Dict[date, Dict[str, float]] = {}
+    for tx_date, tx_type, amount in rows:
+        if tx_date not in buckets:
+            buckets[tx_date] = {"income": 0.0, "expense": 0.0}
+        if tx_type in ("income", "expense"):
+            buckets[tx_date][tx_type] = float(amount or 0.0)
+
+    points: list[schemas.CashflowPoint] = []
+    for tx_date in sorted(buckets.keys()):
+        income = buckets[tx_date]["income"]
+        expense = buckets[tx_date]["expense"]
+        points.append(
+            schemas.CashflowPoint(
+                date=tx_date,
+                income=income,
+                expense=expense,
+                net=income - expense,
+            )
+        )
+
+    return points
 

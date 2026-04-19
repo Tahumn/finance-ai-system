@@ -303,10 +303,13 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
               <div key={idx} className={`message-row ${msg.role}`}>
                 {msg.role === "assistant" && <div className="msg-avatar">🤖</div>}
                 <div className="message-content-wrapper">
-                  <div className="message-bubble">
-                    {msg.content.split('\n').map((line, i) => (
-                      <p key={i}>{line}</p>
-                    ))}
+                  <div className="message-label">{msg.role === "user" ? "Bạn" : "Trợ lý tài chính"}</div>
+                  <div className={`message-bubble ${msg.role === "user" ? "is-user" : "is-bot"}`}>
+                    <div className="message-text">
+                      {msg.content.split('\n').map((line, i) => (
+                        <p key={i}>{line}</p>
+                      ))}
+                    </div>
                   </div>
                   {renderInsightData(msg)}
                 </div>
@@ -315,8 +318,11 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
             {loading && (
               <div className="message-row assistant">
                 <div className="msg-avatar">🤖</div>
-                <div className="message-bubble typing">
-                  <span></span><span></span><span></span>
+                <div className="message-content-wrapper">
+                  <div className="message-label">Trợ lý tài chính</div>
+                  <div className="message-bubble is-bot typing">
+                    <span></span><span></span><span></span>
+                  </div>
                 </div>
               </div>
             )}

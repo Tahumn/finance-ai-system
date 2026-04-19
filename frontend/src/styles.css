@@ -4809,3 +4809,220 @@ body[data-app-mode="web"] .app-shell-topnav {
 .a-amt { display: block; margin-top: 6px; font-size: 15px; color: #f07167; } 
 
 @keyframes messageSlide { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Chat Bubble Refresh */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.chat-thread {
+  background: #f6f8fc;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.chat-bubble {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  position: relative;
+  animation: messageSlide 0.25s ease-out both;
+}
+
+.chat-bubble.is-bot {
+  justify-content: flex-start;
+}
+
+.chat-bubble.is-user {
+  justify-content: flex-end;
+}
+
+.bubble-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  margin-top: 18px;
+  flex: 0 0 auto;
+}
+
+.chat-bubble.is-user .bubble-avatar {
+  display: none;
+}
+
+.bubble-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(78%, 520px);
+}
+
+.chat-bubble.is-user .bubble-stack {
+  align-items: flex-end;
+}
+
+.bubble-label {
+  font-size: 11px;
+  color: #6b7280;
+  padding-inline: 4px;
+}
+
+.chat-bubble .bubble-content {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.chat-bubble.is-bot .bubble-content {
+  border-top-left-radius: 6px;
+}
+
+.chat-bubble.is-user .bubble-content {
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+  border-top-right-radius: 6px;
+}
+
+.chat-bubble p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.chat-bubble .timestamp {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+  color: #6b7280;
+  text-align: right;
+}
+
+.chat-bubble.is-user .timestamp {
+  color: #1d4ed8;
+  opacity: 0.85;
+}
+
+.typing .bubble-content {
+  width: auto;
+  min-width: 64px;
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 5px;
+  padding: 0;
+}
+
+.typing-indicator span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #e5e7eb;
+  background: #f8fafc;
+  padding: 12px 0 0;
+}
+
+.chat-suggestions.sticky {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 8px;
+  padding: 0 2px 4px;
+  scrollbar-width: none;
+}
+
+.chat-suggestions.sticky::-webkit-scrollbar {
+  display: none;
+}
+
+.suggestion-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.suggestion-chip:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.16);
+  transform: translateY(-1px);
+}
+
+.chat-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.chat-input input {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 12px 16px;
+}
+
+.chat-input input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+.chat-input .primary {
+  border-radius: 999px;
+  min-height: 44px;
+  padding: 0 18px;
+  box-shadow: 0 6px 16px rgba(21, 101, 192, 0.24);
+}
+
+.chat-input .primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 720px) {
+  .bubble-stack {
+    max-width: 90%;
+  }
+}
