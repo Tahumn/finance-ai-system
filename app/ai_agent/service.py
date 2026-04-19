@@ -6,12 +6,14 @@ from datetime import date as DateType, datetime, timedelta
 import base64
 import io
 import json
+import logging
 import math
 import re
 import unicodedata
 import urllib.error
 import urllib.request
 import os
+import time
 try:
     import google.generativeai as genai  # type: ignore
 except Exception:
@@ -46,6 +48,32 @@ except Exception:
     cv2 = None
     np = None
 
+logger = logging.getLogger(__name__)
+
+
+class OcrProcessingError(Exception):
+    def __init__(
+        self,
+        error_code: str,
+        message: str,
+        status_code: int = 422,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code
+        self.message = message
+        self.status_code = status_code
+        self.details = details or {}
+
+
+@dataclass
+class _OCRProviderResult:
+    provider: str
+    raw_text: str
+    ocr_confidence: float
+    fields: dict[str, object]
+    debug: dict[str, object]
+
 
 def _extract_json(text: str) -> dict:
     """Extract JSON object from Gemini response text (handles markdown fences)."""
@@ -77,8 +105,47 @@ DATE_ISO_REGEX = re.compile(r"(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2}
 DATE_TEXT_REGEX = re.compile(
     r"(?:ngay\s*)?(?P<day>\d{1,2})\s*thang\s*(?P<month>\d{1,2})(?:\s*nam\s*(?P<year>\d{2,4}))?"
 )
+DATE_EN_MONTH_FIRST_REGEX = re.compile(
+    r"\b(?P<month_name>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|"
+    r"sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)?(?:,)?\s+(?P<year>\d{2,4})\b",
+    re.IGNORECASE,
+)
+DATE_EN_DAY_FIRST_REGEX = re.compile(
+    r"\b(?P<day>\d{1,2})(?:st|nd|rd|th)?\s+"
+    r"(?P<month_name>jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|"
+    r"sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+    r"(?:,)?\s+(?P<year>\d{2,4})\b",
+    re.IGNORECASE,
+)
 MONTH_REGEX = re.compile(r"thang\s*(?P<month>\d{1,2})")
 YEAR_REGEX = re.compile(r"nam\s*(?P<year>\d{4})")
+
+EN_MONTH_TO_NUM = {
+    "jan": 1,
+    "january": 1,
+    "feb": 2,
+    "february": 2,
+    "mar": 3,
+    "march": 3,
+    "apr": 4,
+    "april": 4,
+    "may": 5,
+    "jun": 6,
+    "june": 6,
+    "jul": 7,
+    "july": 7,
+    "aug": 8,
+    "august": 8,
+    "sep": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+}
 
 UNIT_MULTIPLIER = {
     "k": 1_000,
@@ -231,7 +298,7 @@ OCR_TOTAL_KEYWORDS = (
     "tong cong",
     "tong tien",
     "tong",
-    "cong",
+    "cong tien",
     "thanh toan",
     "phai thanh toan",
     "phai tra",
@@ -259,6 +326,20 @@ OCR_SUBTOTAL_KEYWORDS = (
     "tien khach",
     "cash",
 )
+OCR_TOTAL_EXCLUDE_KEYWORDS = (
+    "cash",
+    "change",
+    "tien thua",
+    "tien khach",
+    "receipt no",
+    "receipt",
+    "tel",
+    "phone",
+    "sdt",
+    "cashier",
+    "ma so thue",
+    "mst",
+)
 OCR_MERCHANT_SKIP_KEYWORDS = (
     "hoa don",
     "receipt",
@@ -275,10 +356,27 @@ OCR_MERCHANT_SKIP_KEYWORDS = (
     "ngay",
     "date",
     "time",
+    "cashier",
+    "description",
+    "item",
+    "change",
+    "thank you",
+    "shopping at",
+    "www",
+    ".com",
+    ".vn",
+    "dist",
 )
 OCR_DATE_HINTS = ("ngay", "date", "time", "gio")
 OCR_DUE_DATE_HINTS = ("truoc ngay", "han", "due", "thanh toan", "payment")
 OCR_VAT_KEYWORDS = ("vat", "thue gtgt", "tien thue", "thue", "tax", "gtgt")
+OCR_VAT_INCLUDED_HINTS = (
+    "vat included",
+    "incl vat",
+    "including vat",
+    "da bao gom vat",
+    "bao gom vat",
+)
 OCR_ESTIMATE_KEYWORDS = (
     "tam tinh",
     "subtotal",
@@ -296,6 +394,110 @@ OCR_PRETAX_KEYWORDS = ("truoc thue", "pre tax", "before tax")
 OCR_NOTE_KEYWORDS = ("ghi chu", "note", "chu thich")
 OCR_MERCHANT_HINTS = ("don vi ban hang", "cua hang", "cong ty", "store", "shop", "market")
 OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
+OCR_GENERIC_MERCHANT_WORDS = ("hoa don", "bien lai", "receipt", "invoice", "vat invoice")
+OCR_KNOWN_MERCHANTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Circle K", ("circle k", "circlek")),
+    ("WinMart", ("winmart", "vinmart")),
+    ("Highlands Coffee", ("highlands", "highlands coffee")),
+    ("Phuc Long", ("phuc long", "phuclong")),
+    ("Starbucks", ("starbucks",)),
+    ("GS25", ("gs25",)),
+    ("7-Eleven", ("7-eleven", "7eleven")),
+    ("FamilyMart", ("familymart",)),
+    ("Co.opmart", ("coopmart", "co opmart", "co.opmart")),
+    ("Bach Hoa Xanh", ("bach hoa xanh", "bachhoaxanh")),
+    ("Shopee", ("shopee",)),
+    ("Lazada", ("lazada",)),
+    ("Grab", ("grab", "grabfood")),
+)
+
+OCR_CATEGORY_RULES = [
+    (
+        "Ăn uống",
+        (
+            "circle k",
+            "highlands",
+            "phuc long",
+            "starbucks",
+            "coffee",
+            "cafe",
+            "tra sua",
+            "restaurant",
+            "food",
+            "grabfood",
+            "shopeefood",
+            "an uong",
+            "quan an",
+        ),
+    ),
+    (
+        "Di chuyển",
+        (
+            "grab",
+            "be",
+            "xanh sm",
+            "taxi",
+            "bus",
+            "xang",
+            "petrol",
+            "fuel",
+            "parking",
+            "di chuyen",
+        ),
+    ),
+    (
+        "Giải trí",
+        (
+            "cgv",
+            "galaxy cinema",
+            "netflix",
+            "spotify",
+            "steam",
+            "movie",
+            "game",
+            "giai tri",
+        ),
+    ),
+    (
+        "Shopping",
+        (
+            "shopee",
+            "lazada",
+            "tiki",
+            "vincom",
+            "uniqlo",
+            "zara",
+            "mall",
+            "shopping",
+            "mua sam",
+        ),
+    ),
+    (
+        "Nhà ở",
+        (
+            "dien luc",
+            "tien dien",
+            "tien nuoc",
+            "water",
+            "internet",
+            "wifi",
+            "rent",
+            "thue nha",
+            "housing",
+        ),
+    ),
+    (
+        "Thu nhập",
+        (
+            "salary",
+            "payroll",
+            "luong",
+            "thuong",
+            "thu nhap",
+            "income",
+        ),
+    ),
+]
 
 STOPWORDS = {
     "giao",
@@ -478,6 +680,8 @@ def _strip_date_fragments(text: str) -> str:
     text = DATE_ISO_REGEX.sub(" ", text)
     text = DATE_DDMM_REGEX.sub(" ", text)
     text = DATE_TEXT_REGEX.sub(" ", text)
+    text = DATE_EN_MONTH_FIRST_REGEX.sub(" ", text)
+    text = DATE_EN_DAY_FIRST_REGEX.sub(" ", text)
     text = re.sub(r"thang\s*\d{1,2}", " ", text)
     text = re.sub(r"nam\s*\d{4}", " ", text)
     return text
@@ -518,6 +722,24 @@ def _parse_date(text: str) -> DateType | None:
             return DateType(year, month, day)
         except ValueError:
             return None
+
+    en_match = DATE_EN_MONTH_FIRST_REGEX.search(normalized)
+    if not en_match:
+        en_match = DATE_EN_DAY_FIRST_REGEX.search(normalized)
+    if en_match:
+        day = int(en_match.group("day"))
+        month_name = (en_match.group("month_name") or "").lower()
+        month = EN_MONTH_TO_NUM.get(month_name)
+        if not month:
+            month = EN_MONTH_TO_NUM.get(month_name[:3])
+        year = int(en_match.group("year"))
+        if year < 100:
+            year += 2000
+        if month:
+            try:
+                return DateType(year, month, day)
+            except ValueError:
+                return None
 
     match = DATE_DDMM_REGEX.search(normalized)
     if not match:
@@ -1493,7 +1715,6 @@ def get_spending_forecast(
             model_name = (
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
-                or settings.gemini_model
                 or "gemini-1.5-flash"
             )
             model = genai.GenerativeModel(
@@ -1581,7 +1802,6 @@ def get_savings_suggestions(
             model_name = (
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
-                or settings.gemini_model
                 or "gemini-1.5-flash"
             )
             model = genai.GenerativeModel(
@@ -1874,7 +2094,6 @@ def _call_gemini_chat(text: str) -> dict | None:
     MODEL_NAME = (
         os.environ.get("GEMINI_MODEL_NAME")
         or settings.gemini_model_name
-        or settings.gemini_model
         or "gemini-1.5-flash"
     )
     
@@ -1953,7 +2172,6 @@ def _call_gemini_freeform(text: str) -> str | None:
     model_name = (
         os.environ.get("GEMINI_MODEL_NAME")
         or settings.gemini_model_name
-        or settings.gemini_model
         or "gemini-1.5-flash"
     )
 
@@ -2531,7 +2749,6 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
         model_name = (
             os.environ.get("GEMINI_MODEL_NAME")
             or settings.gemini_model_name
-            or settings.gemini_model
             or "gemini-1.5-flash"
         )
         model = genai.GenerativeModel(
@@ -2609,7 +2826,19 @@ def _ocr_best_text(image: Image.Image) -> str:
 
 
 def _line_has_any_keyword(normalized: str, keywords: tuple[str, ...]) -> bool:
-    return any(keyword in normalized for keyword in keywords)
+    if not normalized:
+        return False
+    for keyword in keywords:
+        kw = (keyword or "").strip().lower()
+        if not kw:
+            continue
+        if " " in kw:
+            if kw in normalized:
+                return True
+            continue
+        if re.search(rf"\b{re.escape(kw)}\b", normalized):
+            return True
+    return False
 
 
 def _extract_total_from_lines(lines: list[str]) -> float | None:
@@ -2619,20 +2848,27 @@ def _extract_total_from_lines(lines: list[str]) -> float | None:
     last_index = max(1, len(lines) - 1)
     for idx, raw_line in enumerate(lines):
         normalized = _normalize_text(raw_line)
+        exclude_total_line = _line_has_any_keyword(normalized, OCR_TOTAL_EXCLUDE_KEYWORDS)
         fixed_line = _normalize_ocr_numeric_tokens(raw_line)
         amount = _parse_amount(fixed_line)
 
         has_total = _line_has_any_keyword(normalized, OCR_TOTAL_KEYWORDS)
         has_subtotal = _line_has_any_keyword(normalized, OCR_SUBTOTAL_KEYWORDS)
         has_pretax = _line_has_any_keyword(normalized, OCR_PRETAX_KEYWORDS)
+        has_vat_included = any(hint in normalized for hint in OCR_VAT_INCLUDED_HINTS)
         if has_pretax:
             has_subtotal = True
             has_total = False
+        if has_vat_included:
+            # "VAT included" often appears on the final payable amount line.
+            has_subtotal = False
 
         if has_total and amount is None:
             for j in range(idx + 1, min(idx + 3, len(lines))):
                 next_line = lines[j]
                 normalized_next = _normalize_text(next_line)
+                if _line_has_any_keyword(normalized_next, OCR_TOTAL_EXCLUDE_KEYWORDS):
+                    continue
                 fixed_next = _normalize_ocr_numeric_tokens(next_line)
                 amount_next = _parse_amount(fixed_next)
                 if amount_next is None:
@@ -2648,11 +2884,23 @@ def _extract_total_from_lines(lines: list[str]) -> float | None:
         if amount is None:
             continue
 
+        # Exclude strong non-total lines (cash/change/receipt metadata).
+        if exclude_total_line:
+            continue
+
+        # Ignore tiny OCR artifacts unless there is explicit total context.
+        if amount < 1000 and not has_total and not has_vat_included:
+            continue
+
         score = idx / last_index
         if has_total:
             score += 5.0
         if has_subtotal:
             score -= 3.0
+        if has_vat_included:
+            score += 2.5
+        if "item" in normalized and "included" in normalized:
+            score += 0.8
         if _amount_has_unit(fixed_line):
             score += 1.0
         if _line_has_any_keyword(normalized, ("sdt", "phone", "tel", "tax", "mst", "ma so thue")):
@@ -2667,6 +2915,42 @@ def _extract_total_from_lines(lines: list[str]) -> float | None:
         return None
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return candidates[0][1]
+
+
+def _amount_has_total_context(amount: float | None, lines: list[str]) -> bool:
+    if amount is None:
+        return False
+    tolerance = max(1000.0, float(amount) * 0.03)
+    for line in lines:
+        normalized = _normalize_text(line)
+        fixed_line = _normalize_ocr_numeric_tokens(line)
+        line_amount = _parse_amount(fixed_line)
+        if line_amount is None:
+            continue
+        if abs(line_amount - amount) > tolerance:
+            continue
+        if _line_has_any_keyword(normalized, OCR_TOTAL_KEYWORDS):
+            return True
+        if any(hint in normalized for hint in OCR_VAT_INCLUDED_HINTS):
+            return True
+    return False
+
+
+def _amount_matches_excluded_context(amount: float | None, lines: list[str]) -> bool:
+    if amount is None:
+        return False
+    tolerance = max(1000.0, float(amount) * 0.03)
+    for line in lines:
+        normalized = _normalize_text(line)
+        if not _line_has_any_keyword(normalized, OCR_TOTAL_EXCLUDE_KEYWORDS):
+            continue
+        fixed_line = _normalize_ocr_numeric_tokens(line)
+        line_amount = _parse_amount(fixed_line)
+        if line_amount is None:
+            continue
+        if abs(line_amount - amount) <= tolerance:
+            return True
+    return False
 
 
 def _extract_amount_for_keywords(lines: list[str], keywords: tuple[str, ...]) -> float | None:
@@ -2686,6 +2970,51 @@ def _extract_amount_for_keywords(lines: list[str], keywords: tuple[str, ...]) ->
             if amount is not None:
                 return amount
     return None
+
+
+def _extract_vat_from_lines(lines: list[str]) -> float | None:
+    if not lines:
+        return None
+    for idx, line in enumerate(lines):
+        normalized = _normalize_text(line)
+        if not _line_has_any_keyword(normalized, OCR_VAT_KEYWORDS):
+            continue
+        if any(hint in normalized for hint in OCR_VAT_INCLUDED_HINTS):
+            continue
+        fixed_line = _normalize_ocr_numeric_tokens(line)
+        amount = _parse_amount(fixed_line)
+        if amount is not None:
+            return amount
+        for j in range(idx + 1, min(idx + 3, len(lines))):
+            next_line = _normalize_ocr_numeric_tokens(lines[j])
+            amount = _parse_amount(next_line)
+            if amount is not None:
+                return amount
+    return None
+
+
+def _is_low_quality_merchant(value: str | None) -> bool:
+    if not value:
+        return True
+    normalized = _normalize_text(value)
+    if not normalized or len(normalized) < 2:
+        return True
+    bad_hints = (
+        "thank you",
+        "shopping at",
+        "receipt",
+        "invoice",
+        "cashier",
+        "change",
+        "item",
+    )
+    if any(hint in normalized for hint in bad_hints):
+        return True
+    if re.search(r"\d{4,}", normalized):
+        return True
+    if len(normalized.split()) >= 8:
+        return True
+    return False
 
 
 def _extract_note_from_lines(lines: list[str]) -> str | None:
@@ -2751,102 +3080,531 @@ def _extract_date_from_lines(lines: list[str]) -> DateType | None:
     return candidates[0][1]
 
 
-def _extract_merchant_from_lines(lines: list[str]) -> str | None:
+def _date_supported_in_lines(value: DateType | None, lines: list[str]) -> bool:
+    if value is None or not lines:
+        return False
     for line in lines:
-        normalized = _normalize_text(line)
-        if _line_has_any_keyword(normalized, OCR_MERCHANT_IGNORE):
-            continue
-        if _line_has_any_keyword(normalized, OCR_MERCHANT_HINTS):
-            if ":" in line:
-                value = line.split(":", 1)[1].strip()
-                if value:
-                    return value
-            cleaned = normalized
-            for keyword in OCR_MERCHANT_HINTS:
-                cleaned = cleaned.replace(keyword, "")
-            if cleaned:
-                return line.strip()
+        if _parse_date(line) == value:
+            return True
+    return False
 
-    for line in lines:
-        normalized = _normalize_text(line)
-        if re.search(r"\d", normalized):
+
+def _extract_known_merchant(text: str) -> str | None:
+    if not text:
+        return None
+    normalized = _normalize_text(text)
+    collapsed = re.sub(r"[^a-z0-9]", "", normalized)
+
+    for display_name, aliases in OCR_KNOWN_MERCHANTS:
+        for alias in aliases:
+            alias_norm = _normalize_text(alias)
+            alias_compact = re.sub(r"[^a-z0-9]", "", alias_norm)
+            if alias_norm and alias_norm in normalized:
+                return display_name
+            if alias_compact and alias_compact in collapsed:
+                return display_name
+
+    domain_pattern = re.compile(r"(?:https?://)?(?:www\.)?(?P<domain>[a-z0-9-]+)\.(?:com|vn|net|co)\b")
+    for match in domain_pattern.finditer(normalized):
+        domain = (match.group("domain") or "").strip().lower()
+        if not domain:
             continue
-        if not re.search(r"[a-z]", normalized):
-            continue
-        if _line_has_any_keyword(normalized, OCR_MERCHANT_SKIP_KEYWORDS):
-            continue
-        word_count = len([token for token in normalized.split() if token])
-        if word_count >= 2:
-            return line.strip()
-        if _parse_amount(line) is not None and len(normalized) < 6:
-            continue
-        return line.strip()
+        for display_name, aliases in OCR_KNOWN_MERCHANTS:
+            for alias in aliases:
+                alias_compact = re.sub(r"[^a-z0-9]", "", _normalize_text(alias))
+                if alias_compact and (domain == alias_compact or alias_compact in domain):
+                    return display_name
     return None
 
 
-def extract_ocr(image_bytes: bytes) -> dict:
-    image = Image.open(io.BytesIO(image_bytes))
+def _extract_merchant_from_lines(lines: list[str]) -> str | None:
+    known_from_all = _extract_known_merchant(" ".join(lines))
+    if known_from_all:
+        return known_from_all
 
-    gemini_result = None
-    if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
-        gemini_result = _call_gemini_ocr(image_bytes)
+    candidates: list[tuple[float, str]] = []
+    for idx, line in enumerate(lines):
+        candidate = line.strip()
+        if not candidate:
+            continue
 
-    text = ""
-    merchant = None
-    total = None
-    date_value = None
-    vat_amount = None
-    estimated = None
-    note = None
+        normalized = _normalize_text(candidate)
+        if not re.search(r"[a-z]", normalized):
+            continue
+        if _line_has_any_keyword(normalized, OCR_MERCHANT_IGNORE):
+            continue
+        if _line_has_any_keyword(normalized, OCR_MERCHANT_SKIP_KEYWORDS):
+            continue
+        known_from_line = _extract_known_merchant(candidate)
+        if known_from_line:
+            return known_from_line
+        if "http" in normalized or "www" in normalized:
+            continue
+        if _is_low_quality_merchant(candidate):
+            continue
 
-    if gemini_result:
-        text = gemini_result.get("text") or ""
-        merchant = gemini_result.get("merchant")
-        total = _coerce_amount(gemini_result.get("total"))
-        date_value = _coerce_date_value(gemini_result.get("date"))
-        vat_amount = _coerce_amount(gemini_result.get("vat"))
-        estimated = _coerce_amount(gemini_result.get("estimated"))
-        note = gemini_result.get("note")
+        score = 1.0
+        score += max(0.0, 2.2 - idx * 0.16)
+        if _line_has_any_keyword(normalized, OCR_MERCHANT_HINTS):
+            score += 2.0
+        if re.search(r"\d", normalized):
+            score -= 1.2
 
-    if not text.strip():
+        word_count = len([token for token in normalized.split() if token])
+        if 1 <= word_count <= 4:
+            score += 0.8
+        elif word_count > 6:
+            score -= 1.0
+        candidates.append((score, candidate))
+
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _clamp_confidence(value: float) -> float:
+    return max(0.0, min(0.99, round(value, 4)))
+
+
+def _estimate_text_quality_confidence(text: str) -> float:
+    score = _score_ocr_text(text)
+    return _clamp_confidence(0.18 + min(0.72, score / 20.0))
+
+
+def _normalize_merchant_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    cleaned = re.sub(r"[^\w\s&./-]", " ", value, flags=re.UNICODE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -:|")
+    cleaned = re.sub(r"^\d+\s*", "", cleaned)
+    if not cleaned:
+        return None
+
+    known_merchant = _extract_known_merchant(cleaned)
+    if known_merchant:
+        return known_merchant
+
+    normalized = _normalize_text(cleaned)
+    if normalized in OCR_GENERIC_MERCHANT_WORDS:
+        return None
+    if _is_low_quality_merchant(cleaned):
+        return None
+    return cleaned
+
+
+def _suggest_category_from_receipt(
+    merchant: str | None,
+    raw_text: str,
+    note: str | None = None,
+) -> tuple[str | None, float]:
+    merchant_norm = _normalize_text(merchant or "")
+    text_norm = _normalize_text(raw_text)
+    note_norm = _normalize_text(note or "")
+    best_name = None
+    best_score = 0.0
+    for category_name, keywords in OCR_CATEGORY_RULES:
+        score = 0.0
+        for keyword in keywords:
+            if keyword in merchant_norm:
+                score += 2.2
+            if keyword in note_norm:
+                score += 1.2
+            if keyword in text_norm:
+                score += 0.9
+        if score > best_score:
+            best_score = score
+            best_name = category_name
+    if not best_name:
+        return None, 0.0
+    confidence = _clamp_confidence(0.45 + min(0.5, best_score * 0.1))
+    return best_name, confidence
+
+
+def _build_ocr_field_confidences(
+    text: str,
+    lines: list[str],
+    merchant: str | None,
+    total: float | None,
+    date_value: DateType | None,
+    vat_amount: float | None,
+    estimated: float | None,
+    is_total_consistent: bool | None,
+) -> dict[str, float]:
+    normalized_lines = [_normalize_text(line) for line in lines]
+    merchant_conf = 0.0
+    if merchant:
+        merchant_conf = 0.55
+        if len(merchant) >= 4:
+            merchant_conf += 0.15
+        if not re.search(r"\d{4,}", merchant):
+            merchant_conf += 0.1
+        if any(keyword in _normalize_text(merchant) for keyword in OCR_MERCHANT_SKIP_KEYWORDS):
+            merchant_conf -= 0.2
+
+    total_conf = 0.0
+    if total is not None:
+        total_conf = 0.6
+        for idx, line in enumerate(lines):
+            line_amount = _parse_amount(_normalize_ocr_numeric_tokens(line))
+            if line_amount is None:
+                continue
+            tolerance = max(1000.0, float(total) * 0.02)
+            if abs(line_amount - total) <= tolerance:
+                norm_line = normalized_lines[idx]
+                if _line_has_any_keyword(norm_line, OCR_TOTAL_KEYWORDS):
+                    total_conf += 0.28
+                    break
+                total_conf += 0.12
+        if is_total_consistent is False:
+            total_conf -= 0.15
+
+    date_conf = 0.0
+    if date_value:
+        date_conf = 0.55
+        if any(_line_has_any_keyword(line, OCR_DATE_HINTS) for line in normalized_lines):
+            date_conf += 0.22
+        if date_value.year >= 2000:
+            date_conf += 0.08
+
+    vat_conf = 0.0
+    if vat_amount is not None:
+        vat_conf = 0.38
+        if any(_line_has_any_keyword(line, OCR_VAT_KEYWORDS) for line in normalized_lines):
+            vat_conf += 0.25
+
+    estimated_conf = 0.0
+    if estimated is not None:
+        estimated_conf = 0.35
+        if any(_line_has_any_keyword(line, OCR_ESTIMATE_KEYWORDS) for line in normalized_lines):
+            estimated_conf += 0.24
+
+    return {
+        "merchant_confidence": _clamp_confidence(merchant_conf),
+        "total_confidence": _clamp_confidence(total_conf),
+        "date_confidence": _clamp_confidence(date_conf),
+        "vat_confidence": _clamp_confidence(vat_conf),
+        "estimated_confidence": _clamp_confidence(estimated_conf),
+    }
+
+
+def _combine_ocr_confidence(provider_confidence: float, field_confidences: dict[str, float]) -> float:
+    non_zero = [value for value in field_confidences.values() if value > 0]
+    avg_field_conf = sum(non_zero) / len(non_zero) if non_zero else 0.0
+    return _clamp_confidence(provider_confidence * 0.6 + avg_field_conf * 0.4)
+
+
+def _run_gemini_ocr_provider(image_bytes: bytes) -> _OCRProviderResult | None:
+    started = time.perf_counter()
+    gemini_result = _call_gemini_ocr(image_bytes)
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    if not gemini_result:
+        return None
+
+    raw_text = (gemini_result.get("text") or "").strip()
+    fields = {
+        "merchant": gemini_result.get("merchant"),
+        "total": _coerce_amount(gemini_result.get("total")),
+        "date": _coerce_date_value(gemini_result.get("date")),
+        "vat": _coerce_amount(gemini_result.get("vat")),
+        "estimated": _coerce_amount(gemini_result.get("estimated")),
+        "note": gemini_result.get("note"),
+    }
+    signals = sum(1 for value in fields.values() if value not in (None, ""))
+    base_confidence = 0.75 + min(0.2, signals * 0.03)
+    if raw_text:
+        base_confidence += 0.05
+
+    model_name = (
+        os.environ.get("GEMINI_MODEL_NAME")
+        or settings.gemini_model_name
+        or "gemini-1.5-flash"
+    )
+    return _OCRProviderResult(
+        provider="gemini",
+        raw_text=raw_text,
+        ocr_confidence=_clamp_confidence(base_confidence),
+        fields=fields,
+        debug={"model": model_name, "elapsed_ms": elapsed_ms},
+    )
+
+
+def _run_tesseract_ocr_provider(image_bytes: bytes, image: Image.Image) -> _OCRProviderResult:
+    started = time.perf_counter()
+    raw_text = ""
+    pipeline_steps: list[str] = []
+
+    if cv2 is not None and np is not None:
         try:
             from app.ai_agent.ocr_preprocessing import OCRProcessor
+
             np_arr = np.frombuffer(image_bytes, np.uint8)
             cv_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if cv_img is not None:
                 processor = OCRProcessor()
                 processed_cv = processor.process(cv_img)
                 lang = _choose_tesseract_lang()
-                custom_config = r'--oem 3 --psm 6'
-                text = pytesseract.image_to_string(processed_cv, lang=lang, config=custom_config)
-        except Exception as e:
-            print(f"OCR Pipeline failed: {e}")
+                custom_config = r"--oem 3 --psm 6"
+                raw_text = pytesseract.image_to_string(processed_cv, lang=lang, config=custom_config) or ""
+                pipeline_steps.append("ocr_preprocessing_pipeline")
+        except Exception as exc:
+            logger.warning("tesseract_preprocess_failed error=%s", exc)
 
-        if not text.strip():
-            text = _ocr_best_text(image)
-        if not text.strip():
-            text = _ocr_to_text(image.convert("L"), psm=6)
+    if not raw_text.strip():
+        raw_text = _ocr_best_text(image)
+        pipeline_steps.append("multi_variant_tesseract")
+    if not raw_text.strip():
+        raw_text = _ocr_to_text(image.convert("L"), psm=6)
+        pipeline_steps.append("basic_tesseract")
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    return _OCRProviderResult(
+        provider="tesseract",
+        raw_text=(raw_text or "").strip(),
+        ocr_confidence=_estimate_text_quality_confidence(raw_text),
+        fields={},
+        debug={"elapsed_ms": elapsed_ms, "pipeline_steps": pipeline_steps},
+    )
+
+
+def extract_ocr(
+    image_bytes: bytes,
+    trace_id: str | None = None,
+    filename: str | None = None,
+    content_type: str | None = None,
+) -> dict:
+    started = time.perf_counter()
+
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        image.load()
+    except Exception as exc:
+        raise OcrProcessingError(
+            "OCR_INVALID_FILE",
+            "Không thể đọc file ảnh OCR.",
+            status_code=415,
+            details={"error": str(exc)},
+        ) from exc
+
+    provider_pref = (settings.ocr_provider or "auto").strip().lower()
+    if provider_pref not in {"auto", "gemini", "tesseract"}:
+        provider_pref = "auto"
+
+    gemini_attempted = provider_pref in {"auto", "gemini"} and bool(settings.gemini_api_key)
+    fallback_used = False
+    provider_result: _OCRProviderResult | None = None
+    provider_debug: dict[str, object] = {}
+
+    if gemini_attempted:
+        provider_result = _run_gemini_ocr_provider(image_bytes)
+        provider_debug["gemini_attempted"] = True
+        provider_debug["gemini_success"] = provider_result is not None
+
+    if provider_result is None and provider_pref != "gemini":
+        if gemini_attempted:
+            fallback_used = True
+        provider_result = _run_tesseract_ocr_provider(image_bytes, image)
+    elif provider_result is None and provider_pref == "gemini":
+        # Explicit Gemini mode but unavailable/unreadable: fallback for resilience.
+        fallback_used = True
+        provider_result = _run_tesseract_ocr_provider(image_bytes, image)
+
+    if provider_result is None:
+        raise OcrProcessingError(
+            "OCR_PROVIDER_TIMEOUT",
+            "Không thể khởi tạo OCR provider.",
+            status_code=503,
+            details={"provider_preference": provider_pref},
+        )
+
+    text = (provider_result.raw_text or "").strip()
+    merchant = _normalize_merchant_value(provider_result.fields.get("merchant"))
+    total = _coerce_amount(provider_result.fields.get("total"))
+    date_value = _coerce_date_value(provider_result.fields.get("date"))
+    vat_amount = _coerce_amount(provider_result.fields.get("vat"))
+    estimated = _coerce_amount(provider_result.fields.get("estimated"))
+    note = provider_result.fields.get("note")
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    warnings: list[str] = []
+
+    line_merchant = _normalize_merchant_value(
+        _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
+    )
+    if line_merchant is None:
+        line_merchant = _extract_known_merchant(text)
     if merchant is None:
-        merchant = _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
+        merchant = line_merchant
+    elif line_merchant and _is_low_quality_merchant(merchant):
+        merchant = line_merchant
+        warnings.append(
+            "Merchant tu provider khong ro, da thay bang merchant parse tu OCR text."
+        )
+
+    line_total = _extract_total_from_lines(lines)
+    if line_total is not None and _amount_matches_excluded_context(line_total, lines):
+        line_total = None
     if total is None:
-        total = _extract_total_from_lines(lines)
-        if total is None:
-            total = _parse_amount(_normalize_ocr_numeric_tokens(text))
+        total = line_total
+    elif line_total is not None:
+        provider_has_context = _amount_has_total_context(total, lines)
+        line_has_context = _amount_has_total_context(line_total, lines)
+        provider_is_excluded = _amount_matches_excluded_context(total, lines)
+        should_replace_total = False
+        if total <= 0:
+            should_replace_total = True
+        elif total < 1000 <= line_total:
+            should_replace_total = True
+        elif provider_is_excluded:
+            should_replace_total = True
+        elif line_has_context and not provider_has_context:
+            should_replace_total = True
+        if should_replace_total:
+            total = line_total
+            warnings.append(
+                "Tong tien tu provider khong khop ngu canh hoa don, da thay bang gia tri parse theo dong total."
+            )
+    if total is not None and _amount_matches_excluded_context(total, lines):
+        total = line_total
+        warnings.append("Bo qua so tien o dong CASH/CHANGE khi suy luan tong tien.")
+
+    line_date = _extract_date_from_lines(lines) or _parse_date(text)
     if date_value is None:
-        date_value = _extract_date_from_lines(lines) or _parse_date(text)
+        date_value = line_date
+    elif line_date and line_date != date_value:
+        provider_date_supported = _date_supported_in_lines(date_value, lines)
+        line_date_supported = _date_supported_in_lines(line_date, lines)
+        if line_date_supported and not provider_date_supported:
+            date_value = line_date
+            warnings.append(
+                "Ngay tu provider khong khop noi dung OCR, da thay bang ngay parse tu hoa don."
+            )
+
+    line_vat = _extract_vat_from_lines(lines)
+    has_vat_included_line = any(
+        any(hint in _normalize_text(line) for hint in OCR_VAT_INCLUDED_HINTS) for line in lines
+    )
     if vat_amount is None:
-        vat_amount = _extract_amount_for_keywords(lines, OCR_VAT_KEYWORDS)
+        vat_amount = line_vat
+    elif line_vat is not None:
+        if abs(vat_amount - line_vat) > max(1000.0, line_vat * 0.05):
+            vat_amount = line_vat
+            warnings.append(
+                "VAT tu provider lech so voi OCR text, da uu tien VAT parse theo dong thue."
+            )
+    elif has_vat_included_line and total is not None:
+        if abs(vat_amount - total) <= max(1000.0, total * 0.02):
+            vat_amount = None
+            warnings.append("Hoa don ghi 'VAT included', VAT rieng duoc de trong.")
+    if has_vat_included_line and line_vat is None and vat_amount is not None:
+        vat_amount = None
+        warnings.append("Hoa don ghi 'VAT included' va khong co dong VAT rieng.")
+    if has_vat_included_line:
+        vat_included_note = "Tong tien da bao gom VAT."
+        if not note:
+            note = vat_included_note
+        elif "vat" not in _normalize_text(str(note)):
+            note = f"{str(note).strip()} {vat_included_note}".strip()
+
     if estimated is None:
         estimated = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
     if note is None:
         note = _extract_note_from_lines(lines)
 
-    computed_total, total_delta, is_total_consistent, warnings = _validate_ocr_totals(
+    has_signal = bool(text.strip()) or any(
+        value not in (None, "")
+        for value in (merchant, total, date_value, vat_amount, estimated, note)
+    )
+    if not has_signal:
+        raise OcrProcessingError(
+            "OCR_NO_TEXT_DETECTED",
+            "Không trích xuất được nội dung từ ảnh hóa đơn.",
+            status_code=422,
+            details={
+                "provider": provider_result.provider,
+                "fallback_used": fallback_used,
+                "trace_id": trace_id,
+            },
+        )
+
+    computed_total, total_delta, is_total_consistent, consistency_warnings = _validate_ocr_totals(
         total, estimated, vat_amount
     )
-    return {
+    warnings.extend(consistency_warnings)
+    suggested_category, category_confidence = _suggest_category_from_receipt(merchant, text, note)
+    if not suggested_category:
+        warnings.append("Chưa suy luận được danh mục, vui lòng chọn thủ công.")
+
+    field_confidences = _build_ocr_field_confidences(
+        text=text,
+        lines=lines,
+        merchant=merchant,
+        total=total,
+        date_value=date_value,
+        vat_amount=vat_amount,
+        estimated=estimated,
+        is_total_consistent=is_total_consistent,
+    )
+    if field_confidences["total_confidence"] < 0.5 and total is not None:
+        warnings.append("Tổng tiền có độ tin cậy thấp, nên kiểm tra lại.")
+    if field_confidences["date_confidence"] < 0.5 and date_value is not None:
+        warnings.append("Ngày hóa đơn có độ tin cậy thấp, nên kiểm tra lại.")
+
+    warnings = list(dict.fromkeys(warnings))
+
+    parsed_payload = {
+        "merchant": merchant,
+        "merchant_confidence": field_confidences["merchant_confidence"],
+        "date": date_value,
+        "date_confidence": field_confidences["date_confidence"],
+        "total": total,
+        "total_confidence": field_confidences["total_confidence"],
+        "vat": vat_amount,
+        "vat_confidence": field_confidences["vat_confidence"],
+        "estimated": estimated,
+        "estimated_confidence": field_confidences["estimated_confidence"],
+        "note": note,
+        "computed_total": computed_total,
+        "total_delta": total_delta,
+        "is_total_consistent": is_total_consistent,
+        "suggested_category": suggested_category,
+        "category_confidence": category_confidence,
+    }
+
+    ocr_confidence = _combine_ocr_confidence(
+        provider_result.ocr_confidence,
+        {
+            "merchant": field_confidences["merchant_confidence"],
+            "date": field_confidences["date_confidence"],
+            "total": field_confidences["total_confidence"],
+            "vat": field_confidences["vat_confidence"],
+            "estimated": field_confidences["estimated_confidence"],
+        },
+    )
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    logger.info(
+        "ocr_parse_completed trace_id=%s provider=%s fallback_used=%s duration_ms=%s confidence=%s debug=%s filename=%s content_type=%s",
+        trace_id,
+        provider_result.provider,
+        fallback_used,
+        elapsed_ms,
+        ocr_confidence,
+        {**provider_debug, **provider_result.debug},
+        filename,
+        content_type,
+    )
+
+    response = {
+        "success": True,
+        "provider": provider_result.provider,
+        "fallback_used": fallback_used,
+        "ocr_confidence": ocr_confidence,
+        "raw_text": text,
+        "parsed": parsed_payload,
+        "warnings": warnings,
+        "trace_id": trace_id,
+        # Backward-compatible legacy fields
         "merchant": merchant,
         "total": total,
         "date": date_value,
@@ -2856,8 +3614,10 @@ def extract_ocr(image_bytes: bytes) -> dict:
         "computed_total": computed_total,
         "total_delta": total_delta,
         "is_total_consistent": is_total_consistent,
-        "warnings": warnings,
         "text": text,
     }
+    return response
+
+
 
 

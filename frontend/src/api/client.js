@@ -65,11 +65,19 @@ export async function request(path, options = {}) {
       window.dispatchEvent(new CustomEvent("finance:logout"));
     }
     let message = payload?.detail || payload?.message || "Request failed";
+    if (typeof message === "object" && message !== null) {
+      message = message.message || message.error_code || JSON.stringify(message);
+    }
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");
     }
     const error = new Error(message);
     error.status = response.status;
+    if (typeof payload?.detail === "object" && payload?.detail !== null) {
+      error.code = payload.detail.error_code;
+      error.details = payload.detail.details;
+      error.trace_id = payload.detail.trace_id;
+    }
     throw error;
   }
 
@@ -107,11 +115,19 @@ export async function requestForm(path, formData) {
       window.dispatchEvent(new CustomEvent("finance:logout"));
     }
     let message = payload?.detail || payload?.message || "Request failed";
+    if (typeof message === "object" && message !== null) {
+      message = message.message || message.error_code || JSON.stringify(message);
+    }
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");
     }
     const error = new Error(message);
     error.status = response.status;
+    if (typeof payload?.detail === "object" && payload?.detail !== null) {
+      error.code = payload.detail.error_code;
+      error.details = payload.detail.details;
+      error.trace_id = payload.detail.trace_id;
+    }
     throw error;
   }
 

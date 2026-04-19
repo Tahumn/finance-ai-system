@@ -52,7 +52,36 @@ class ChatHistoryResponse(BaseModel):
     messages: list[ChatMessageRead] = []
 
 
+class OcrParsedResult(BaseModel):
+    merchant: str | None = None
+    merchant_confidence: float = 0.0
+    date: DateType | None = None
+    date_confidence: float = 0.0
+    total: float | None = None
+    total_confidence: float = 0.0
+    vat: float | None = None
+    vat_confidence: float = 0.0
+    estimated: float | None = None
+    estimated_confidence: float = 0.0
+    note: str | None = None
+    computed_total: float | None = None
+    total_delta: float | None = None
+    is_total_consistent: bool | None = None
+    suggested_category: str | None = None
+    category_confidence: float = 0.0
+
+
 class OcrResponse(BaseModel):
+    success: bool = True
+    provider: Literal["gemini", "tesseract", "none"] = "none"
+    fallback_used: bool = False
+    ocr_confidence: float = 0.0
+    raw_text: str = ""
+    parsed: OcrParsedResult = Field(default_factory=OcrParsedResult)
+    warnings: list[str] = []
+    trace_id: str | None = None
+
+    # Backward-compatible legacy fields for existing frontend mapping.
     merchant: str | None = None
     total: float | None = None
     date: DateType | None = None
@@ -62,8 +91,15 @@ class OcrResponse(BaseModel):
     computed_total: float | None = None
     total_delta: float | None = None
     is_total_consistent: bool | None = None
-    warnings: list[str] = []
     text: str = ""
+
+
+class OcrErrorResponse(BaseModel):
+    success: Literal[False] = False
+    error_code: str
+    message: str
+    details: dict[str, object] = {}
+    trace_id: str | None = None
 
 
 class AnomalyListResponse(BaseModel):

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     dev_return_otp: bool = False
     
     # OCR Provider
-    ocr_provider: str = "tesseract"
+    ocr_provider: str = "auto"
 
     # Tự động load từ file .env
     model_config = SettingsConfigDict(

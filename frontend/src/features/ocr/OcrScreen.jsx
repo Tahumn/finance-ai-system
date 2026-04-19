@@ -36,6 +36,13 @@ const toFormattedNumber = (value, fallback = "") => {
 };
 
 const normalizeTag = (value) => String(value || "").trim().replace(/^#/, "");
+const normalizeCategoryKey = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 export default function OcrScreen({
   categories,
@@ -75,6 +82,14 @@ export default function OcrScreen({
     return map;
   }, [tags]);
 
+  const categoryNameMap = useMemo(() => {
+    const map = {};
+    categories.forEach((category) => {
+      map[normalizeCategoryKey(category.name)] = category;
+    });
+    return map;
+  }, [categories]);
+
   useEffect(() => {
     setSelectedTagIds((current) => current.filter((id) => tagMap[id]));
   }, [tagMap]);
@@ -106,27 +121,53 @@ export default function OcrScreen({
 
     try {
       const result = await extractOcr(file);
+      const parsedResult = result?.parsed || result || {};
+      const rawText = result?.raw_text || result?.text || "";
+      const suggestedCategory = parsedResult.suggested_category || "";
+      const suggestedCategoryId = suggestedCategory
+        ? categoryNameMap[normalizeCategoryKey(suggestedCategory)]?.id || ""
+        : "";
       setParsed((current) => ({
         ...current,
-        merchant: result.merchant || current.merchant || sanitizeName(file.name) || t("ocr.merchant_guess"),
-        total: toFormattedNumber(result.total, current.total),
-        vat: toFormattedNumber(result.vat, current.vat),
-        estimated: toFormattedNumber(result.estimated, current.estimated),
-        note: result.note || (result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note),
-        date: result.date || current.date
+        merchant:
+          parsedResult.merchant || current.merchant || sanitizeName(file.name) || t("ocr.merchant_guess"),
+        total: parsedResult.total == null ? "" : toFormattedNumber(parsedResult.total, current.total),
+        vat: parsedResult.vat == null ? "" : toFormattedNumber(parsedResult.vat, current.vat),
+        estimated: parsedResult.estimated == null ? "" : toFormattedNumber(parsedResult.estimated, current.estimated),
+        note: parsedResult.note || (rawText ? `OCR: ${rawText.slice(0, 200)}` : current.note),
+        date: parsedResult.date || current.date,
+        categoryId: suggestedCategoryId || current.categoryId
       }));
       setConfidence({
-        date: result.date ? 0.8 : 0.3,
-        merchant: result.merchant ? 0.8 : 0.3,
-        total: result.total ? 0.9 : 0.3,
-        vat: result.vat ? 0.7 : 0.2,
-        estimated: result.estimated ? 0.6 : 0.2
+        date: parsedResult.date_confidence ?? (parsedResult.date ? 0.8 : 0.3),
+        merchant: parsedResult.merchant_confidence ?? (parsedResult.merchant ? 0.8 : 0.3),
+        total: parsedResult.total_confidence ?? (parsedResult.total ? 0.9 : 0.3),
+        vat: parsedResult.vat_confidence ?? (parsedResult.vat ? 0.7 : 0.2),
+        estimated: parsedResult.estimated_confidence ?? (parsedResult.estimated ? 0.6 : 0.2)
       });
-      setWarnings(result.warnings || []);
-      setNotice(t("ocr.notice.extracted", null, "OCR done. Review and confirm before creating transaction."));
+      const nextWarnings = [...(result.warnings || [])];
+      if (result.provider) {
+        nextWarnings.unshift(
+          `OCR provider: ${result.provider}${result.fallback_used ? " (fallback Tesseract)" : ""}.`
+        );
+      }
+      if (suggestedCategory && !suggestedCategoryId) {
+        nextWarnings.push(`Gợi ý danh mục: "${suggestedCategory}" chưa khớp với danh mục hiện có.`);
+      }
+      setWarnings(nextWarnings);
+      const confidencePct = Math.round((result.ocr_confidence || 0) * 100);
+      setNotice(
+        `${t("ocr.notice.extracted", null, "OCR done. Review and confirm before creating transaction.")} (${confidencePct}%)`
+      );
       setOcrState("done");
     } catch (err) {
       setError(err.message || t("ocr.error.extract_failed", null, "OCR failed."));
+      if (err.code) {
+        setWarnings([
+          `Error code: ${err.code}${err.trace_id ? ` (trace: ${err.trace_id})` : ""}.`,
+          ...(err.details ? [JSON.stringify(err.details)] : [])
+        ]);
+      }
       setOcrState("idle");
     }
   };
@@ -304,7 +345,7 @@ export default function OcrScreen({
                     vat: formatNumberInput(event.target.value)
                   }))
                 }
-                placeholder="0"
+                placeholder="--"
               />
               <small className="hint">
                 {t("ocr.confidence", { value: Math.round(confidence.vat * 100) }, `Confidence: ${
