@@ -1,0 +1,16 @@
+{
+  "name": "finance-ai-system",
+  "version": "1.0.0",
+  "description": "Finance AI Microservices System",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev:web",
+    "dev:mobile": "npm --prefix frontend run dev:mobile",
+    "build": "npm --prefix frontend run build",
+    "docker:up": "docker compose --profile micro up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose --profile micro logs -f",
+    "seed": "python -m app.scripts.seed_recent_transactions --months 6"
+  },
+  "author": "",
+  "license": "ISC"
+}

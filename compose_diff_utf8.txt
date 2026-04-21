@@ -1,0 +1,717 @@
+﻿diff --git a/docker-compose.yml b/docker-compose.yml
+index 8d4078c..ec2ee6a 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -1,186 +1,550 @@
+ services:
+-  api:
+-    build:
+-      context: .
+-      dockerfile: Dockerfile
+-    container_name: finance-api
+-    env_file:
+-      - .env
+-    environment:
+-      # Keep sane defaults for local compose; `.env` can override.
+-      DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
+-      SECRET_KEY: ${SECRET_KEY:-change-this-to-a-long-random-string}
+-      ALGORITHM: ${ALGORITHM:-HS256}
+-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+-      DIFY_API_BASE: ${DIFY_API_BASE:-http://dify-api:5001/v1}
+-      DIFY_API_KEY: ${DIFY_API_KEY:-}
+-      DIFY_FORCE_JSON: ${DIFY_FORCE_JSON:-true}
+-      DEV_RETURN_OTP: ${DEV_RETURN_OTP:-true}
+-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+-      SMTP_PORT: ${SMTP_PORT:-465}
+-      SMTP_USER: ${SMTP_USER:-}
+-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+-      SMTP_FROM: ${SMTP_FROM:-}
+-      OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
++  api:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-api
++    env_file:
++      - .env
++    environment:
++      # Keep sane defaults for local compose; `.env` can override.
++      DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
++      SECRET_KEY: ${SECRET_KEY:-change-this-to-a-long-random-string}
++      ALGORITHM: ${ALGORITHM:-HS256}
++      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
++      DIFY_API_BASE: ${DIFY_API_BASE:-http://dify-api:5001/v1}
++      DIFY_API_KEY: ${DIFY_API_KEY:-}
++      DIFY_FORCE_JSON: ${DIFY_FORCE_JSON:-true}
++      DEV_RETURN_OTP: ${DEV_RETURN_OTP:-true}
++      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
++      SMTP_PORT: ${SMTP_PORT:-465}
++      SMTP_USER: ${SMTP_USER:-}
++      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
++      SMTP_FROM: ${SMTP_FROM:-}
++      OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
+     ports:
+       - "8000:8000"
+-    depends_on:
+-      postgres:
+-        condition: service_healthy
+-
+-  seed:
+-    build:
+-      context: .
+-      dockerfile: Dockerfile
+-    container_name: finance-seed
+-    env_file:
+-      - .env
+-    environment:
+-      DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
+-      SEED_MONTHS: ${SEED_MONTHS:-6}
+-      SEED_FORCE: ${SEED_FORCE:-true}
+-      SEED_CREATE_DEMO_USER: ${SEED_CREATE_DEMO_USER:-true}
+-      SEED_EMAIL: ${SEED_EMAIL:-}
+-      SEED_DEMO_EMAIL: ${SEED_DEMO_EMAIL:-demo@financeai.local}
+-      SEED_DEMO_USERNAME: ${SEED_DEMO_USERNAME:-demo_finance}
+-      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-Demo@1234}
+-      SEED_BASE: ${SEED_BASE:-20260412}
+-    depends_on:
+-      postgres:
+-        condition: service_healthy
+-    command: ["sh", "/app/app/scripts/docker_seed.sh"]
+-    restart: "no"
+-    profiles: ["tools"]
+-
+-  postgres:
+-    image: postgres:16-alpine
+-    container_name: finance-postgres
++    depends_on:
++      postgres:
++        condition: service_healthy
++      redis:
++        condition: service_started
++
++  # Microservice-style stack (optional). Uses the same codebase/image, but
++  # runs separate FastAPI entrypoints + a lightweight gateway proxy.
++  gateway:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-gateway
++    env_file:
++      - .env
++    environment:
++      AUTH_SERVICE_URL: http://auth:8000
++      FINANCE_SERVICE_URL: http://finance:8000
++      NOTIFICATIONS_SERVICE_URL: http://notifications:8000
++      AI_SERVICE_URL: http://ai:8000
++    command: ["uvicorn", "app.gateway_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8005:8000"
++    depends_on:
++      auth:
++        condition: service_started
++      finance:
++        condition: service_started
++      notifications:
++        condition: service_started
++      notifications-worker:
++        condition: service_started
++      ai:
++        condition: service_started
++      planning:
++        condition: service_started
++      recurring:
++        condition: service_started
++    profiles: ["micro"]
++
++  auth:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-auth
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${AUTH_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/auth_db}
++      DB_SCHEMA: ${AUTH_DB_SCHEMA:-auth_service}
++    command: ["uvicorn", "app.services.auth_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8001:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++    profiles: ["micro"]
++
++  finance:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-finance
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${FINANCE_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/finance_db}
++      DB_SCHEMA: ${FINANCE_DB_SCHEMA:-finance_service}
++    command: ["uvicorn", "app.services.finance_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8002:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++    profiles: ["micro"]
++
++  planning:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-planning
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${PLANNING_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/planning_db}
++      DB_SCHEMA: ${PLANNING_DB_SCHEMA:-planning_service}
++    command: ["uvicorn", "app.services.planning_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8006:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++    profiles: ["micro"]
++
++  recurring:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-recurring
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${RECURRING_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/recurring_db}
++      DB_SCHEMA: ${RECURRING_DB_SCHEMA:-recurring_service}
++    command: ["uvicorn", "app.services.recurring_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8007:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++    profiles: ["micro"]
++
++  notifications:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-notifications
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${NOTIFICATIONS_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/notifications_db}
++      DB_SCHEMA: ${NOTIFICATIONS_DB_SCHEMA:-notifications_service}
++      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
++    command: ["uvicorn", "app.services.notifications_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8003:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++      redis:
++        condition: service_started
++    profiles: ["micro"]
++
++  ai:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-ai
++    env_file:
++      - .env
++    environment:
++      # Current AI module still depends on finance data directly.
++      DB_URL: ${AI_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/finance_db}
++      DB_SCHEMA: ${AI_DB_SCHEMA:-finance_service}
++    command: ["uvicorn", "app.services.ai_main:app", "--host", "0.0.0.0", "--port", "8000"]
++    ports:
++      - "8004:8000"
++    depends_on:
++      postgres:
++        condition: service_healthy
++    profiles: ["micro"]
++
++  notifications-worker:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-notifications-worker
++    env_file:
++      - .env
++    environment:
++      DB_URL: ${NOTIFICATIONS_DB_URL:-postgresql://finance_user:finance_pass@postgres:5432/notifications_db}
++      DB_SCHEMA: ${NOTIFICATIONS_DB_SCHEMA:-notifications_service}
++      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
++    command: ["python", "-m", "app.workers.notifications_worker"]
++    depends_on:
++      postgres:
++        condition: service_healthy
++      redis:
++        condition: service_started
++    profiles: ["micro"]
++
++  seed:
++    build:
++      context: .
++      dockerfile: Dockerfile
++    container_name: finance-seed
++    env_file:
++      - .env
++    environment:
++      DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
++      SEED_MONTHS: ${SEED_MONTHS:-6}
++      SEED_FORCE: ${SEED_FORCE:-true}
++      SEED_CREATE_DEMO_USER: ${SEED_CREATE_DEMO_USER:-true}
++      SEED_EMAIL: ${SEED_EMAIL:-}
++      SEED_DEMO_EMAIL: ${SEED_DEMO_EMAIL:-demo@financeai.local}
++      SEED_DEMO_USERNAME: ${SEED_DEMO_USERNAME:-demo_finance}
++      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-Demo@1234}
++      SEED_BASE: ${SEED_BASE:-20260412}
++    depends_on:
++      postgres:
++        condition: service_healthy
++    command: ["sh", "/app/app/scripts/docker_seed.sh"]
++    restart: "no"
++    profiles: ["tools"]
++
++  postgres:
++    image: postgres:16-alpine
++    container_name: finance-postgres
+     environment:
+       POSTGRES_DB: finance_db
+       POSTGRES_USER: finance_user
+       POSTGRES_PASSWORD: finance_pass
+     ports:
+       - "5432:5432"
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
+     volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
+       - postgres_data:/var/lib/postgresql/data
++      - ./docker/postgres/init-micro.sh:/docker-entrypoint-initdb.d/01-init-micro.sh
+     healthcheck:
+       test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_db"]
+       interval: 5s
+       timeout: 5s
+       retries: 20
+ 
+-  n8n:
+-    image: n8nio/n8n:latest
+-    container_name: finance-n8n
++  redis:
++    image: redis:7-alpine
++    container_name: finance-redis
++    ports:
++      - "6379:6379"
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - redis_data:/data
++
++  kafka:
++    image: bitnami/kafka:3.5
++    container_name: finance-kafka
++    ports:
++      - "9092:9092"
++    environment:
++      - KAFKA_ENABLE_KRAFT=yes
++      - KAFKA_CFG_PROCESS_ROLES=broker,controller
++      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
++      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
++      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
++      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
++      - KAFKA_CFG_BROKER_ID=1
++      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
++      - ALLOW_PLAINTEXT_LISTENER=yes
++      - KAFKA_CFG_NODE_ID=1
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - kafka_data:/bitnami/kafka
++    profiles: ["micro"]
++
++  kafka-ui:
++    image: provectuslabs/kafka-ui:latest
++    container_name: finance-kafka-ui
++    ports:
++      - "8080:8080"
++    environment:
++      - KAFKA_CLUSTERS_0_NAME=local
++      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
++    depends_on:
++      - kafka
++    profiles: ["micro"]
++
++  n8n:
++    image: n8nio/n8n:latest
++    container_name: finance-n8n
+     ports:
+       - "5678:5678"
+     environment:
+       N8N_PORT: 5678
+       GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
+     volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
+       - n8n_data:/home/node/.n8n
+-    depends_on:
+-      api:
+-        condition: service_started
+-
+-  dify-api:
+-    image: langgenius/dify-api:latest
+-    container_name: dify-api
+-    environment:
+-      MODE: api
+-      LOG_LEVEL: INFO
+-      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+-      DB_HOST: dify-db
+-      DB_PORT: 5432
+-      DB_USERNAME: dify
+-      DB_PASSWORD: dify
+-      DB_DATABASE: dify
+-      REDIS_HOST: dify-redis
+-      REDIS_PORT: 6379
+-      REDIS_PASSWORD: ""
+-      CELERY_BROKER_URL: redis://dify-redis:6379/0
+-      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+-      STORAGE_TYPE: local
+-      STORAGE_LOCAL_PATH: /app/api/storage
+-      SERVICE_URL: http://localhost:5001
+-      CONSOLE_URL: http://localhost:5002
+-    volumes:
+-      - dify_api_storage:/app/api/storage
+-    ports:
+-      - "5001:5001"
+-    depends_on:
+-      dify-db:
+-        condition: service_started
+-      dify-redis:
+-        condition: service_started
+-      dify-sandbox:
+-        condition: service_started
+-
+-  dify-worker:
+-    image: langgenius/dify-api:latest
+-    container_name: dify-worker
+-    environment:
+-      MODE: worker
+-      LOG_LEVEL: INFO
+-      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+-      DB_HOST: dify-db
+-      DB_PORT: 5432
+-      DB_USERNAME: dify
+-      DB_PASSWORD: dify
+-      DB_DATABASE: dify
+-      REDIS_HOST: dify-redis
+-      REDIS_PORT: 6379
+-      REDIS_PASSWORD: ""
+-      CELERY_BROKER_URL: redis://dify-redis:6379/0
+-      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+-      STORAGE_TYPE: local
+-      STORAGE_LOCAL_PATH: /app/api/storage
+-      SERVICE_URL: http://dify-api:5001
+-      CONSOLE_URL: http://dify-web:3000
+-    volumes:
+-      - dify_api_storage:/app/api/storage
+-    depends_on:
+-      dify-api:
+-        condition: service_started
+-      dify-db:
+-        condition: service_started
+-      dify-redis:
+-        condition: service_started
+-
+-  dify-web:
+-    image: langgenius/dify-web:latest
+-    container_name: dify-web
+-    environment:
+-      NEXT_PUBLIC_API_BASE_URL: http://localhost:5001
+-    ports:
+-      - "5002:3000"
+-    depends_on:
+-      dify-api:
+-        condition: service_started
+-
+-  dify-db:
+-    image: postgres:15-alpine
+-    container_name: dify-postgres
+-    environment:
+-      POSTGRES_USER: dify
+-      POSTGRES_PASSWORD: dify
+-      POSTGRES_DB: dify
+-    volumes:
+-      - dify_db_data:/var/lib/postgresql/data
+-
+-  dify-redis:
+-    image: redis:7-alpine
+-    container_name: dify-redis
+-    volumes:
+-      - dify_redis_data:/data
+-
+-  dify-sandbox:
+-    image: langgenius/dify-sandbox:latest
+-    container_name: dify-sandbox
+-
+-volumes:
+-  postgres_data:
+-  n8n_data:
+-  dify_db_data:
+-  dify_redis_data:
+-  dify_api_storage:
++    depends_on:
++      api:
++        condition: service_started
++
++  dify-api:
++    image: langgenius/dify-api:latest
++    container_name: dify-api
++    environment:
++      MODE: api
++      LOG_LEVEL: INFO
++      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
++      DB_HOST: dify-db
++      DB_PORT: 5432
++      DB_USERNAME: dify
++      DB_PASSWORD: dify
++      DB_DATABASE: dify
++      REDIS_HOST: dify-redis
++      REDIS_PORT: 6379
++      REDIS_PASSWORD: ""
++      CELERY_BROKER_URL: redis://dify-redis:6379/0
++      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
++      STORAGE_TYPE: local
++      STORAGE_LOCAL_PATH: /app/api/storage
++      SERVICE_URL: http://localhost:5001
++      CONSOLE_URL: http://localhost:5002
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - dify_api_storage:/app/api/storage
++    ports:
++      - "5001:5001"
++    depends_on:
++      dify-db:
++        condition: service_started
++      dify-redis:
++        condition: service_started
++      dify-sandbox:
++        condition: service_started
++
++  dify-worker:
++    image: langgenius/dify-api:latest
++    container_name: dify-worker
++    environment:
++      MODE: worker
++      LOG_LEVEL: INFO
++      SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
++      DB_HOST: dify-db
++      DB_PORT: 5432
++      DB_USERNAME: dify
++      DB_PASSWORD: dify
++      DB_DATABASE: dify
++      REDIS_HOST: dify-redis
++      REDIS_PORT: 6379
++      REDIS_PASSWORD: ""
++      CELERY_BROKER_URL: redis://dify-redis:6379/0
++      CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
++      STORAGE_TYPE: local
++      STORAGE_LOCAL_PATH: /app/api/storage
++      SERVICE_URL: http://dify-api:5001
++      CONSOLE_URL: http://dify-web:3000
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - dify_api_storage:/app/api/storage
++    depends_on:
++      dify-api:
++        condition: service_started
++      dify-db:
++        condition: service_started
++      dify-redis:
++        condition: service_started
++
++  dify-web:
++    image: langgenius/dify-web:latest
++    container_name: dify-web
++    environment:
++      NEXT_PUBLIC_API_BASE_URL: http://localhost:5001
++    ports:
++      - "5002:3000"
++    depends_on:
++      dify-api:
++        condition: service_started
++
++  dify-db:
++    image: postgres:15-alpine
++    container_name: dify-postgres
++    environment:
++      POSTGRES_USER: dify
++      POSTGRES_PASSWORD: dify
++      POSTGRES_DB: dify
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - dify_db_data:/var/lib/postgresql/data
++
++  dify-redis:
++    image: redis:7-alpine
++    container_name: dify-redis
++    
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++      - dify_redis_data:/data
++
++  dify-sandbox:
++    image: langgenius/dify-sandbox:latest
++    container_name: dify-sandbox
++
++
++  frontend:
++    build:
++      context: ./frontend
++      dockerfile: Dockerfile
++    container_name: finance-frontend
++    ports:
++      - "5173:5173"
++    volumes:
++      - ./frontend:/app
++      - /app/node_modules
++    environment:
++      - VITE_API_URL=http://localhost:8005/api/v1
++    depends_on:
++      - gateway
++    profiles: ["micro"]
++
++volumes:
++  postgres_data:
++  redis_data:
++  n8n_data:
++  dify_db_data:
++  dify_redis_data:
++  dify_api_storage:
++  kafka_data:
++  kafka_data:

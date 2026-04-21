@@ -14,6 +14,39 @@ Services:
 - Swagger: `http://localhost:8000/docs`
 - n8n: `http://localhost:5678`
 - PostgreSQL: `localhost:5432`
+- Redis (queue): `localhost:6379`
+
+## Microservice-style (Optional)
+
+Run separate containers for `auth`, `finance`, `notifications`, `ai`, `notifications-worker`, `redis` plus a lightweight gateway proxy:
+
+```powershell
+docker compose --profile micro up -d --build
+```
+
+Endpoints:
+- Gateway: `http://localhost:8005` (Swagger: `http://localhost:8005/docs`)
+- Auth: `http://localhost:8001/docs`
+- Finance: `http://localhost:8002/docs`
+- Notifications: `http://localhost:8003/docs`
+- AI: `http://localhost:8004/docs`
+
+Queue:
+- Redis: `localhost:6379`
+- Notification jobs are enqueued to `notifications` and consumed by `notifications-worker`.
+
+DB ownership:
+- Auth -> `auth_db.auth_service`
+- Finance -> `finance_db.finance_service`
+- Notifications -> `notifications_db.notifications_service`
+- AI currently shares finance data (`finance_db.finance_service`) because AI features still query finance tables directly.
+
+If you are migrating from the old compose volume, re-init Postgres so the micro init script creates DB/schema:
+
+```powershell
+docker compose down -v
+docker compose --profile micro up -d --build
+```
 
 ## Run without Docker
 
@@ -119,9 +152,12 @@ python -m app.scripts.seed_recent_transactions --email demo@financeai.local --cr
 From `.env` (tham khảo `.env.example`):
 
 - `DB_URL`
+- `DB_SCHEMA`
 - `SECRET_KEY`
 - `ALGORITHM`
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `REDIS_URL`
+- `QUEUE_DEFAULT_TIMEOUT`
 
 ### Gemini + SMTP Notes (Important)
 

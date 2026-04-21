@@ -45,6 +45,7 @@ import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import NotificationsScreen from "./features/notifications/NotificationsScreen.jsx";
 import FloatingChatbot from "./components/FloatingChatbot.jsx";
+import RecurringScreen from "./features/recurring/RecurringScreen.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
 import {
@@ -883,7 +884,7 @@ export default function App() {
             summary={summary}
             monthlySeries={monthlySeries}
             breakdown={breakdownWithShare}
-            transactions={transactions}
+            transactions={transactionsWithLabels}
             userEmail={authState.user?.email}
             onBack={() => handleChangeView("dashboard")}
           />
@@ -892,7 +893,7 @@ export default function App() {
         {view === "budgets" && (
           <BudgetsScreen
             categories={categories}
-            transactions={transactions}
+            transactions={transactionsWithLabels}
             userEmail={authState.user?.email}
           />
         )}
@@ -906,6 +907,10 @@ export default function App() {
             onCreateTransaction={handleCreateTransaction}
             loading={loading}
           />
+        )}
+
+        {view === "recurring" && (
+          <RecurringScreen userEmail={authState.user?.email} />
         )}
 
         {view === "accounts" && <AccountsScreen userEmail={authState.user?.email} />}

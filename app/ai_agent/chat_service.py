@@ -4,7 +4,7 @@ import json
 from datetime import date as DateType
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.auth.models import User
+from app.core.auth_context import RequestUser
 from app.finance import service as finance_service
 from app.finance import schemas as finance_schemas
 
@@ -77,7 +77,7 @@ def get_gemini_response(prompt: str) -> dict:
             "intent": "network_error"
         }
 
-def answer_chat(db: Session, current_user: User, text: str) -> dict:
+def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
     """
     Hàm entry-point cho Router.
     """

@@ -5,7 +5,8 @@ const primaryViews = [
   { key: "dashboard", label: "nav.dashboard" },
   { key: "transactions", label: "nav.transactions" },
   { key: "reports", label: "nav.reports" },
-  { key: "budgets", label: "nav.budgets" }
+  { key: "budgets", label: "nav.budgets" },
+  { key: "recurring", label: "nav.recurring" }
 ];
 
 const getInitial = (user) => {

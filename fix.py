@@ -1,0 +1,45 @@
+import os
+
+file_path = "c:/Users/NHU/finance-ai-system/docker-compose.yml"
+with open(file_path, "r") as f:
+    content = f.read()
+
+kafka_block = """  kafka:
+    image: bitnami/kafka:3.5
+    container_name: finance-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_BROKER_ID=1
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_NODE_ID=1
+    volumes:
+      - kafka_data:/bitnami/kafka
+    profiles: ["micro"]
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: finance-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+    profiles: ["micro"]
+
+"""
+
+if "kafka:" not in content:
+    content = content.replace("  n8n:", kafka_block + "  n8n:")
+
+with open(file_path, "w") as f:
+    f.write(content)

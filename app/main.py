@@ -8,6 +8,8 @@ from app.auth.router import router as auth_router
 from app.database import Base, engine, ensure_schema
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
+from app.planning import models as planning_models
+from app.recurring import models as recurring_models
 from app.notifications.router import router as notifications_router
 from app.realtime import socket_app
 
@@ -31,8 +33,8 @@ def healthcheck():
 
 @app.on_event("startup")
 def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
     ensure_schema()
+    Base.metadata.create_all(bind=engine)
     _ = (
         auth_models.User,
         auth_models.EmailOTP,
@@ -41,17 +43,22 @@ def on_startup() -> None:
         finance_models.Tag,
         finance_models.Account,
         finance_models.Transfer,
-        finance_models.Debt,
-        finance_models.Budget,
-        finance_models.Goal,
-        finance_models.Subscription,
-        finance_models.Reminder,
+        recurring_models.Debt,
+        planning_models.Budget,
+        planning_models.Goal,
+        recurring_models.Subscription,
+        recurring_models.Reminder,
         ai_models.ChatMessage,
     )
 
 
+from app.planning.router import router as planning_router
+from app.recurring.router import router as recurring_router
+
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
+app.include_router(planning_router, prefix="/api/v1")
+app.include_router(recurring_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 

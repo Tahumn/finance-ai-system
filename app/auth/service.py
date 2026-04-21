@@ -146,7 +146,11 @@ def authenticate_user(db: Session, user: schemas.UserLogin) -> schemas.Token:
             detail="Email is not verified",
         )
 
-    token = create_access_token(subject=str(db_user.id), email=db_user.email)
+    token = create_access_token(
+        subject=str(db_user.id),
+        email=db_user.email,
+        is_active=bool(db_user.is_active),
+    )
     return schemas.Token(access_token=token)
 
 

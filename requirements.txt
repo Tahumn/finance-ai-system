@@ -17,3 +17,6 @@ numpy
 scipy
 google-generativeai
 httpx
+redis
+rq
+aiokafka

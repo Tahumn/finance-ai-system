@@ -22,22 +22,21 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from app.auth.models import User
+from app.core.auth_context import RequestUser
 from app.core.config import settings
 from app.finance import schemas as finance_schemas
 from app.finance import service as finance_service
 from app.ai_agent.models import ChatMessage
 from app.finance.models import (
     Account,
-    Budget,
     Category,
-    Debt,
-    Goal,
-    Reminder,
-    Subscription,
     Transaction,
     Transfer,
 )
+from app.planning.models import Budget, Goal
+from app.planning import service as planning_service
+from app.recurring.models import Subscription, Debt, Reminder
+
 
 try:
     import cv2  # type: ignore
@@ -65,6 +64,13 @@ def _extract_json(text: str) -> dict:
             except json.JSONDecodeError:
                 pass
     return {}
+
+
+def _json_serializable(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, (DateType, datetime)):
+        return obj.isoformat()
+    return str(obj)
 
 
 
@@ -603,7 +609,7 @@ def _split_transaction_segments(text: str) -> list[str]:
 
 def _extract_multi_transactions(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     text: str,
 ) -> list[dict]:
     segments = _split_transaction_segments(text)
@@ -835,7 +841,18 @@ def _parse_amount(text: str) -> float | None:
 
     if not matches:
         return None
-    return max(matches)
+        
+    # Improved logic: If matches are close to each other in the text, 
+    # they might be part of the same amount (e.g., "9 triệu 500k")
+    # For now, if there's a big unit followed by a smaller one, sum them.
+    # A simple but effective heuristic for common Vietnamese patterns:
+    if len(matches) >= 2:
+        # Sort by value descending to handle "9 triệu 500k"
+        # We only sum if the total "looks" like a single amount phrase
+        # But to be safe and simple: if they are all within the same short string, sum them.
+        return sum(matches)
+        
+    return matches[0]
 
 
 def _amount_has_unit(text: str) -> bool:
@@ -1198,7 +1215,7 @@ def _peek_pending_action(user_id: int) -> _PendingAction | None:
 
 def _sum_by_category(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     start_date: DateType,
     end_date: DateType,
     category_id: int | None,
@@ -1218,7 +1235,7 @@ def _sum_by_category(
 
 def _count_transactions(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     start_date: DateType,
     end_date: DateType,
     category_id: int | None,
@@ -1238,14 +1255,14 @@ def _count_transactions(
 
 def _list_transactions(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     start_date: DateType | None = None,
     end_date: DateType | None = None,
     category_id: int | None = None,
     transaction_type: str | None = None,
     account_id: int | None = None,
 ) -> list[Transaction]:
-    return finance_service.list_transactions(
+    items, _ = finance_service.list_transactions(
         db,
         current_user,
         start_date=start_date,
@@ -1254,6 +1271,7 @@ def _list_transactions(
         transaction_type=transaction_type,
         account_id=account_id,
     )
+    return items
 
 
 def _filter_transactions_by_keywords(transactions: list[Transaction], keywords: list[str]) -> list[Transaction]:
@@ -1269,7 +1287,7 @@ def _filter_transactions_by_keywords(transactions: list[Transaction], keywords: 
 
 def _find_transactions_by_text(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     text: str,
     start_date: DateType,
     end_date: DateType,
@@ -1291,7 +1309,7 @@ def _find_transactions_by_text(
 
 def _sum_expense_by_keywords(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     start_date: DateType,
     end_date: DateType,
     keywords: list[str],
@@ -1305,7 +1323,7 @@ def _sum_expense_by_keywords(
 
 
 def _latest_transaction(
-    db: Session, current_user: User, transaction_type: str | None = None
+    db: Session, current_user: RequestUser, transaction_type: str | None = None
 ) -> Transaction | None:
     items = _list_transactions(db, current_user, None, None, None, transaction_type)
     return items[0] if items else None
@@ -1368,7 +1386,7 @@ def _detect_spend_anomalies(transactions: list[Transaction]) -> list[tuple[DateT
     candidates.sort(key=lambda item: item[1], reverse=True)
     return candidates[:10]
 
-def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomalies: list[tuple[DateType, float]], all_txs: list[Transaction]) -> dict[str, dict]:
+def _analyze_anomalies_with_ai(db: Session, current_user: RequestUser, candidate_anomalies: list[tuple[DateType, float]], all_txs: list[Transaction]) -> dict[str, dict]:
     """Sử dụng AI để phân tích tính hợp lý của các điểm bất thường thống kê."""
     if not candidate_anomalies or not settings.gemini_api_key or genai is None:
         return {}
@@ -1401,7 +1419,7 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
         return {}
 
 
-def get_spending_anomalies(db: Session, current_user: User) -> list[finance_schemas.AnomalyAlert]:
+def get_spending_anomalies(db: Session, current_user: RequestUser) -> list[finance_schemas.AnomalyAlert]:
     # Lấy giao dịch 30 ngày qua để tính trung bình
     today = DateType.today()
     start = today - timedelta(days=30)
@@ -1442,7 +1460,7 @@ def get_spending_anomalies(db: Session, current_user: User) -> list[finance_sche
 
 def _get_user_financial_context(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     months: int = 6,
 ) -> dict:
     """Build a financial context dict for AI prompts."""
@@ -1472,7 +1490,7 @@ def _get_user_financial_context(
 
 def get_spending_forecast(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
 ) -> dict:
     """Phân tích và dự đoán xu hướng chi tiêu 3 tháng tới bằng Gemini."""
     from calendar import month_abbr
@@ -1568,7 +1586,7 @@ def get_spending_forecast(
 
 def get_savings_suggestions(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
 ) -> dict:
     """Gợi ý kế hoạch tiết kiệm dựa trên phân tích chi tiêu thực tế bằng Gemini."""
     ctx = _get_user_financial_context(db, current_user, months=3)
@@ -1673,7 +1691,7 @@ def get_savings_suggestions(
 
 def _resolve_category(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     category_name: str | None,
     auto_create: bool,
 ) -> tuple[int | None, str | None]:
@@ -1699,7 +1717,7 @@ def _resolve_category(
 
 
 def _get_category_by_name(
-    db: Session, current_user: User, category_name: str
+    db: Session, current_user: RequestUser, category_name: str
 ) -> Category | None:
     normalized_target = _normalize_text(category_name)
     items = (
@@ -1713,7 +1731,7 @@ def _get_category_by_name(
     return None
 
 
-def _list_accounts(db: Session, current_user: User) -> list[Account]:
+def _list_accounts(db: Session, current_user: RequestUser) -> list[Account]:
     return (
         db.query(Account)
         .filter(Account.user_id == current_user.id)
@@ -1722,7 +1740,7 @@ def _list_accounts(db: Session, current_user: User) -> list[Account]:
     )
 
 
-def _get_account_by_name(db: Session, current_user: User, account_name: str) -> Account | None:
+def _get_account_by_name(db: Session, current_user: RequestUser, account_name: str) -> Account | None:
     normalized_target = _normalize_text(account_name)
     items = _list_accounts(db, current_user)
     for item in items:
@@ -1732,7 +1750,7 @@ def _get_account_by_name(db: Session, current_user: User, account_name: str) -> 
 
 
 def _ensure_account(
-    db: Session, current_user: User, account_name: str, currency: str = "VND"
+    db: Session, current_user: RequestUser, account_name: str, currency: str = "VND"
 ) -> Account:
     existing = _get_account_by_name(db, current_user, account_name)
     if existing:
@@ -1750,7 +1768,7 @@ def _ensure_account(
 
 
 def _get_subscription_by_name(
-    db: Session, current_user: User, name: str
+    db: Session, current_user: RequestUser, name: str
 ) -> Subscription | None:
     normalized_target = _normalize_text(name)
     items = (
@@ -1766,7 +1784,7 @@ def _get_subscription_by_name(
 
 def _sum_transfers(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     account_id: int,
     start_date: DateType | None = None,
     end_date: DateType | None = None,
@@ -1790,7 +1808,7 @@ def _sum_transfers(
 
 def parse_transaction_text(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     text: str,
     default_date: DateType | None = None,
     auto_create_category: bool = True,
@@ -1892,6 +1910,8 @@ Nhiệm vụ: Phân tích câu nói của người dùng để trích xuất Ý 
 2. PHÂN LOẠI Ý ĐỊNH (STRATEGIC INTENT)
 - SAVE_EXPENSE: Lưu giao dịch chi tiền.
 - SAVE_INCOME: Lưu giao dịch nhận tiền (Lương, thưởng, quà...).
+- UPDATE_TRANSACTION: Khi người dùng muốn sửa, đính chính giao dịch vừa nhập (ví dụ: 'nhầm rồi', 'sửa lại là...', 'phải là...').
+- DELETE_TRANSACTION: Khi người dùng muốn xóa giao dịch vừa nhập hoặc một giao dịch cụ thể.
 - QUERY_HISTORY: Truy vấn lịch sử (Tổng chi, liệt kê giao dịch).
 - CHECK_BUDGET: Kiểm tra ngân sách (Còn bao nhiêu tiền cho Ăn uống?).
 - ANOMALY_DETECTION: Cảnh báo bất thường.
@@ -1916,6 +1936,8 @@ User: 'Hôm qua đi chợ hết hai trăm rưỡi' -> {"intent": "SAVE_EXPENSE",
 User: 'Mới nhận lương 20 củ' -> {"intent": "SAVE_INCOME", "data": {"amount": 20000000, "category": "Lương", "note": "nhận lương", "date": "today"}, "friendly_response": "Chúc mừng bạn! Đã cộng 20.000.000đ tiền Lương vào tài khoản."}
 User: 'Vừa trả tiền điện 500k' -> {"intent": "SAVE_EXPENSE", "data": {"amount": 500000, "category": "Hóa đơn", "note": "tiền điện", "date": "today"}, "friendly_response": "Ghi nhận 500.000đ tiền điện. Đừng quên tiết kiệm điện nhé!"}
 User: 'Cà phê với bạn hết 45' -> {"intent": "SAVE_EXPENSE", "data": {"amount": 45000, "category": "Ăn uống", "note": "cà phê", "date": "today"}, "friendly_response": "Đã lưu 45.000đ tiền cà phê."}
+User: 'Nhầm rồi, chỉ có 40k thôi' -> {"intent": "UPDATE_TRANSACTION", "data": {"amount": 40000}, "friendly_response": "Đã sửa lại số tiền thành 40.000đ cho bạn."}
+User: 'Xóa giao dịch đó đi' -> {"intent": "DELETE_TRANSACTION", "data": {}, "friendly_response": "Đã xóa giao dịch vừa rồi theo yêu cầu của bạn."}
 
 Hãy luôn trả về JSON sạch, không kèm markdown."""
 
@@ -1943,6 +1965,91 @@ Hãy luôn trả về JSON sạch, không kèm markdown."""
     except Exception as e:
         print(f"Gemini Chat Error: {e}")
         return None
+
+def _critic_verify_intent(db: Session, text: str, current_intent: str, current_data: dict, history: list[ChatMessage], current_user: RequestUser) -> dict:
+    """A secondary 'Critic' agent that reviews the first agent's decision against context."""
+    if genai is None or not settings.gemini_api_key:
+        return {"intent": current_intent, "data": current_data}
+
+    # Get the absolute latest transaction for deep context
+    last_tx = _latest_transaction(db, current_user)
+    last_tx_context = ""
+    if last_tx:
+        type_vn = "Thu nhập" if last_tx.transaction_type == "income" else "Chi tiêu"
+        last_tx_context = (
+            f"\nGiao dich vua thuc hien truoc do:\n"
+            f"- Loai: {type_vn}\n"
+            f"- So tien: {last_tx.amount:,.0f} VND\n"
+            f"- Ghi chu: {last_tx.description}\n"
+            f"- Danh muc: {last_tx.category.name if last_tx.category else 'Chua phan loai'}\n"
+        )
+
+    try:
+        # Prepare brief history summary for context (ensure chronological order)
+        history_summary = ""
+        if history:
+            history_summary = "Lich su chat gan day (tu cu den moi):\n"
+            # history is [Newest, ..., Oldest], we want [Older, Oldest, Newest] for the AI
+            recent = history[:5] # Get 5 newest
+            recent.reverse()     # Chronological: [Oldest, ..., Newest]
+            for msg in recent:
+                role_label = "Bot" if msg.role in ["bot", "assistant"] else "User"
+                history_summary += f"- {role_label}: {msg.content}\n"
+
+        # Safely serialize data with dates
+        safe_data = json.dumps(current_data, default=_json_serializable)
+
+        system_instruction = f"""Ban la 'AI Reviewer' chuyen kiem soat chat luong cho he thong tai chinh.
+Nhiem vu: Xem xet ket qua cua 'Extractor Agent' va lich su chat de dam bao phan loai Y dinh (Intent) dung ngu canh.
+
+Dac biet chu y:
+1. Neu nguoi dung dung tu 'nham', 'sai', 'sua', 'chinh', 'phai la'... -> Hau het la UPDATE_TRANSACTION hoac DELETE_TRANSACTION.
+2. Neu truoc do Bot vua ghi nhan 1 giao dich, ma bay gio nguoi dung noi 1 con so khac -> Co the ho dang sua loi vua nhap.
+
+Extractor Agent vua tra ve:
+- Intent hien tai: {current_intent}
+- Data hien tai: {safe_data}
+
+{last_tx_context}
+{history_summary}
+
+Tin nhan moi nhat cua User: "{text}"
+
+Yeu cau:
+- Neu thay Intent hien tai sai ngu canh (VD: User muon sua nhung Extractor lai ghi nhan moi), hay sua lai Intent thanh UPDATE_TRANSACTION hoac phu hop hon.
+- Neu thay dung, hay giu nguyen.
+
+Tra ve DUY NHAT JSON:
+{{
+  "intent": "string",
+  "data": {{ ... }},
+  "reason": "Ly do thay doi (neu co)"
+}}"""
+        genai.configure(api_key=settings.gemini_api_key)
+        model_name = os.environ.get("GEMINI_MODEL_NAME") or "gemini-1.5-flash"
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=system_instruction
+        )
+        response = model.generate_content(
+            "Hay kiem tra va tra ve ket qua JSON.",
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json"
+            )
+        )
+        if not response or not response.text:
+            return {"intent": current_intent, "data": current_data}
+            
+        validated = _extract_json(response.text)
+        if validated and validated.get("intent"):
+            if validated["intent"] != current_intent:
+                print(f"🤖 Critic Agent: Da sua intent tu {current_intent} sang {validated['intent']}. Ly do: {validated.get('reason')}")
+            return validated
+        return {"intent": current_intent, "data": current_data}
+    except Exception as e:
+        print(f"Critic Agent Error: {e}")
+        return {"intent": current_intent, "data": current_data}
+
 
 
 def _call_gemini_freeform(text: str) -> str | None:
@@ -1992,7 +2099,7 @@ def _infer_fallback_range(text: str) -> str:
 
 def _fallback_chat_intent_payload(
     db: Session,
-    current_user: User,
+    current_user: RequestUser,
     text: str,
 ) -> dict:
     normalized = _normalize_text(text)
@@ -2054,7 +2161,7 @@ def _fallback_chat_intent_payload(
     }
 
 
-def answer_chat(db: Session, current_user: User, text: str) -> dict:
+def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
     multi = _extract_multi_transactions(db, current_user, text)
     if multi:
         created = []
@@ -2104,6 +2211,30 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     data = llm_resp.get("data", {})
     friendly = llm_resp.get("friendly_response", "Da nhan thong tin.")
 
+    # [HEURISTIC FOR CORRECTIONS]
+    # If text contains correction keywords, strongly suggest UPDATE_TRANSACTION
+    normalized_text = _normalize_text(text)
+    correction_keywords = ("nham", "sai", "sua lai", "phai la", "chinh lai", "doi lai")
+    if any(kw in normalized_text for kw in correction_keywords):
+        if intent in ("SAVE_EXPENSE", "SAVE_INCOME", "UNKNOWN"):
+            intent = "UPDATE_TRANSACTION"
+
+    # [CRITIC LAYER] Verify intent with context
+    history = get_chat_history(db, current_user, limit=5)
+    validated = _critic_verify_intent(db, text, intent, data, history, current_user)
+    
+    # If Critic changed the intent, we might need a better friendly response
+    old_intent = intent
+    if validated["intent"] != intent:
+        intent = validated["intent"]
+        data = validated.get("data", data)
+        # Generate a more context-aware response if updated by critic
+        if intent == "UPDATE_TRANSACTION":
+            friendly = "Minh da hieu! Da cap nhat lai thong tin chinh xac cho ban."
+        elif intent == "DELETE_TRANSACTION":
+            friendly = "Da ro! Minh se xoa giao dich vua nhap cho ban."
+
+
     heuristic = parse_transaction_text(
         db,
         current_user,
@@ -2122,7 +2253,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     elif data.get("date"):
         data.pop("date", None)
 
-    if heuristic_amount is not None and intent not in ("QUERY_HISTORY", "CHECK_BUDGET", "ANOMALY_DETECTION"):
+    if heuristic_amount is not None and intent not in ("QUERY_HISTORY", "CHECK_BUDGET", "ANOMALY_DETECTION", "UPDATE_TRANSACTION", "DELETE_TRANSACTION"):
         if _has_income_keyword(text) and not _has_expense_keyword(text):
             intent = "SAVE_INCOME"
         elif _has_expense_keyword(text) and not _has_income_keyword(text):
@@ -2183,6 +2314,73 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         _persist_chat_messages(db, current_user, text, response)
         return response
 
+    if intent == "UPDATE_TRANSACTION":
+        tx = _latest_transaction(db, current_user)
+        if not tx:
+            return {
+                "answer": "Minh khong tim thay giao dich nao gan day de chinh sua.",
+                "intent": "not_found",
+                "start_date": None,
+                "end_date": None,
+                "category_name": None,
+                "total": None,
+            }
+        
+        amount = _coerce_amount(data.get("amount"))
+        cat_name = data.get("category")
+        update_data = {}
+        if amount:
+            update_data["amount"] = amount
+        if cat_name:
+            cat_id, _ = _resolve_category(db, current_user, cat_name, True)
+            update_data["category_id"] = cat_id
+        if data.get("note"):
+            update_data["description"] = data["note"]
+        if data.get("date"):
+            update_data["date"] = _coerce_date_value(data["date"])
+            
+        updated_tx = finance_service.update_transaction(
+            db, current_user, tx.id, finance_schemas.TransactionUpdate(**update_data)
+        )
+        
+        # Craft a very friendly response for update
+        update_msg = f"Da hieu! Minh da cap nhat giao dich '{tx.description}' tu {tx.amount:,.0f}đ thanh {updated_tx.amount:,.0f}đ cho ban nhe."
+        
+        response = {
+            "answer": update_msg,
+            "intent": "update_transaction",
+            "start_date": updated_tx.date,
+            "end_date": updated_tx.date,
+            "category_name": None,
+            "total": updated_tx.amount,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
+    if intent == "DELETE_TRANSACTION":
+        tx = _latest_transaction(db, current_user)
+        if not tx:
+            return {
+                "answer": "Minh khong tim thay giao dich nao de xoa.",
+                "intent": "not_found",
+                "start_date": None,
+                "end_date": None,
+                "category_name": None,
+                "total": None,
+            }
+        
+        finance_service.delete_transaction(db, current_user, tx.id)
+        response = {
+            "answer": friendly,
+            "intent": "delete_transaction",
+            "start_date": None,
+            "end_date": None,
+            "category_name": None,
+            "total": None,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
     if intent == "QUERY_HISTORY":
         range_v = data.get("range", "current_month")
         today = DateType.today()
@@ -2215,15 +2413,45 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
     if intent == "CHECK_BUDGET":
         cat_name = data.get("category")
-        if not cat_name:
-            return {
-                "answer": "Ban muon kiem tra ngan sach cho danh muc nao?",
-                "intent": "ask_category",
+        is_all = not cat_name or _normalize_text(cat_name) in ["tat ca", "het", "danh sach"]
+        
+        if is_all:
+            budgets = planning_service.list_budgets(db, current_user)
+            if not budgets:
+                return {
+                    "answer": "Ban chua thiet lap ngan sach nao. Hay tao moi trong muc Ke hoach nhe!",
+                    "intent": "budget_list_empty",
+                    "start_date": None,
+                    "end_date": None,
+                    "category_name": None,
+                    "total": None,
+                }
+            
+            summary_lines = []
+            for b in budgets:
+                today = DateType.today()
+                s, e = _month_range_for_date(today)
+                # Calculate spent for all categories in this budget
+                cat_ids = (b.category_ids or "").split(",")
+                spent = 0
+                for cid in cat_ids:
+                    if not cid.isdigit(): continue
+                    spent += _sum_by_category(db, current_user, s, e, int(cid), "expense")
+                
+                percent = (spent / b.amount * 100) if b.amount > 0 else 0
+                name = b.name or "Ngan sach chung"
+                summary_lines.append(f"- {name}: {spent:,.0f}/{b.amount:,.0f} VND ({percent:.1f}%)")
+            
+            response = {
+                "answer": f"Day la danh sach ngan sach cua ban thang nay:\n" + "\n".join(summary_lines),
+                "intent": "budget_list",
                 "start_date": None,
                 "end_date": None,
                 "category_name": None,
                 "total": None,
             }
+            _persist_chat_messages(db, current_user, text, response)
+            return response
 
         cat = _get_category_by_name(db, current_user, cat_name)
         if not cat:
@@ -2242,7 +2470,8 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
         budget_obj = (
             db.query(Budget)
-            .filter(Budget.user_id == current_user.id, Budget.category_id == cat.id)
+            .filter(Budget.user_id == current_user.id)
+            .filter(Budget.category_ids.like(f"%{cat.id}%"))
             .first()
         )
         if budget_obj:
@@ -2251,7 +2480,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
             response = {
                 "answer": (
                     f"{friendly}\n"
-                    f"- Ngan sach: {budget_obj.amount:,.0f} VND\n"
+                    f"- Ngan sach {cat.name}: {budget_obj.amount:,.0f} VND\n"
                     f"- Da chi: {spent:,.0f} VND ({percent:.1f}%)\n"
                     f"- Con lai: {remain:,.0f} VND"
                 ),
@@ -2328,7 +2557,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     return response
 
 
-def _persist_chat_messages(db: Session, current_user: User, user_text: str, response: dict) -> None:
+def _persist_chat_messages(db: Session, current_user: RequestUser, user_text: str, response: dict) -> None:
     if not user_text:
         return
     try:
@@ -2352,7 +2581,7 @@ def _persist_chat_messages(db: Session, current_user: User, user_text: str, resp
         db.rollback()
 
 
-def get_chat_history(db: Session, current_user: User, limit: int = 50) -> list[ChatMessage]:
+def get_chat_history(db: Session, current_user: RequestUser, limit: int = 50) -> list[ChatMessage]:
     items = (
         db.query(ChatMessage)
         .filter(ChatMessage.user_id == current_user.id)

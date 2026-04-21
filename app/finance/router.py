@@ -4,9 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.auth_context import RequestUser, get_request_user
 from app.finance import schemas, service
-from app.auth.models import User
-from app.auth.service import get_current_user
 from app.database import get_db
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 def create_category(
     payload: schemas.CategoryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.create_category(db, current_user, payload)
 
@@ -24,7 +23,7 @@ def create_category(
 @router.get("/categories", response_model=list[schemas.CategoryRead])
 def list_categories(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.list_categories(db, current_user)
 
@@ -33,7 +32,7 @@ def list_categories(
 def create_tag(
     payload: schemas.TagCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.create_tag(db, current_user, payload)
 
@@ -41,7 +40,7 @@ def create_tag(
 @router.get("/tags", response_model=list[schemas.TagRead])
 def list_tags(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.list_tags(db, current_user)
 
@@ -51,7 +50,7 @@ def update_tag(
     tag_id: int,
     payload: schemas.TagUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.update_tag(db, current_user, tag_id, payload)
 
@@ -60,7 +59,7 @@ def update_tag(
 def delete_tag(
     tag_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     service.delete_tag(db, current_user, tag_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -70,7 +69,7 @@ def delete_tag(
 def create_transaction(
     payload: schemas.TransactionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.create_transaction(db, current_user, payload)
 
@@ -84,7 +83,7 @@ def list_transactions(
     limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     items, total = service.list_transactions(
         db,
@@ -109,7 +108,7 @@ def update_transaction(
     transaction_id: int,
     payload: schemas.TransactionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.update_transaction(db, current_user, transaction_id, payload)
 
@@ -118,7 +117,7 @@ def update_transaction(
 def delete_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     service.delete_transaction(db, current_user, transaction_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -129,7 +128,7 @@ def report_summary(
     start_date: date | None = None,
     end_date: date | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.get_summary(db, current_user, start_date=start_date, end_date=end_date)
 
@@ -140,7 +139,7 @@ def report_category_breakdown(
     end_date: date | None = None,
     transaction_type: str = "expense",
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.get_category_breakdown(
         db, current_user, start_date=start_date, end_date=end_date, transaction_type=transaction_type
@@ -151,7 +150,7 @@ def report_category_breakdown(
 def report_chart(
     limit_months: int = 6,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: RequestUser = Depends(get_request_user),
 ):
     return service.get_chart_data(db, current_user, limit_months=limit_months)
 

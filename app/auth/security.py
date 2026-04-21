@@ -17,10 +17,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str, email: str) -> str:
+def create_access_token(subject: str, email: str, is_active: bool = True) -> str:
     expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
     expires_at = datetime.now(timezone.utc) + expires_delta
-    payload = {"sub": subject, "email": email, "exp": expires_at}
+    payload = {"sub": subject, "email": email, "is_active": is_active, "exp": expires_at}
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 

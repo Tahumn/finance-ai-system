@@ -3,6 +3,7 @@ import { colorFor, onColor } from "../../utils/colors.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
 import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
+import * as api from "../../api/planning.js";
 
 const emptyForm = () => ({
   name: "",
@@ -13,8 +14,6 @@ const emptyForm = () => ({
   endDate: "",
   threshold: "80"
 });
-
-const storageKey = (email) => `finance_local_budgets:${email || "guest"}`;
 
 const daysBetween = (from, to) => {
   const start = new Date(from);
@@ -33,13 +32,14 @@ const estimatePeriodDays = (plan) => {
 };
 
 const computeSpent = (plan, transactions) => {
+  const catIds = (plan.category_ids || "").split(",").filter(Boolean);
   return transactions
     .filter((item) => item.transaction_type === "expense")
     .filter((item) =>
-      !plan.categoryIds.length ? true : plan.categoryIds.includes(String(item.category_id))
+      !catIds.length ? true : catIds.includes(String(item.category_id))
     )
-    .filter((item) => (plan.startDate ? item.date >= plan.startDate : true))
-    .filter((item) => (plan.endDate ? item.date <= plan.endDate : true))
+    .filter((item) => (plan.start_date ? item.date >= plan.start_date : true))
+    .filter((item) => (plan.end_date ? item.date <= plan.end_date : true))
     .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 };
 
@@ -47,6 +47,8 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
   const [form, setForm] = useState(emptyForm);
   const [plans, setPlans] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   const categoryPrefs = useMemo(() => getCategoryPrefs(userEmail), [userEmail]);
   const categoryMap = useMemo(() => {
     const map = {};
@@ -56,31 +58,34 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
     return map;
   }, [categories]);
 
-  useEffect(() => {
-    const raw = localStorage.getItem(storageKey(userEmail));
-    if (!raw) {
-      setPlans([]);
-      return;
-    }
+  const loadPlans = async () => {
+    setLoading(true);
     try {
-      setPlans(JSON.parse(raw));
-    } catch {
-      setPlans([]);
+      const data = await api.listBudgets();
+      setPlans(data);
+    } catch (err) {
+      console.error("Failed to load budgets", err);
+    } finally {
+      setLoading(false);
     }
-  }, [userEmail]);
+  };
 
   useEffect(() => {
-    localStorage.setItem(storageKey(userEmail), JSON.stringify(plans));
-  }, [plans, userEmail]);
+    loadPlans();
+  }, []);
 
   const plansWithStats = useMemo(() => {
     return plans.map((plan) => {
       const spent = computeSpent(plan, transactions);
       const budget = Number(plan.amount) || 0;
       const progress = budget > 0 ? spent / budget : 0;
-      const periodDays = estimatePeriodDays(plan);
-      const elapsedDays = plan.startDate
-        ? Math.max(1, Math.min(periodDays, daysBetween(plan.startDate, toInputDate(new Date()))))
+      const periodDays = estimatePeriodDays({
+        startDate: plan.start_date,
+        endDate: plan.end_date,
+        cycle: plan.cycle
+      });
+      const elapsedDays = plan.start_date
+        ? Math.max(1, Math.min(periodDays, daysBetween(plan.start_date, toInputDate(new Date()))))
         : Math.ceil(periodDays / 2);
       const forecast = elapsedDays > 0 ? (spent / elapsedDays) * periodDays : spent;
       return {
@@ -94,60 +99,72 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
     });
   }, [plans, transactions]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const amount = parseNumberInput(form.amount);
     const threshold = Number(form.threshold);
     if (!form.name.trim()) return;
     if (!(amount > 0)) return;
-    if (!(threshold > 0 && threshold <= 100)) return;
+    
+    setLoading(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        category_ids: form.categoryIds.join(","),
+        amount,
+        cycle: form.cycle,
+        start_date: form.startDate || null,
+        end_date: form.endDate || null,
+        threshold
+      };
 
-    const payload = {
-      id: editingId || `plan-${Date.now()}`,
-      name: form.name.trim(),
-      categoryIds: form.categoryIds,
-      amount,
-      cycle: form.cycle,
-      startDate: form.startDate || "",
-      endDate: form.endDate || "",
-      threshold,
-      status: "active"
-    };
-
-    setPlans((current) => {
-      if (!editingId) return [payload, ...current];
-      return current.map((plan) => (plan.id === editingId ? { ...plan, ...payload } : plan));
-    });
-
-    setForm(emptyForm());
-    setEditingId(null);
-  };
-
-  const updateStatus = (planId, status) => {
-    setPlans((current) =>
-      current.map((plan) => (plan.id === planId ? { ...plan, status } : plan))
-    );
-  };
-
-  const removePlan = (planId) => {
-    setPlans((current) => current.filter((plan) => plan.id !== planId));
-    if (editingId === planId) {
-      setEditingId(null);
+      if (editingId) {
+        await api.updateBudget(editingId, payload);
+      } else {
+        await api.createBudget(payload);
+      }
+      
       setForm(emptyForm());
+      setEditingId(null);
+      await loadPlans();
+    } catch (err) {
+      alert(t("common.error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateStatus = async (planId, status) => {
+    try {
+      await api.updateBudget(planId, { status });
+      await loadPlans();
+    } catch (err) {
+      alert(t("common.error"));
+    }
+  };
+
+  const removePlan = async (planId) => {
+    if (!window.confirm(t("budgets.action.delete") + "?")) return;
+    try {
+      await api.deleteBudget(planId);
+      await loadPlans();
+    } catch (err) {
+      alert(t("common.error"));
     }
   };
 
   const startEdit = (plan) => {
     setEditingId(plan.id);
     setForm({
-      name: plan.name,
-      categoryIds: plan.categoryIds,
+      name: plan.name || "",
+      categoryIds: (plan.category_ids || "").split(",").filter(Boolean),
       amount: formatNumberInput(plan.amount),
-      cycle: plan.cycle,
-      startDate: plan.startDate,
-      endDate: plan.endDate,
-      threshold: String(plan.threshold)
+      cycle: plan.cycle || "monthly",
+      startDate: plan.start_date || "",
+      endDate: plan.end_date || "",
+      threshold: String(plan.threshold || 80)
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const toggleCategory = (categoryId) => {
@@ -228,8 +245,8 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
             </div>
             <small className="hint">
               {form.categoryIds.length
-                ? t("budgets.form.categories_selected", { count: form.categoryIds.length }, `${form.categoryIds.length} danh mục đã chọn`)
-                : t("budgets.form.categories_hint", null, "Chọn 1 hoặc nhiều danh mục")}
+                ? `${form.categoryIds.length} danh mục đã chọn`
+                : "Chọn 1 hoặc nhiều danh mục"}
             </small>
           </label>
 
@@ -267,7 +284,7 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
             />
           </label>
           <label className="field">
-            <span>{t("budgets.form.threshold")}</span>
+            <span>{t("budgets.form.threshold")} (%)</span>
             <input
               type="number"
               min="1"
@@ -293,91 +310,89 @@ export default function BudgetsScreen({ categories, transactions, userEmail }) {
               {t("budgets.action.cancel_edit")}
             </button>
           )}
-          <button className="primary" type="submit">
-            {editingId ? t("budgets.action.save_changes") : t("budgets.action.create")}
+          <button className="primary" type="submit" disabled={loading}>
+            {loading ? "..." : (editingId ? t("budgets.action.save_changes") : t("budgets.action.create"))}
           </button>
         </div>
       </form>
 
-      <div className="list">
+      <div className="list" style={{ marginTop: 30 }}>
         {!plansWithStats.length ? (
-          <p className="empty">{t("budgets.empty")}</p>
+          <p className="empty">{loading ? "Đang tải..." : "Chưa có kế hoạch ngân sách. Tạo mới để theo dõi tiến độ."}</p>
         ) : (
           plansWithStats.map((plan) => {
-            const planCategories = plan.categoryIds
+            const planCategories = (plan.category_ids || "")
+              .split(",")
               .map((id) => categoryMap[id])
               .filter(Boolean);
             return (
-              <article key={plan.id} className="item-row budget-card">
-                <div className="panel-header">
+              <article key={plan.id} className="item-row budget-card" style={{ padding: '20px', marginBottom: '15px' }}>
+                <div className="panel-header" style={{ marginBottom: '15px' }}>
                   <div>
-                    <h4>{plan.name}</h4>
-                    <p className="budget-meta">
+                    <h4 style={{ fontSize: '1.2rem', margin: '0 0 5px 0' }}>{plan.name || "Kế hoạch không tên"}</h4>
+                    <p className="budget-meta" style={{ opacity: 0.8 }}>
                       {currency(plan.spent)} / {currency(plan.budget)} -{" "}
                       {t(`budgets.cycle.${plan.cycle === "one-time" ? "one_time" : plan.cycle}`)}
                     </p>
-                    <div className="budget-tags">
+                    <div className="budget-tags" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
                       {planCategories.length ? (
                         planCategories.map((label) => (
-                          <span key={label} className="budget-tag">
-                            <span className="dot" style={{ background: colorFor(label, userEmail) }} />
+                          <span key={label} className="budget-tag" style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
+                            <span className="dot" style={{ background: colorFor(label, userEmail), display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', marginRight: '5px' }} />
                             {label}
                           </span>
                         ))
                       ) : (
-                        <span className="budget-tag muted">
-                          {t("budgets.tag.all", null, "Tất cả danh mục")}
-                        </span>
+                        <span className="budget-tag muted">Tất cả danh mục</span>
                       )}
                     </div>
                   </div>
-                  <span className={`badge ${plan.status === "paused" ? "muted" : ""}`}>
-                    {t(`budgets.status.${plan.status}`)}
-                  </span>
+                  <div style={{ textAlign: 'right' }}>
+                     <span className={`badge ${plan.status === "paused" ? "muted" : "success"}`} style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem' }}>
+                        {t(`budgets.status.${plan.status || 'active'}`)}
+                      </span>
+                  </div>
                 </div>
 
-              <div className="progress">
-                <span
-                  style={{ width: `${Math.min(100, Math.max(2, plan.progress * 100))}%` }}
-                  className={plan.progress >= 1 ? "danger" : ""}
-                />
-              </div>
+                <div className="progress" style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden', marginBottom: '15px' }}>
+                  <div
+                    style={{ 
+                      width: `${Math.min(100, Math.max(2, plan.progress * 100))}%`,
+                      height: '100%',
+                      background: plan.progress >= 1 ? '#ff4d4d' : (plan.progress >= (plan.threshold/100) ? '#ffcc00' : '#00cc66'),
+                      transition: 'width 0.5s ease'
+                    }}
+                  />
+                </div>
 
-              <div className="budget-insights">
-                <p>
-                  {t("budgets.forecast")}: <strong>{currency(plan.forecast)}</strong>
-                </p>
-                <p>
-                  {plan.willOverrun
-                    ? t("budgets.ai_overrun")
-                    : t("budgets.ai_ok")}
-                </p>
-              </div>
+                <div className="budget-insights" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '20px' }}>
+                  <p>
+                    {t("budgets.forecast")}: <strong>{currency(plan.forecast)}</strong>
+                  </p>
+                  <p style={{ color: plan.willOverrun ? '#ff4d4d' : '#00cc66', fontWeight: 'bold' }}>
+                    {plan.willOverrun
+                      ? "⚠️ Dự báo sẽ vượt định mức"
+                      : "✅ Đang trong tầm kiểm soát"}
+                  </p>
+                </div>
 
-              <div className="row-actions">
-                <button className="ghost" type="button" onClick={() => startEdit(plan)}>
-                  {t("budgets.action.edit")}
-                </button>
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={() =>
-                    updateStatus(plan.id, plan.status === "paused" ? "active" : "paused")
-                  }
-                >
-                  {plan.status === "paused" ? t("budgets.action.resume") : t("budgets.action.pause")}
-                </button>
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={() => updateStatus(plan.id, "completed")}
-                >
-                  {t("budgets.action.complete")}
-                </button>
-                <button className="ghost danger" type="button" onClick={() => removePlan(plan.id)}>
-                  {t("budgets.action.delete")}
-                </button>
-              </div>
+                <div className="row-actions" style={{ display: 'flex', gap: '10px' }}>
+                  <button className="ghost" type="button" onClick={() => startEdit(plan)}>
+                    Sửa
+                  </button>
+                  <button
+                    className="ghost"
+                    type="button"
+                    onClick={() =>
+                      updateStatus(plan.id, plan.status === "paused" ? "active" : "paused")
+                    }
+                  >
+                    {plan.status === "paused" ? "Tiếp tục" : "Tạm dừng"}
+                  </button>
+                  <button className="ghost danger" type="button" onClick={() => removePlan(plan.id)}>
+                    Xóa
+                  </button>
+                </div>
               </article>
             );
           })
