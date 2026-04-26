@@ -1,3 +1,192 @@
+# services:
+#   api:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: finance-api
+#     env_file:
+#       - .env
+#     environment:
+#       # Keep sane defaults for local compose; `.env` can override.
+#       DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
+#       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-long-random-string}
+#       ALGORITHM: ${ALGORITHM:-HS256}
+#       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+#       DIFY_API_BASE: ${DIFY_API_BASE:-http://dify-api:5001/v1}
+#       DIFY_API_KEY: ${DIFY_API_KEY:-}
+#       DIFY_FORCE_JSON: ${DIFY_FORCE_JSON:-true}
+#       DEV_RETURN_OTP: ${DEV_RETURN_OTP:-true}
+#       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+#       SMTP_PORT: ${SMTP_PORT:-465}
+#       SMTP_USER: ${SMTP_USER:-}
+#       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+#       SMTP_FROM: ${SMTP_FROM:-}
+#       OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
+#     ports:
+#       - "8000:8000"
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+
+#   seed:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: finance-seed
+#     env_file:
+#       - .env
+#     environment:
+#       DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
+#       SEED_MONTHS: ${SEED_MONTHS:-6}
+#       SEED_FORCE: ${SEED_FORCE:-true}
+#       SEED_CREATE_DEMO_USER: ${SEED_CREATE_DEMO_USER:-true}
+#       SEED_EMAIL: ${SEED_EMAIL:-}
+#       SEED_DEMO_EMAIL: ${SEED_DEMO_EMAIL:-demo@financeai.local}
+#       SEED_DEMO_USERNAME: ${SEED_DEMO_USERNAME:-demo_finance}
+#       SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-Demo@1234}
+#       SEED_BASE: ${SEED_BASE:-20260412}
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     command: ["sh", "/app/app/scripts/docker_seed.sh"]
+#     restart: "no"
+#     profiles: ["tools"]
+
+#   postgres:
+#     image: postgres:16-alpine
+#     container_name: finance-postgres
+#     environment:
+#       POSTGRES_DB: finance_db
+#       POSTGRES_USER: finance_user
+#       POSTGRES_PASSWORD: finance_pass
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_db"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 20
+
+#   n8n:
+#     image: n8nio/n8n:latest
+#     container_name: finance-n8n
+#     ports:
+#       - "5678:5678"
+#     environment:
+#       N8N_PORT: 5678
+#       GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
+#     volumes:
+#       - n8n_data:/home/node/.n8n
+#     depends_on:
+#       api:
+#         condition: service_started
+
+#   dify-api:
+#     image: langgenius/dify-api:latest
+#     container_name: dify-api
+#     environment:
+#       MODE: api
+#       LOG_LEVEL: INFO
+#       SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+#       DB_HOST: dify-db
+#       DB_PORT: 5432
+#       DB_USERNAME: dify
+#       DB_PASSWORD: dify
+#       DB_DATABASE: dify
+#       REDIS_HOST: dify-redis
+#       REDIS_PORT: 6379
+#       REDIS_PASSWORD: ""
+#       CELERY_BROKER_URL: redis://dify-redis:6379/0
+#       CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+#       STORAGE_TYPE: local
+#       STORAGE_LOCAL_PATH: /app/api/storage
+#       SERVICE_URL: http://localhost:5001
+#       CONSOLE_URL: http://localhost:5002
+#     volumes:
+#       - dify_api_storage:/app/api/storage
+#     ports:
+#       - "5001:5001"
+#     depends_on:
+#       dify-db:
+#         condition: service_started
+#       dify-redis:
+#         condition: service_started
+#       dify-sandbox:
+#         condition: service_started
+
+#   dify-worker:
+#     image: langgenius/dify-api:latest
+#     container_name: dify-worker
+#     environment:
+#       MODE: worker
+#       LOG_LEVEL: INFO
+#       SECRET_KEY: ${DIFY_SECRET_KEY:-replace-with-strong-secret}
+#       DB_HOST: dify-db
+#       DB_PORT: 5432
+#       DB_USERNAME: dify
+#       DB_PASSWORD: dify
+#       DB_DATABASE: dify
+#       REDIS_HOST: dify-redis
+#       REDIS_PORT: 6379
+#       REDIS_PASSWORD: ""
+#       CELERY_BROKER_URL: redis://dify-redis:6379/0
+#       CELERY_RESULT_BACKEND: redis://dify-redis:6379/0
+#       STORAGE_TYPE: local
+#       STORAGE_LOCAL_PATH: /app/api/storage
+#       SERVICE_URL: http://dify-api:5001
+#       CONSOLE_URL: http://dify-web:3000
+#     volumes:
+#       - dify_api_storage:/app/api/storage
+#     depends_on:
+#       dify-api:
+#         condition: service_started
+#       dify-db:
+#         condition: service_started
+#       dify-redis:
+#         condition: service_started
+
+#   dify-web:
+#     image: langgenius/dify-web:latest
+#     container_name: dify-web
+#     environment:
+#       NEXT_PUBLIC_API_BASE_URL: http://localhost:5001
+#     ports:
+#       - "5002:3000"
+#     depends_on:
+#       dify-api:
+#         condition: service_started
+
+#   dify-db:
+#     image: postgres:15-alpine
+#     container_name: dify-postgres
+#     environment:
+#       POSTGRES_USER: dify
+#       POSTGRES_PASSWORD: dify
+#       POSTGRES_DB: dify
+#     volumes:
+#       - dify_db_data:/var/lib/postgresql/data
+
+#   dify-redis:
+#     image: redis:7-alpine
+#     container_name: dify-redis
+#     volumes:
+#       - dify_redis_data:/data
+
+#   dify-sandbox:
+#     image: langgenius/dify-sandbox:latest
+#     container_name: dify-sandbox
+
+# volumes:
+#   postgres_data:
+#   n8n_data:
+#   dify_db_data:
+#   dify_redis_data:
+#   dify_api_storage:
+# ------------------------------------------
+
+
 services:
   api:
     build:
@@ -7,7 +196,7 @@ services:
     env_file:
       - .env
     environment:
-      # Keep sane defaults for local compose; `.env` can override.
+      # Keep sane defaults for local compose; .env can override.
       DB_URL: postgresql://finance_user:finance_pass@postgres:5432/finance_db
       SECRET_KEY: ${SECRET_KEY:-change-this-to-a-long-random-string}
       ALGORITHM: ${ALGORITHM:-HS256}

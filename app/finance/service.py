@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.models import User
 from app.finance import schemas
-from app.finance.models import Account, Budget, Category, Goal, SavingsGoal, Tag, Transaction
+from app.finance.models import Account, Bill, Budget, Category, Goal, SavingsGoal, Tag, Transaction
 from app.realtime import emit_finance_update
 
 DEFAULT_INCOME_CATEGORIES = ["Lương", "Freelance", "Đầu tư", "Thưởng", "Hoàn tiền", "Thu nhập khác"]
@@ -315,6 +315,25 @@ def delete_tag(db: Session, current_user: User, tag_id: int) -> None:
     emit_finance_update("tags", current_user.id, tag_id)
 
 
+def _adjust_account_balance(db: Session, account_id: int | None, amount: float, tx_type: str, reverse: bool = False) -> None:
+    if account_id is None:
+        return
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if not account:
+        return
+
+    # If reverse is True, we are undoing a transaction (e.g. deleting or before updating)
+    factor = -1 if reverse else 1
+    
+    if tx_type == "income":
+        account.balance += (amount * factor)
+    else:
+        account.balance -= (amount * factor)
+    
+    db.add(account)
+    db.flush()
+
+
 def create_transaction(db: Session, current_user: User, payload: schemas.TransactionCreate) -> Transaction:
     _validate_category_ownership(db, current_user, payload.category_id)
     _validate_account_ownership(db, current_user, payload.account_id)
@@ -333,9 +352,12 @@ def create_transaction(db: Session, current_user: User, payload: schemas.Transac
         db_tx.tags = tags
 
     db.add(db_tx)
+    _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type)
     db.commit()
     db.refresh(db_tx)
     emit_finance_update("transactions", current_user.id, db_tx.id)
+    if db_tx.account_id:
+        emit_finance_update("accounts", current_user.id, db_tx.account_id)
     return db_tx
 
 
@@ -403,15 +425,24 @@ def update_transaction(
         db_tx.tags = _load_tags(db, current_user, data["tag_ids"])
         data.pop("tag_ids", None)
 
+    # Reverse old balance
+    _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type, reverse=True)
+
     for key, value in data.items():
         if key == "description" and isinstance(value, str):
             setattr(db_tx, key, value.strip())
         else:
             setattr(db_tx, key, value)
 
+    db.flush()
+    # Apply new balance
+    _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type)
+
     db.commit()
     db.refresh(db_tx)
     emit_finance_update("transactions", current_user.id, db_tx.id)
+    if db_tx.account_id:
+        emit_finance_update("accounts", current_user.id, db_tx.account_id)
     return db_tx
 
 
@@ -419,9 +450,16 @@ def delete_transaction(db: Session, current_user: User, transaction_id: int) -> 
     db_tx = db.query(Transaction).filter(Transaction.id == transaction_id, Transaction.user_id == current_user.id).first()
     if not db_tx:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found")
+    
+    # Reverse balance before delete
+    _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type, reverse=True)
+    account_id = db_tx.account_id
+
     db.delete(db_tx)
     db.commit()
     emit_finance_update("transactions", current_user.id, transaction_id)
+    if account_id:
+        emit_finance_update("accounts", current_user.id, account_id)
 
 
 def _base_query(db: Session, current_user: User, start_date: date | None, end_date: date | None):
@@ -1087,3 +1125,80 @@ def bootstrap_finance_data(db: Session, current_user: User) -> dict:
         "created_tags": created_tags,
         "created_budgets": created_budgets,
     }
+
+
+def create_bill(db: Session, current_user: User, payload: schemas.BillCreate) -> Bill:
+    _validate_category_ownership(db, current_user, payload.category_id)
+    _validate_account_ownership(db, current_user, payload.account_id)
+    
+    item = Bill(
+        user_id=current_user.id,
+        merchant=payload.merchant,
+        date=payload.date,
+        category_id=payload.category_id,
+        account_id=payload.account_id,
+        total_amount=payload.total_amount,
+        vat_amount=payload.vat_amount,
+        ocr_confidence=payload.ocr_confidence,
+        status=payload.status,
+        bill_number=payload.bill_number,
+        items=[i.model_dump() for i in payload.items] if payload.items else None
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    emit_finance_update("bills", current_user.id, item.id)
+    return item
+
+
+def list_bills(
+    db: Session,
+    current_user: User,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    status: str | None = None,
+) -> list[Bill]:
+    query = db.query(Bill).filter(Bill.user_id == current_user.id)
+    if start_date:
+        query = query.filter(Bill.date >= start_date)
+    if end_date:
+        query = query.filter(Bill.date <= end_date)
+    if status:
+        query = query.filter(Bill.status == status)
+    
+    return query.order_by(Bill.date.desc().nulls_last(), Bill.id.desc()).all()
+
+
+def get_bill(db: Session, current_user: User, bill_id: int) -> Bill:
+    item = db.query(Bill).filter(Bill.id == bill_id, Bill.user_id == current_user.id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
+    return item
+
+
+def update_bill(db: Session, current_user: User, bill_id: int, payload: schemas.BillUpdate) -> Bill:
+    item = get_bill(db, current_user, bill_id)
+    data = payload.model_dump(exclude_unset=True)
+    
+    if "category_id" in data:
+        _validate_category_ownership(db, current_user, data["category_id"])
+    if "account_id" in data:
+        _validate_account_ownership(db, current_user, data["account_id"])
+        
+    for key, value in data.items():
+        if key == "items" and value is not None:
+            setattr(item, key, [i.model_dump() for i in value])
+        elif key != "items":
+            setattr(item, key, value)
+            
+    db.commit()
+    db.refresh(item)
+    emit_finance_update("bills", current_user.id, item.id)
+    return item
+
+
+def delete_bill(db: Session, current_user: User, bill_id: int) -> None:
+    item = get_bill(db, current_user, bill_id)
+    db.delete(item)
+    db.commit()
+    emit_finance_update("bills", current_user.id, bill_id)

@@ -42,7 +42,8 @@ export default function GoalsScreen({
   onCreateGoal,
   onUpdateGoal,
   onDeleteGoal,
-  loading
+  loading,
+  aiSuggestions = []
 }) {
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
@@ -247,7 +248,11 @@ export default function GoalsScreen({
               <div className="goal-panel-head">
                 <h3>Gợi ý từ AI</h3>
               </div>
-              <p>Bạn đang tiến gần mục tiêu lớn nhất. Tăng đóng góp thêm 10% để rút ngắn thời gian hoàn thành.</p>
+              <div className="ai-tips-list">
+                {aiSuggestions.length ? aiSuggestions.slice(0, 3).map((tip, idx) => (
+                  <p key={idx} className="ai-tip-text">✨ {tip.suggestion || tip.message || tip}</p>
+                )) : <p>Bạn đang tiến gần mục tiêu lớn nhất. Tăng đóng góp thêm 10% để rút ngắn thời gian hoàn thành.</p>}
+              </div>
             </article>
           </aside>
         ) : (
@@ -269,7 +274,11 @@ export default function GoalsScreen({
               <div className="goal-panel-head">
                 <h3>Gợi ý từ AI</h3>
               </div>
-              <p>Bạn đang tiến gần mục tiêu lớn nhất. Tăng đóng góp thêm 10% để rút ngắn thời gian hoàn thành.</p>
+              <div className="ai-tips-list">
+                {aiSuggestions.length ? aiSuggestions.slice(0, 3).map((tip, idx) => (
+                  <p key={idx} className="ai-tip-text">✨ {tip.suggestion || tip.message || tip}</p>
+                )) : <p>Bạn đang tiến gần mục tiêu lớn nhất. Tăng đóng góp thêm 10% để rút ngắn thời gian hoàn thành.</p>}
+              </div>
             </article>
           </div>
         )}

@@ -310,3 +310,52 @@ def delete_savings_goal(
 ):
     service.delete_savings_goal(db, current_user, goal_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/bills", response_model=list[schemas.BillRead])
+def list_bills(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    bill_status: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_bills(db, current_user, start_date=start_date, end_date=end_date, status=bill_status)
+
+
+@router.post("/bills", response_model=schemas.BillRead, status_code=status.HTTP_201_CREATED)
+def create_bill(
+    payload: schemas.BillCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_bill(db, current_user, payload)
+
+
+@router.get("/bills/{bill_id}", response_model=schemas.BillRead)
+def get_bill(
+    bill_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.get_bill(db, current_user, bill_id)
+
+
+@router.put("/bills/{bill_id}", response_model=schemas.BillRead)
+def update_bill(
+    bill_id: int,
+    payload: schemas.BillUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.update_bill(db, current_user, bill_id, payload)
+
+
+@router.delete("/bills/{bill_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_bill(
+    bill_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    service.delete_bill(db, current_user, bill_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

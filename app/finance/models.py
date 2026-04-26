@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 
@@ -58,6 +59,7 @@ class Account(Base):
     color = Column(String, nullable=False, default="#ec4899")
     currency = Column(String, nullable=False, default="VND")
     opening_balance = Column(Float, nullable=False, default=0.0)
+    credit_limit = Column(Float, nullable=True, default=0.0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
 
@@ -177,4 +179,21 @@ class Reminder(Base):
     label = Column(String, nullable=False)
     remind_date = Column(Date, nullable=True)
     channel = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class Bill(Base):
+    __tablename__ = "bills"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    merchant = Column(String, nullable=True)
+    date = Column(Date, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    total_amount = Column(Float, nullable=False, default=0.0)
+    vat_amount = Column(Float, nullable=True, default=0.0)
+    ocr_confidence = Column(Float, nullable=True)
+    status = Column(String, nullable=False, default="pending")
+    bill_number = Column(String, nullable=True)
+    items = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

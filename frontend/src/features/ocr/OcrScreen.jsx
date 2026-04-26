@@ -60,7 +60,8 @@ export default function OcrScreen({
   onCreateTag,
   onCreateTransaction,
   loading,
-  embedded = false
+  embedded = false,
+  onClose
 }) {
   const paymentTagCandidates = useMemo(
     () =>
@@ -268,6 +269,11 @@ export default function OcrScreen({
       {!embedded && (
         <div className="panel-header">
           <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
+          {onClose && (
+            <button type="button" className="ocr-close-btn" onClick={onClose} aria-label="Đóng">
+              ×
+            </button>
+          )}
         </div>
       )}
 

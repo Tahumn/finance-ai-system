@@ -209,7 +209,8 @@ export default function DashboardScreen({
   onGoReports,
   rangePreset,
   onSelectPreset,
-  userEmail
+  userEmail,
+  savingsGoals = [],
 }) {
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
@@ -485,8 +486,46 @@ export default function DashboardScreen({
               <h3>Mục tiêu tiết kiệm</h3>
               <button className="ghost-link" onClick={() => {}}>Xem tất cả</button>
             </div>
-            <div className="dp-body">
-              <p className="empty">Chưa có dữ liệu mục tiêu tiết kiệm.</p>
+            <div className="dp-body dp-goals-body">
+              {savingsGoals.length ? savingsGoals.slice(0, 4).map((goal, idx) => {
+                const pct = Math.min(100, Math.round(
+                  ((goal.saved_amount || goal.current_amount || 0) / Math.max(1, goal.target_amount || 1)) * 100
+                ));
+                const saved = goal.saved_amount || goal.current_amount || 0;
+                const goalColors = [
+                  {grad: "linear-gradient(90deg,#8b5cf6,#c084fc)", light: "#f3e8ff", text: "#7c3aed"},
+                  {grad: "linear-gradient(90deg,#3b82f6,#60a5fa)", light: "#dbeafe", text: "#2563eb"},
+                  {grad: "linear-gradient(90deg,#10b981,#34d399)", light: "#d1fae5", text: "#059669"},
+                  {grad: "linear-gradient(90deg,#f59e0b,#fcd34d)", light: "#fef3c7", text: "#d97706"},
+                ];
+                const clr = goalColors[idx % goalColors.length];
+                return (
+                  <div key={goal.id} className="dp-goal-card">
+                    <div className="dp-goal-top">
+                      <div className="dp-goal-icon" style={{background: clr.light, color: clr.text}}>
+                        🎯
+                      </div>
+                      <div className="dp-goal-info">
+                        <span className="dp-goal-name">{goal.name}</span>
+                        <span className="dp-goal-pct" style={{color: clr.text}}>{pct}%</span>
+                      </div>
+                    </div>
+                    <div className="dp-goal-bar-bg">
+                      <div className="dp-goal-bar-fill" style={{width: `${pct}%`, background: clr.grad}} />
+                    </div>
+                    <div className="dp-goal-amounts">
+                      <span style={{color: clr.text, fontWeight: 600}}>{currency(saved)}</span>
+                      <span style={{color: "#94a3b8"}}>/ {currency(goal.target_amount)}</span>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="dp-goals-empty">
+                  <div style={{fontSize: "2rem", marginBottom: "8px"}}>🎯</div>
+                  <p>Chưa có mục tiêu tiết kiệm nào.</p>
+                  <p style={{fontSize: "12px", color: "#94a3b8"}}>Thiết lập mục tiêu để theo dõi tiến độ tiết kiệm của bạn.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

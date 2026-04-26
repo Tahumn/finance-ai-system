@@ -251,6 +251,7 @@ class AccountCreate(BaseModel):
     provider: str | None = None
     last4: str | None = Field(default=None, max_length=4)
     balance: float = Field(default=0.0)
+    credit_limit: float | None = Field(default=None)
     note: str | None = None
     color: str = Field(default="#ec4899")
     currency: str = Field(default="VND")
@@ -262,6 +263,7 @@ class AccountUpdate(BaseModel):
     provider: str | None = None
     last4: str | None = Field(default=None, max_length=4)
     balance: float | None = None
+    credit_limit: float | None = None
     note: str | None = None
     color: str | None = None
     currency: str | None = None
@@ -275,9 +277,57 @@ class AccountRead(BaseModel):
     provider: str | None
     last4: str | None
     balance: float
+    credit_limit: float | None
     note: str | None
     color: str
     currency: str
+    created_at: DateTimeType
+
+    model_config = ConfigDict(from_attributes=True)
+
+class BillItem(BaseModel):
+    name: str
+    amount: float
+
+class BillCreate(BaseModel):
+    merchant: str | None = None
+    date: DateType | None = None
+    category_id: int | None = None
+    account_id: int | None = None
+    total_amount: float = Field(default=0.0)
+    vat_amount: float = Field(default=0.0)
+    ocr_confidence: float | None = None
+    status: str = "pending"
+    bill_number: str | None = None
+    items: list[BillItem] | None = None
+
+class BillUpdate(BaseModel):
+    merchant: str | None = None
+    date: DateType | None = None
+    category_id: int | None = None
+    account_id: int | None = None
+    total_amount: float | None = None
+    vat_amount: float | None = None
+    ocr_confidence: float | None = None
+    status: str | None = None
+    bill_number: str | None = None
+    items: list[BillItem] | None = None
+
+class BillRead(BaseModel):
+    id: int
+    user_id: int
+    merchant: str | None
+    date: DateType | None
+    category_id: int | None
+    category: str | None = None
+    account_id: int | None
+    account_name: str | None = None
+    total_amount: float
+    vat_amount: float
+    ocr_confidence: float | None
+    status: str
+    bill_number: str | None
+    items: list[BillItem] | None
     created_at: DateTimeType
 
     model_config = ConfigDict(from_attributes=True)

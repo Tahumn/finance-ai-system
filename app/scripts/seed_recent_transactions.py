@@ -9,7 +9,7 @@ from sqlalchemy import func
 from app.auth.models import User
 from app.auth.security import hash_password
 from app.database import SessionLocal
-from app.finance.models import Account, Budget, Category, Goal, SavingsGoal, Tag, Transaction
+from app.finance.models import Account, Bill, Budget, Category, Goal, SavingsGoal, Tag, Transaction
 
 
 INCOME_CATEGORIES = [
@@ -229,26 +229,111 @@ def ensure_tags(db, user_id: int):
 
 
 def ensure_account(db, user_id: int):
-    account = (
-        db.query(Account)
-        .filter(Account.user_id == user_id, Account.name == "Ví chính")
-        .first()
-    )
+    # Dữ liệu mẫu giống UI
+    account_defs = [
+        {
+            "name": "Tài khoản thanh toán",
+            "type": "bank",
+            "provider": "Vietcombank",
+            "last4": "1234",
+            "balance": 56250000.0,
+            "color": "#3b82f6",
+            "note": "Tài khoản nhận lương",
+        },
+        {
+            "name": "Ví tiền mặt",
+            "type": "cash",
+            "provider": "Tiền mặt",
+            "last4": None,
+            "balance": 12800000.0,
+            "color": "#22c55e",
+            "note": "Tiền mặt mang theo người",
+        },
+        {
+            "name": "Ví MoMo",
+            "type": "wallet",
+            "provider": "MoMo",
+            "last4": "5678",
+            "balance": 8600000.0,
+            "color": "#d946ef",
+            "note": "Dùng thanh toán ăn uống",
+        },
+        {
+            "name": "Thẻ Visa cá nhân",
+            "type": "credit",
+            "provider": "Vietcombank",
+            "last4": "4321",
+            "balance": 25000000.0,
+            "color": "#f59e0b",
+            "note": "Thẻ tín dụng mua sắm",
+            "credit_limit": 50000000.0,
+        },
+    ]
 
-    if account:
-        return account
+    main_account = None
+    for acc_data in account_defs:
+        account = (
+            db.query(Account)
+            .filter(Account.user_id == user_id, Account.name == acc_data["name"])
+            .first()
+        )
+        if not account:
+            account = Account(
+                user_id=user_id,
+                name=acc_data["name"],
+                account_type=acc_data["type"],
+                provider=acc_data["provider"],
+                last4=acc_data["last4"],
+                opening_balance=acc_data["balance"],
+                color=acc_data["color"],
+                note=acc_data["note"],
+                credit_limit=acc_data.get("credit_limit"),
+                currency="VND",
+            )
+            db.add(account)
+            db.flush()
+            
+        if acc_data["name"] == "Tài khoản thanh toán":
+            main_account = account
+            
+    return main_account
 
-    account = Account(
-        user_id=user_id,
-        name="Ví chính",
-        currency="VND",
-        opening_balance=15_000_000,
-    )
 
-    db.add(account)
+def ensure_bills(db, user_id: int, categories: dict[str, Category], accounts: list[Account], today: date):
+    # Dữ liệu mẫu giống UI
+    bill_defs = [
+        {"merchant": "Circle K", "date": today, "category": "Ăn uống", "total": 78000, "vat": 0, "ocr": 0.92, "status": "confirmed", "no": "CK260426-00123"},
+        {"merchant": "Highlands Coffee", "date": today - timedelta(days=1), "category": "Ăn uống", "total": 165000, "vat": 15000, "ocr": 0.95, "status": "confirmed", "no": "HL2504-998"},
+        {"merchant": "WinMart", "date": today - timedelta(days=2), "category": "Mua sắm", "total": 685000, "vat": 62273, "ocr": 0.86, "status": "pending", "no": "WM-2404-001"},
+        {"merchant": "Co.opmart", "date": today - timedelta(days=3), "category": "Mua sắm", "total": 1230000, "vat": 111818, "ocr": 0.93, "status": "confirmed", "no": "COOP-2304-X"},
+        {"merchant": "The Coffee House", "date": today - timedelta(days=4), "category": "Ăn uống", "total": 120000, "vat": 0, "ocr": 0.88, "status": "confirmed", "no": "TCH-22-ABC"},
+        {"merchant": "Guardian", "date": today - timedelta(days=5), "category": "Mua sắm", "total": 259000, "vat": 23545, "ocr": 0.91, "status": "confirmed", "no": "GD-21-XYZ"},
+        {"merchant": "Grab", "date": today - timedelta(days=6), "category": "Di chuyển", "total": 85000, "vat": 0, "ocr": 0.92, "status": "confirmed", "no": "GRAB-2004"},
+        {"merchant": "Shopee Express", "date": today - timedelta(days=7), "category": "Khác", "total": 37000, "vat": 0, "ocr": 0.85, "status": "error", "no": "SP-19-ERR"},
+    ]
+    
+    existing = db.query(Bill).filter(Bill.user_id == user_id).count()
+    if existing > 0:
+        return
+        
+    main_account = next((a for a in accounts if a.name == "Tài khoản thanh toán"), accounts[0])
+    
+    for b in bill_defs:
+        cat = categories.get(b["category"])
+        db.add(Bill(
+            user_id=user_id,
+            merchant=b["merchant"],
+            date=b["date"],
+            category_id=cat.id if cat else None,
+            account_id=main_account.id,
+            total_amount=b["total"],
+            vat_amount=b["vat"],
+            ocr_confidence=b["ocr"],
+            status=b["status"],
+            bill_number=b["no"],
+            items=[{"name": "Mặt hàng", "amount": b["total"]}]
+        ))
     db.flush()
-
-    return account
 
 
 def add_months_safe(src: date, months: int) -> date:
@@ -717,6 +802,7 @@ def seed_user_recent_transactions(
             )
             .delete(synchronize_session=False)
         )
+        db.query(Bill).filter(Bill.user_id == user.id).delete(synchronize_session=False)
         db.flush()
 
     categories = ensure_categories(db, user.id)
@@ -739,6 +825,9 @@ def seed_user_recent_transactions(
     )
     created_goals = ensure_savings_goals(db, user_id=user.id, force=force, today=today)
     created_goal_plans = ensure_savings_goal_plans(db, user_id=user.id, force=force, today=today)
+    
+    all_accounts = db.query(Account).filter(Account.user_id == user.id).all()
+    ensure_bills(db, user.id, categories, all_accounts, today)
 
     rows: list[Transaction] = []
 
@@ -904,7 +993,7 @@ def seed_user_recent_transactions(
             ),
         ]
 
-        for category_name, desc, amount, day, tx_tags in recurring_expenses:
+        for category_name, desc, amount, day, tags_list in recurring_expenses:
             tx_date = clamp_day(month.year, month.month, day)
 
             if tx_date <= today:
@@ -917,7 +1006,7 @@ def seed_user_recent_transactions(
                     amount=float(amount),
                     tx_type="expense",
                     tx_date=tx_date,
-                    tags=tx_tags,
+                    tags=tags_list,
                 )
 
         # Chi du lịch

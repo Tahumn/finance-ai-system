@@ -34,11 +34,25 @@ const SvgGear = ({ active }) => (
   </svg>
 );
 
+const SvgWallet = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+  </svg>
+);
+
+const SvgReceipt = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z"/>
+    <path d="M16 8H8M16 12H8M13 16H8"/>
+  </svg>
+);
+
 export default function BottomNav({ active, onChange }) {
   const tabs = useMemo(() => [
-    { key: "dashboard", label: "Tổng quan", Icon: SvgHome },
+    { key: "dashboard", label: "Tổng", Icon: SvgHome },
     { key: "transactions", label: "Giao dịch", Icon: SvgList },
-    { key: "budgets", label: "Ngân sách", Icon: SvgPieChart },
+    { key: "accounts", label: "Tài khoản", Icon: SvgWallet },
+    { key: "bills", label: "Hóa đơn", Icon: SvgReceipt },
     { key: "reports", label: "Báo cáo", Icon: SvgBarChart },
     { key: "settings", label: "Cài đặt", Icon: SvgGear }
   ], []);

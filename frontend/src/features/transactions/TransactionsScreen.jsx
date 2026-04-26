@@ -130,9 +130,12 @@ export default function TransactionsScreen({
   loading,
   onCreateFromText,
   onParseFromText,
+  accounts = [],
+  anomalies = [],
 }) {
   /* modals */
   const [activeModal, setActiveModal] = useState(null); // "add" | "ocr" | "edit" | "detail" | "dateRange"
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState(null);
   const [editingTx, setEditingTx] = useState(null);
 
@@ -216,33 +219,35 @@ export default function TransactionsScreen({
     setEditAmount(formatNumberInput(editingTx.amount));
   }, [editingTx]);
 
+  // Reset page when filters change
+  const resetPage = () => setCurrentPage(1);
+
   /* filtered + sorted transactions */
   const filtered = useMemo(() => {
     return transactions.filter((item) => {
       if (typeFilter && item.transaction_type !== typeFilter) return false;
-      if (categoryFilter && (item.categoryLabel || "Khác") !== categoryFilter) return false;
+      
+      if (categoryFilter) {
+        const itemCat = String(item.categoryLabel || "Khác").trim().toLowerCase();
+        const filterCat = String(categoryFilter).trim().toLowerCase();
+        if (itemCat !== filterCat) return false;
+      }
+
       if (searchText) {
         const q = searchText.toLowerCase();
         if (!item.description?.toLowerCase().includes(q)) return false;
       }
-      if (paymentFilter === "cash") {
-        return Array.isArray(item.tags) && item.tags.some((t) => t.name === "Tiền mặt");
+
+      if (paymentFilter !== "all") {
+        if (paymentFilter === "cash") {
+            return !item.account_id || (accounts.find(a => a.id === item.account_id)?.type === "cash");
+        }
+        return item.account_id === Number(paymentFilter);
       }
-      if (paymentFilter === "bank") {
-        return Array.isArray(item.tags) && item.tags.some((t) => t.name === "Ngân hàng");
-      }
-      if (paymentFilter === "ewallet") {
-        return (
-          Array.isArray(item.tags) &&
-          item.tags.some((t) => {
-            const lower = String(t.name || "").toLowerCase();
-            return lower.includes("ví") || lower.includes("momo");
-          })
-        );
-      }
+      
       return true;
     });
-  }, [transactions, typeFilter, categoryFilter, searchText, paymentFilter, filters.start, filters.end]);
+  }, [transactions, typeFilter, categoryFilter, searchText, paymentFilter, accounts]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -484,27 +489,42 @@ export default function TransactionsScreen({
                     })}
                  </div>
               </div>
+
+              {/* AI Insights Card - below category sidebar */}
+              {anomalies && anomalies.length > 0 && (
+                <div className="txd-ai-card">
+                  <div className="txd-ai-card-header">
+                    <span>✨</span>
+                    <h4>Gợi ý AI</h4>
+                    <span className="txd-ai-badge">Mới</span>
+                  </div>
+                  {anomalies.slice(0, 2).map((a, idx) => (
+                    <p key={idx} className="txd-ai-tip">• {a.message || a}</p>
+                  ))}
+                </div>
+              )}
            </div>
 
            {/* Right Column (List + Filters) */}
            <div className="txd-col-right">
               <div className="txd-filters-bar">
                  <div className="txd-pay-tabs">
-                   {[
-                     { value: "all", label: "Tất cả" },
-                     { value: "cash", label: "Tiền mặt" },
-                     { value: "bank", label: "Ngân hàng" },
-                     { value: "ewallet", label: "Ví điện tử" },
-                   ].map(t => (
-                     <button 
-                       key={t.value}
-                       className={`txd-pay-tab ${paymentFilter === t.value ? "active" : ""}`}
-                       onClick={() => setPaymentFilter(t.value)}
-                     >
-                       {t.label}
-                     </button>
-                   ))}
-                 </div>
+                    <button 
+                      className={`txd-pay-tab ${paymentFilter === "all" ? "active" : ""}`}
+                      onClick={() => setPaymentFilter("all")}
+                    >
+                      Tất cả
+                    </button>
+                    {accounts.map(acc => (
+                      <button 
+                        key={acc.id}
+                        className={`txd-pay-tab ${paymentFilter === String(acc.id) ? "active" : ""}`}
+                        onClick={() => setPaymentFilter(String(acc.id))}
+                      >
+                        {acc.name}
+                      </button>
+                    ))}
+                  </div>
                  <div className="txd-filter-selectors">
                     <div className="txd-fsel">
                        <span>Loại:</span>
@@ -542,7 +562,14 @@ export default function TransactionsScreen({
                  </div>
                  
                  <div className="txd-groups">
-                    {sortedGroups.map(([catName, data]) => {
+                    {(() => {
+                      const totalTx = sorted.length;
+                      const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
+                      const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
+                      const safePage = Math.min(currentPage, totalPages);
+                      const pagedGroups = sortedGroups.slice((safePage - 1) * CATS_PER_PAGE, safePage * CATS_PER_PAGE);
+                      return pagedGroups;
+                    })().map(([catName, data]) => {
                        const isExpanded = expandedGroups[catName] !== false; // Default Open
                        const meta = getCatMeta(catName);
                        return (
@@ -560,13 +587,10 @@ export default function TransactionsScreen({
                                    {data.items.slice(0, showAllGroups[catName] ? data.items.length : 4).map(tx => {
                                       const isIncome = tx.transaction_type === "income";
                                       const txMeta = getCatMeta(tx.categoryLabel || "Khác");
-                                      const isBank = (tx.tagLabels || []).some(t => String(t).toLowerCase().includes("ngân hàng"));
-                                      const isEWallet = (tx.tagLabels || []).some(t => String(t).toLowerCase().includes("ví") || String(t).toLowerCase().includes("momo"));
+                                      const acc = accounts.find(a => a.id === tx.account_id);
                                       
-                                      let sourceText = "Tiền mặt";
-                                      let sourceClass = "cash";
-                                      if (isBank) { sourceText = "Thẻ tín dụng"; sourceClass = "bank"; }
-                                      if (isEWallet) { sourceText = "Ví MoMo"; sourceClass = "ewallet"; }
+                                      let sourceText = acc ? acc.name : "Tiền mặt";
+                                      let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
                                       
                                       return (
                                         <div key={tx.id || tx.description} className="txd-list-row" onClick={() => setSelectedTx(tx)}>
@@ -596,25 +620,36 @@ export default function TransactionsScreen({
                           </div>
                        )
                     })}
-                 </div>
-              </div>
+                  </div>
+               </div>
 
-              <div className="txd-pagination-bar">
-                 <div className="txd-page-info">Hiển thị 1 – {Math.min(filtered.length, 10)} trong tổng số {filtered.length} giao dịch</div>
-                 <div className="txd-page-nums">
-                    <button className="txd-page-btn">{'<'}</button>
-                    <button className="txd-page-btn active">1</button>
-                    <button className="txd-page-btn">2</button>
-                    <button className="txd-page-btn">3</button>
-                    <button className="txd-page-btn">5</button>
-                    <button className="txd-page-btn">{'>'}</button>
-                 </div>
-                 <div className="txd-page-size">
-                    Hiển thị <select><option>10</option></select> giao dịch / trang
-                 </div>
-              </div>
-           </div>
+               {/* Pagination with real page numbers */}
+               {(() => {
+                 const totalTx = sorted.length;
+                 const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
+                 const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
+                 const safePage = Math.min(currentPage, totalPages);
+                 if (totalPages <= 1) return (
+                   <div className="txd-pagination-bar">
+                     <div className="txd-page-info">{filtered.length} giao dịch</div>
+                   </div>
+                 );
+                 const pageNums = Array.from({length: totalPages}, (_, i) => i + 1);
+                 return (
+                   <div className="txd-pagination-bar">
+                     <div className="txd-page-info">Trang {safePage} / {totalPages} &nbsp;·&nbsp; {filtered.length} giao dịch</div>
+                     <div className="txd-page-nums">
+                       <button className="txd-page-btn" disabled={safePage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>‹</button>
+                       {pageNums.map(n => (
+                         <button key={n} className={`txd-page-btn ${n === safePage ? "active" : ""}`} onClick={() => setCurrentPage(n)}>{n}</button>
+                       ))}
+                       <button className="txd-page-btn" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>›</button>
+                     </div>
+                   </div>
+                 );
+               })()}
         </div>
+      </div>
       </div>
     );
   };

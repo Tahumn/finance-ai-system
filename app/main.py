@@ -47,6 +47,7 @@ def on_startup() -> None:
         finance_models.SavingsGoal,
         finance_models.Subscription,
         finance_models.Reminder,
+        finance_models.Bill,
         ai_models.ChatMessage,
     )
 

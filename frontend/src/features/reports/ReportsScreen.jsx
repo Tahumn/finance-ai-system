@@ -90,8 +90,10 @@ export default function ReportsScreen({
   reportsOverview,
   userEmail,
   onBack,
+  savingsGoals = [],
 }) {
   const [activeTab, setActiveTab] = useState("30 ngày");
+  const [showAllSources, setShowAllSources] = useState(false);
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const overview = reportsOverview || {};
@@ -110,9 +112,10 @@ export default function ReportsScreen({
   const currentNet = Number(currentMonthly.income || summary?.balance || 0) - Number(currentMonthly.expense || 0);
   const prevNet = Number(prevMonthly.income || summary?.balance || 0) - Number(prevMonthly.expense || 0);
 
-  const currentSavingsRate = Number(currentMonthly.income || summary?.total_income || 0) > 0
-    ? Math.max(0, currentNet) / Number(currentMonthly.income || summary?.total_income || 1)
+  const currentSavingsRate = savingsGoals.length > 0 
+    ? savingsGoals.reduce((s, g) => s + (g.current_amount || 0), 0) / savingsGoals.reduce((s, g) => s + (g.target_amount || 1), 0)
     : 0;
+
   const prevSavingsRate = Number(prevMonthly.income || summary?.total_income || 0) > 0
     ? Math.max(0, prevNet) / Number(prevMonthly.income || summary?.total_income || 1)
     : 0;
@@ -325,9 +328,14 @@ export default function ReportsScreen({
               <div className="rpt-card">
                 <div className="rpt-card-header">
                   <h3>Phân bổ nguồn tiền</h3>
+                  {paymentBreakdown.length > 3 && (
+                    <button className="rpt-toggle-btn" onClick={() => setShowAllSources(!showAllSources)}>
+                      {showAllSources ? "∧ Thu gọn" : "∨ Xem thêm"}
+                    </button>
+                  )}
                 </div>
                 <div className="rpt-source-bars">
-                  {paymentBreakdown.length ? paymentBreakdown.map((item) => (
+                  {(showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).length ? (showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).map((item) => (
                     <div className="rpt-source-item" key={item.source}>
                       <div className="rpt-source-head">
                         <span>{item.source}</span>

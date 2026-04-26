@@ -39,9 +39,10 @@ import {
   updateTransaction,
   getChartData,
   getReportsOverview,
-  listSavingsGoals
+  listSavingsGoals,
+  listBills
 } from "./api/finance.js";
-import { createTransactionFromText, parseTransaction, getAnomalies } from "./api/ai.js";
+import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
 import TopBar from "./components/TopBar.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
@@ -169,6 +170,7 @@ export default function App() {
   const [budgets, setBudgets] = useState([]);
   const [savingsGoals, setSavingsGoals] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [bills, setBills] = useState([]);
   const [reportsOverview, setReportsOverview] = useState({
     daily_series: [],
     monthly_series: [],
@@ -179,6 +181,7 @@ export default function App() {
     goals: []
   });
   const [anomalies, setAnomalies] = useState([]);
+  const [savingsTips, setSavingsTips] = useState([]);
   const [filters, setFilters] = useState(defaultFilters());
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -514,8 +517,10 @@ export default function App() {
         chartData,
         budgetsData,
         accountsData,
+        billsData,
         goalsData,
         anomalyData,
+        tipsData,
         overviewData
       ] = await Promise.all([
         listCategories(),
@@ -527,8 +532,10 @@ export default function App() {
         getChartData({ limit_months: 6 }),
         listBudgets({ start_date: filters.start, end_date: filters.end }),
         listAccounts(),
+        listBills(),
         listSavingsGoals(),
         getAnomalies(),
+        getSavingsTips(),
         getReportsOverview({ start_date: filters.start, end_date: filters.end })
       ]);
       setCategories(cats);
@@ -541,6 +548,7 @@ export default function App() {
       setBudgets(Array.isArray(budgetsData) ? budgetsData : []);
       setAccounts(Array.isArray(accountsData) ? accountsData : []);
       setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
+      setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
       setReportsOverview(overviewData || {
         daily_series: [],
@@ -573,6 +581,31 @@ export default function App() {
       } else {
         setError(err.message || t("finance.error.load"));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMoreTransactions = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const currentCount = transactions.items.length;
+      const params = {
+        start_date: filters.start,
+        end_date: filters.end,
+        category_id: filters.categoryId || undefined,
+        transaction_type: filters.type || undefined,
+        limit: 20,
+        offset: currentCount
+      };
+      const moreTxs = await listTransactions(params);
+      setTransactions((prev) => ({
+        items: [...prev.items, ...moreTxs.items],
+        total: moreTxs.total
+      }));
+    } catch (err) {
+      console.error("Failed to load more transactions:", err);
     } finally {
       setLoading(false);
     }
@@ -999,11 +1032,13 @@ export default function App() {
             incomeBreakdown={incomeBreakdownWithShare}
             transactions={transactionsWithLabels}
             monthlySeries={monthlySeries}
+            anomalies={anomalies}
+            savingsGoals={savingsGoals}
             onViewTransactions={() => handleChangeView("transactions")}
             onGoOcr={() => handleChangeView("ocr")}
             onGoChat={() => handleChangeView("chat")}
-            onGoAddTransaction={() => handleChangeView("transactions")}
             onGoReports={() => handleChangeView("reports")}
+            onGoAddTransaction={() => {}}
             rangePreset={rangePreset}
             onSelectPreset={selectRangePreset}
             userEmail={authState.user?.email}
@@ -1014,9 +1049,13 @@ export default function App() {
           <TransactionsScreen
             transactions={transactionsWithLabels}
             totalCount={transactions.total}
+            hasMore={transactions.items.length < transactions.total}
+            onLoadMore={handleLoadMoreTransactions}
             categories={categories}
+            accounts={accounts}
             tags={tags}
             filters={filters}
+            anomalies={anomalies}
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
             onCreateFromText={handleCreateFromText}
@@ -1084,6 +1123,7 @@ export default function App() {
         {view === "goals" && (
           <GoalsScreen
             goals={savingsGoals}
+            aiSuggestions={savingsTips}
             onCreateGoal={handleCreateSavingsGoal}
             onUpdateGoal={handleUpdateSavingsGoal}
             onDeleteGoal={handleDeleteSavingsGoal}
@@ -1100,6 +1140,7 @@ export default function App() {
             onCreateTag={handleCreateTag}
             onCreateTransaction={handleCreateTransaction}
             loading={loading}
+            onClose={() => handleChangeView("dashboard")}
           />
         )}
 
@@ -1129,8 +1170,9 @@ export default function App() {
 
         {view === "bills" && (
           <BillsScreen
-            transactions={transactionsWithLabels}
-            categories={categories}
+            bills={bills}
+            loading={loading}
+            onGoOcr={() => handleChangeView("ocr")}
           />
         )}
       </main>

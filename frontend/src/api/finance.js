@@ -168,3 +168,12 @@ export const bootstrapFinance = async () => {
     throw err;
   }
 };
+
+export const listBills = async () => {
+  try {
+    return await request("/finance/bills");
+  } catch (err) {
+    if (err?.status === 404) return [];
+    throw err;
+  }
+};
