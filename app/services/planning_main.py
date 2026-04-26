@@ -15,10 +15,12 @@ def healthcheck():
 @app.on_event("startup")
 async def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    _ = (
-        planning_models.Budget,
-        planning_models.Goal,
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            planning_models.Budget.__table__,
+            planning_models.Goal.__table__,
+        ],
     )
     await consumer_manager.start()
 

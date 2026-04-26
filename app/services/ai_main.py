@@ -15,8 +15,12 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    _ = (ai_models.ChatMessage,)
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            ai_models.ChatMessage.__table__,
+        ],
+    )
 
 
 app.include_router(ai_router, prefix="/api/v1")

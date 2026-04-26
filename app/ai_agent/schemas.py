@@ -5,8 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.finance import schemas as finance_schemas
-
 
 class ParseTransactionRequest(BaseModel):
     text: str = Field(..., min_length=1, example="hom nay chi 50k an sang")
@@ -66,8 +64,17 @@ class OcrResponse(BaseModel):
     text: str = ""
 
 
+class AnomalyAlert(BaseModel):
+    id: str
+    date: DateType
+    amount: float
+    description: str
+    reason: str
+    severity: Literal["low", "medium", "high"]
+
+
 class AnomalyListResponse(BaseModel):
-    alerts: list[finance_schemas.AnomalyAlert]
+    alerts: list[AnomalyAlert]
 
 
 class ForecastPoint(BaseModel):

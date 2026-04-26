@@ -1,22 +1,22 @@
 # Finance AI System
 
-Backend monolith for Personal Finance management, built with FastAPI + PostgreSQL.
-The stack also includes n8n for workflow automation.
+Backend for Personal Finance management, built with FastAPI + PostgreSQL.
+The default Docker setup runs as microservices with a gateway and n8n automation.
 
 ## Run with Docker (Recommended)
 
 ```powershell
-docker compose up -d --build
+docker compose --profile micro up -d --build
 ```
 
 Services:
-- API: `http://localhost:8000`
-- Swagger: `http://localhost:8000/docs`
+- Gateway: `http://localhost:8005`
+- Gateway Swagger: `http://localhost:8005/docs`
 - n8n: `http://localhost:5678`
-- PostgreSQL: `localhost:5432`
+- PostgreSQL: `localhost:5431..5436`
 - Redis (queue): `localhost:6379`
 
-## Microservice-style (Optional)
+## Microservice-style
 
 Run separate containers for `auth`, `finance`, `notifications`, `ai`, `notifications-worker`, `redis` plus a lightweight gateway proxy:
 
@@ -39,7 +39,7 @@ DB ownership:
 - Auth -> `auth_db.auth_service`
 - Finance -> `finance_db.finance_service`
 - Notifications -> `notifications_db.notifications_service`
-- AI currently shares finance data (`finance_db.finance_service`) because AI features still query finance tables directly.
+- AI stores chat/AI state in `ai_db.ai_service` and calls Finance via internal HTTP APIs.
 
 If you are migrating from the old compose volume, re-init Postgres so the micro init script creates DB/schema:
 
@@ -78,7 +78,7 @@ GRANT ALL PRIVILEGES ON DATABASE finance_db TO finance_user;
 Alternative (recommended): start the bundled Postgres container only:
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d finance-postgres
 ```
 
 ## Run Frontend (Web/Mobile)
@@ -100,7 +100,7 @@ Mobile (LAN access for phones):
 npm run dev:mobile
 ```
 
-Open the app on your phone using `http://<LAN-IP>:5173`. The frontend will call the same API at `http://<LAN-IP>:8000/api/v1`.
+Open the app on your phone using `http://<LAN-IP>:5173`. The frontend will call the gateway API at `http://<LAN-IP>:8005/api/v1`.
 
 ## Seed 6-Month Demo Transactions
 
@@ -110,23 +110,17 @@ Create realistic income/expense data in DB (categories + tags + account + transa
 python -m app.scripts.seed_recent_transactions --months 6
 ```
 
-If you're running the stack with Docker, the most reliable way is to run the seed **inside** the API container (avoids Windows driver / port conflicts):
+If you're running the stack with Docker, the most reliable way is to run the dedicated seed container:
 
 ```powershell
-docker compose exec api python -m app.scripts.seed_recent_transactions --months 6
-```
-
-Or run a dedicated one-off seed container:
-
-```powershell
-docker compose --profile tools run --rm seed
+docker compose --profile micro --profile tools run --rm seed
 ```
 
 Seed a specific email (PowerShell):
 
 ```powershell
 $env:SEED_EMAIL="your_email@example.com"
-docker compose --profile tools run --rm seed
+docker compose --profile micro --profile tools run --rm seed
 ```
 
 Seed a specific user:

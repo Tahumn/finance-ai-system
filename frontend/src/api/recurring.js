@@ -30,6 +30,11 @@ export const deleteSubscription = (id) =>
     method: "DELETE"
   });
 
+export const paySubscription = (id) =>
+  request(`/recurring/subscriptions/${id}/pay`, {
+    method: "POST"
+  });
+
 // Debts
 export const listDebts = () => request("/recurring/debts");
 
@@ -48,6 +53,11 @@ export const updateDebt = (id, payload) =>
 export const deleteDebt = (id) =>
   request(`/recurring/debts/${id}`, {
     method: "DELETE"
+  });
+
+export const payDebt = (id) =>
+  request(`/recurring/debts/${id}/pay`, {
+    method: "POST"
   });
 
 // Reminders

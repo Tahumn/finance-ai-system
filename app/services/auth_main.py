@@ -15,8 +15,13 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    _ = (auth_models.User, auth_models.EmailOTP)
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            auth_models.User.__table__,
+            auth_models.EmailOTP.__table__,
+        ],
+    )
 
 
 app.include_router(auth_router, prefix="/api/v1")

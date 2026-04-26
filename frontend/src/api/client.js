@@ -1,9 +1,10 @@
 const inferApiBase = () => {
   if (import.meta.env.VITE_API_BASE) return import.meta.env.VITE_API_BASE;
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   // Works for local dev and phone testing on LAN:
-  // If frontend is opened at http://192.168.1.10:5173, default API becomes http://192.168.1.10:8000/api/v1
-  const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:8000/api/v1`;
+  // If frontend is opened at http://192.168.1.10:5173, default API becomes http://192.168.1.10:8005/api/v1
+  const { protocol, hostname, port } = window.location;
+  return `${protocol}//${hostname}:8005/api/v1`;
 };
 
 const API_BASE = inferApiBase();

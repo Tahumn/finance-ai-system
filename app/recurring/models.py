@@ -10,6 +10,7 @@ class Subscription(Base):
     name = Column(String, nullable=False)
     amount = Column(Float, nullable=False, default=0.0)
     start_date = Column(Date, nullable=True)
+    frequency = Column(String, nullable=False, default="monthly") # daily, weekly, monthly, yearly
     is_active = Column(Boolean, nullable=False, default=True)
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_subscription_name"),)
 
@@ -22,6 +23,7 @@ class Debt(Base):
     name = Column(String, nullable=False)
     amount = Column(Float, nullable=False, default=0.0)
     due_date = Column(Date, nullable=True)
+    frequency = Column(String, nullable=False, default="one_time") # one_time, weekly, monthly, yearly
 
 
 class Reminder(Base):

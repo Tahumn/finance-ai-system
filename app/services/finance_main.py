@@ -16,13 +16,16 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    _ = (
-        finance_models.Category,
-        finance_models.Transaction,
-        finance_models.Tag,
-        finance_models.Account,
-        finance_models.Transfer,
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            finance_models.Category.__table__,
+            finance_models.Tag.__table__,
+            finance_models.Account.__table__,
+            finance_models.Transaction.__table__,
+            finance_models.Transfer.__table__,
+            finance_models.transaction_tags,
+        ],
     )
 
 @app.on_event("startup")

@@ -3,8 +3,8 @@ import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../.
 import { t } from "../../utils/i18n.js";
 import * as api from "../../api/recurring.js";
 
-const emptySub = { name: "", amount: "", startDate: toInputDate(new Date()) };
-const emptyDebt = { name: "", amount: "", dueDate: toInputDate(new Date()) };
+const emptySub = { name: "", amount: "", startDate: toInputDate(new Date()), frequency: "monthly" };
+const emptyDebt = { name: "", amount: "", dueDate: toInputDate(new Date()), frequency: "one_time" };
 
 export default function RecurringScreen({ userEmail }) {
   const [subs, setSubs] = useState([]);
@@ -37,7 +37,8 @@ export default function RecurringScreen({ userEmail }) {
       await api.createSubscription({
         name: subForm.name,
         amount: parseNumberInput(subForm.amount),
-        start_date: subForm.startDate
+        start_date: subForm.startDate,
+        frequency: subForm.frequency
       });
       setSubForm(emptySub);
       loadData();
@@ -53,7 +54,8 @@ export default function RecurringScreen({ userEmail }) {
       await api.createDebt({
         name: debtForm.name,
         amount: parseNumberInput(debtForm.amount),
-        due_date: debtForm.dueDate
+        due_date: debtForm.dueDate,
+        frequency: debtForm.frequency
       });
       setDebtForm(emptyDebt);
       loadData();
@@ -77,6 +79,24 @@ export default function RecurringScreen({ userEmail }) {
     try {
       await api.deleteDebt(id);
       loadData();
+    } catch (err) {
+      alert(t("common.error"));
+    }
+  };
+
+  const handlePaySub = async (id) => {
+    try {
+      await api.paySubscription(id);
+      alert("Đã ghi nhận thanh toán thành công! ✅");
+    } catch (err) {
+      alert(t("common.error"));
+    }
+  };
+
+  const handlePayDebt = async (id) => {
+    try {
+      await api.payDebt(id);
+      alert("Đã ghi nhận trả nợ thành công! ✅");
     } catch (err) {
       alert(t("common.error"));
     }
@@ -130,6 +150,18 @@ export default function RecurringScreen({ userEmail }) {
                   onChange={(e) => setDebtForm({ ...debtForm, dueDate: e.target.value })}
                 />
               </label>
+              <label className="field">
+                <span>{t("recurring.form.frequency") || "Tần suất"}</span>
+                <select 
+                  value={debtForm.frequency}
+                  onChange={(e) => setDebtForm({ ...debtForm, frequency: e.target.value })}
+                >
+                  <option value="one_time">Trả 1 lần</option>
+                  <option value="weekly">Trả góp hàng tuần</option>
+                  <option value="monthly">Trả góp hàng tháng</option>
+                  <option value="yearly">Trả góp hàng năm</option>
+                </select>
+              </label>
               <div className="row-actions" style={{ marginTop: 'auto', paddingBottom: 8 }}>
                 <button className="primary" type="submit">{t("recurring.debts.add")}</button>
               </div>
@@ -144,13 +176,24 @@ export default function RecurringScreen({ userEmail }) {
                 <article key={d.id} className="item-row">
                   <div>
                     <strong>{d.name}</strong>
-                    <p className="muted">{d.due_date || "--"}</p>
+                    <p className="muted">
+                      {d.due_date || "--"} • {
+                        d.frequency === "weekly" ? "Hàng tuần" :
+                        d.frequency === "monthly" ? "Hàng tháng" :
+                        d.frequency === "yearly" ? "Hàng năm" : "Trả 1 lần"
+                      }
+                    </p>
                   </div>
                   <div className="row-right">
                     <span className="amount expense">{currency(d.amount)}</span>
-                    <button className="ghost danger icon-btn-small" onClick={() => handleDeleteDebt(d.id)}>
-                      &times;
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="primary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => handlePayDebt(d.id)}>
+                        Trả nợ
+                      </button>
+                      <button className="ghost danger icon-btn-small" onClick={() => handleDeleteDebt(d.id)}>
+                        &times;
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))
@@ -196,6 +239,18 @@ export default function RecurringScreen({ userEmail }) {
                   onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })}
                 />
               </label>
+              <label className="field">
+                <span>{t("recurring.form.frequency") || "Tần suất"}</span>
+                <select 
+                  value={subForm.frequency}
+                  onChange={(e) => setSubForm({ ...subForm, frequency: e.target.value })}
+                >
+                  <option value="daily">Hàng ngày</option>
+                  <option value="weekly">Hàng tuần</option>
+                  <option value="monthly">Hàng tháng</option>
+                  <option value="yearly">Hàng năm</option>
+                </select>
+              </label>
               <div className="row-actions" style={{ marginTop: 'auto', paddingBottom: 8 }}>
                 <button className="primary" type="submit">{t("recurring.subs.add")}</button>
               </div>
@@ -210,13 +265,24 @@ export default function RecurringScreen({ userEmail }) {
                 <article key={s.id} className="item-row">
                   <div>
                     <strong>{s.name}</strong>
-                    <p className="muted">{s.start_date || "--"}</p>
+                    <p className="muted">
+                      {s.start_date || "--"} • {
+                        s.frequency === "daily" ? "Hàng ngày" :
+                        s.frequency === "weekly" ? "Hàng tuần" :
+                        s.frequency === "yearly" ? "Hàng năm" : "Hàng tháng"
+                      }
+                    </p>
                   </div>
                   <div className="row-right">
                     <span className="amount expense">{currency(s.amount)}</span>
-                    <button className="ghost danger icon-btn-small" onClick={() => handleDeleteSub(s.id)}>
-                      &times;
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="primary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => handlePaySub(s.id)}>
+                        Đóng phí
+                      </button>
+                      <button className="ghost danger icon-btn-small" onClick={() => handleDeleteSub(s.id)}>
+                        &times;
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))

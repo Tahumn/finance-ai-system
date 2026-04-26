@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 from app.core.auth_context import RequestUser, get_request_user
 from app.database import get_db
@@ -39,6 +39,21 @@ def delete_subscription(
     service.delete_subscription(db, current_user, item_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@router.post("/subscriptions/{item_id}/pay")
+def pay_subscription(
+    item_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: RequestUser = Depends(get_request_user),
+):
+    service.pay_subscription(
+        db,
+        current_user,
+        item_id,
+        authorization=request.headers.get("authorization"),
+    )
+    return {"status": "success"}
+
 
 @router.post("/debts", response_model=schemas.DebtRead, status_code=status.HTTP_201_CREATED)
 def create_debt(
@@ -72,6 +87,21 @@ def delete_debt(
 ):
     service.delete_debt(db, current_user, item_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/debts/{item_id}/pay")
+def pay_debt(
+    item_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: RequestUser = Depends(get_request_user),
+):
+    service.pay_debt(
+        db,
+        current_user,
+        item_id,
+        authorization=request.headers.get("authorization"),
+    )
+    return {"status": "success"}
 
 
 @router.post("/reminders", response_model=schemas.ReminderRead, status_code=status.HTTP_201_CREATED)

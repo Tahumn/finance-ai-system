@@ -12,11 +12,13 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    _ = (
-        recurring_models.Subscription,
-        recurring_models.Debt,
-        recurring_models.Reminder,
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            recurring_models.Subscription.__table__,
+            recurring_models.Debt.__table__,
+            recurring_models.Reminder.__table__,
+        ],
     )
 
 app.include_router(recurring_router, prefix="/api/v1")

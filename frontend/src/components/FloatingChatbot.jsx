@@ -266,7 +266,10 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
         response?.intent === "create_transaction" || 
         response?.intent === "create_transactions" ||
         response?.intent === "update_transaction" ||
-        response?.intent === "delete_transaction"
+        response?.intent === "delete_transaction" ||
+        response?.intent === "create_budget" ||
+        response?.intent === "create_debt" ||
+        response?.intent === "create_subscription"
       ) {
         window.dispatchEvent(
           new CustomEvent("finance:refresh", {

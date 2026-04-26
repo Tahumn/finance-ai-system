@@ -5,27 +5,61 @@ from app.planning.models import Budget
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_category_ids(value: str | None) -> set[int]:
+    if not value:
+        return set()
+    parsed: set[int] = set()
+    for raw in value.split(","):
+        token = raw.strip()
+        if not token:
+            continue
+        try:
+            parsed.add(int(token))
+        except ValueError:
+            continue
+    return parsed
+
+
 async def handle_finance_event(message: Dict[str, Any]):
     event_type = message.get("event_type")
-    
-    if event_type in ["transaction.created", "transaction.deleted"]:
-        user_id = message.get("user_id")
-        category_id = message.get("category_id")
-        
-        if not user_id or not category_id:
+
+    if event_type not in {"transaction.created", "transaction.deleted"}:
+        return
+
+    if message.get("transaction_type") != "expense":
+        return
+
+    user_id = message.get("user_id")
+    category_id = message.get("category_id")
+    if user_id is None or category_id is None:
+        return
+
+    try:
+        user_id = int(user_id)
+        category_id = int(category_id)
+    except (TypeError, ValueError):
+        return
+
+    logger.info(
+        "Planning Service received %s for user=%s category=%s",
+        event_type,
+        user_id,
+        category_id,
+    )
+
+    with SessionLocal() as db:
+        budgets = db.query(Budget).filter(Budget.user_id == user_id).all()
+        matched = [budget for budget in budgets if category_id in _parse_category_ids(budget.category_ids)]
+
+        if not matched:
+            logger.debug("No budget found for category %s of user %s.", category_id, user_id)
             return
 
-        # Simple logic: If a transaction happens, we might want to check the budget.
-        # In a real system, we might maintain a "spent" column in the Budget table
-        # and update it here based on transaction.created and transaction.deleted.
-        # Since our Budget table only has 'amount' (the target), we just log the event.
-        
-        logger.info(f"Planning Service received {event_type} for user {user_id}, category {category_id}")
-        
-        with SessionLocal() as db:
-            budget = db.query(Budget).filter(Budget.user_id == user_id, Budget.category_id == category_id).first()
-            if budget:
-                logger.info(f"Found active budget for this category: Target Amount {budget.amount}")
-                # You can add logic here to send an alert if spent > budget.amount
-            else:
-                logger.debug("No budget found for this category.")
+        for budget in matched:
+            logger.info(
+                "Matched budget %s for user=%s with target amount=%s",
+                budget.id,
+                user_id,
+                budget.amount,
+            )
