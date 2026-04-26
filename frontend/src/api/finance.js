@@ -18,6 +18,17 @@ export const createCategory = (name) =>
     body: { name }
   });
 
+export const updateCategory = (categoryId, payload) =>
+  request(`/finance/categories/${categoryId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteCategory = (categoryId) =>
+  request(`/finance/categories/${categoryId}`, {
+    method: "DELETE"
+  });
+
 export const listTags = async () => {
   try {
     return await request("/finance/tags");
@@ -64,6 +75,32 @@ export const deleteTransaction = (transactionId) =>
     method: "DELETE"
   });
 
+export const listAccounts = async () => {
+  try {
+    return await request("/finance/accounts");
+  } catch (err) {
+    if (err?.status === 404) return [];
+    throw err;
+  }
+};
+
+export const createAccount = (payload) =>
+  request("/finance/accounts", {
+    method: "POST",
+    body: payload
+  });
+
+export const updateAccount = (accountId, payload) =>
+  request(`/finance/accounts/${accountId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteAccount = (accountId) =>
+  request(`/finance/accounts/${accountId}`, {
+    method: "DELETE"
+  });
+
 export const getSummary = (params) =>
   request(`/finance/reports/summary${buildQuery(params)}`);
 
@@ -72,3 +109,62 @@ export const getCategoryBreakdown = (params) =>
 
 export const getChartData = (params) =>
   request(`/finance/reports/chart${buildQuery(params)}`);
+
+export const getReportsOverview = (params) =>
+  request(`/finance/reports/overview${buildQuery(params)}`);
+
+export const listSavingsGoals = () => request("/finance/savings-goals");
+
+export const createSavingsGoal = (payload) =>
+  request("/finance/savings-goals", {
+    method: "POST",
+    body: payload
+  });
+
+export const updateSavingsGoal = (goalId, payload) =>
+  request(`/finance/savings-goals/${goalId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteSavingsGoal = (goalId) =>
+  request(`/finance/savings-goals/${goalId}`, {
+    method: "DELETE"
+  });
+
+export const listBudgets = async (params) => {
+  try {
+    return await request(`/finance/budgets${buildQuery(params)}`);
+  } catch (err) {
+    if (err?.status === 404) return [];
+    throw err;
+  }
+};
+
+export const createBudget = (payload) =>
+  request("/finance/budgets", {
+    method: "POST",
+    body: payload
+  });
+
+export const updateBudget = (budgetId, payload) =>
+  request(`/finance/budgets/${budgetId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteBudget = (budgetId) =>
+  request(`/finance/budgets/${budgetId}`, {
+    method: "DELETE"
+  });
+
+export const bootstrapFinance = async () => {
+  try {
+    return await request("/finance/bootstrap", {
+      method: "POST"
+    });
+  } catch (err) {
+    if (err?.status === 404) return { created_categories: 0, created_tags: 0, created_budgets: 0 };
+    throw err;
+  }
+};

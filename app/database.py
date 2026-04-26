@@ -90,6 +90,25 @@ def ensure_schema() -> None:
                     text("CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions (account_id)")
                 )
 
+    if "accounts" in tables:
+        account_cols = {col["name"] for col in inspector.get_columns("accounts")}
+        statements = []
+        if "type" not in account_cols:
+            statements.append("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS type VARCHAR NOT NULL DEFAULT 'bank'")
+        if "provider" not in account_cols:
+            statements.append("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS provider VARCHAR")
+        if "last4" not in account_cols:
+            statements.append("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS last4 VARCHAR")
+        if "note" not in account_cols:
+            statements.append("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS note VARCHAR")
+        if "color" not in account_cols:
+            statements.append("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS color VARCHAR NOT NULL DEFAULT '#ec4899'")
+
+        if statements:
+            with engine.begin() as conn:
+                for stmt in statements:
+                    conn.execute(text(stmt))
+
 
 def get_db():
     db = SessionLocal()

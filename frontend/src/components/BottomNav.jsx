@@ -1,27 +1,66 @@
 import { t } from "../utils/i18n.js";
+import { useMemo } from "react";
 
-const views = [
-  { key: "dashboard", label: "nav.overview" },
-  { key: "transactions", label: "nav.add_tx" },
-  { key: "chat", label: "nav.chat" },
-  { key: "reports", label: "nav.reports" },
-  { key: "notifications", label: "nav.notifications" },
-  { key: "settings", label: "nav.settings" }
-];
+const SvgHome = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? "1" : "2"} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+    <polyline points="9 22 9 12 15 12 15 22"/>
+  </svg>
+);
+
+const SvgList = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+    <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+);
+
+const SvgPieChart = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? "1" : "2"} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.21 15.89A10 10 0 1 1 8 2.83M22 12A10 10 0 0 0 12 2v10z"/>
+  </svg>
+);
+
+const SvgBarChart = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? "1" : "2"} strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+
+const SvgGear = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active ? "1" : "2"} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
 
 export default function BottomNav({ active, onChange }) {
+  const tabs = useMemo(() => [
+    { key: "dashboard", label: "Tổng quan", Icon: SvgHome },
+    { key: "transactions", label: "Giao dịch", Icon: SvgList },
+    { key: "budgets", label: "Ngân sách", Icon: SvgPieChart },
+    { key: "reports", label: "Báo cáo", Icon: SvgBarChart },
+    { key: "settings", label: "Cài đặt", Icon: SvgGear }
+  ], []);
+
   return (
     <nav className="bottom-nav">
-      {views.map((item) => (
-        <button
-          key={item.key}
-          className={active === item.key ? "active" : ""}
-          onClick={() => onChange(item.key)}
-          type="button"
-        >
-          {t(item.label)}
-        </button>
-      ))}
+      {tabs.map(({ key, label, Icon }) => {
+        const isActive = active === key;
+        return (
+          <button
+            key={key}
+            className={`bottom-nav-item ${isActive ? "active" : ""}`}
+            onClick={() => onChange(key)}
+            type="button"
+          >
+            <span className="bottom-nav-icon">
+              <Icon active={isActive} />
+            </span>
+            <span className="bottom-nav-label">{label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

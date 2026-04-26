@@ -1,4 +1,17 @@
 import { useState } from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Cell
+} from "recharts";
 import TransactionRow from "../../components/TransactionRow.jsx";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
@@ -198,220 +211,286 @@ export default function DashboardScreen({
   onSelectPreset,
   userEmail
 }) {
-  const [actionsOpen, setActionsOpen] = useState(true);
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
-  const maxVal = Math.max(1, ...safeMonthly.flatMap((item) => [item.income, item.expense]));
-  const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 4);
+  const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
   const insights = buildAiInsights(summary || {}, transactions, breakdown);
-  const donutItems = buildDonutItems(breakdown, 4, t("reports.other", null, "Khác"));
+  const donutItems = buildDonutItems(breakdown, 6, t("reports.other", null, "Khác"));
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
   const { series: waveSource } = buildWaveSeries(transactions, monthlySeries);
   const trendSeries = buildLineSeries(waveSource);
-  const labelStep = trendSeries.labels.length > 10 ? Math.ceil(trendSeries.labels.length / 6) : 1;
+  const trendChartDataRaw = waveSource.map((item) => ({
+    label: String(item.month || "").slice(5).replace("-", "/"),
+    income: Number(item.income || 0),
+    expense: Number(item.expense || 0)
+  }));
+  const trendChartData = trendChartDataRaw.length >= 2
+    ? trendChartDataRaw
+    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => ({
+        label: String(item.month || "").slice(5).replace("-", "/"),
+        income: Number(item.income || 0),
+        expense: Number(item.expense || 0)
+      }));
+
+  const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
+    const spent = Number(item.spent || 0);
+    const total = Math.max(spent, Math.round(spent * 1.3), 1);
+    const pct = Math.round((spent / total) * 100);
+    return {
+      label: item.category,
+      percent: Math.max(1, Math.min(100, pct)),
+      spent,
+      total,
+      color: colorFor(item.category, userEmail)
+    };
+  });
 
   return (
-    <>
-      <section className="panel dashboard-actions">
-        <div className="panel-header">
-          <div className="dashboard-actions-header">
-            <h3>{t("dashboard.quick_actions")}</h3>
-            <button
-              className="chevron-btn"
-              type="button"
-              aria-label={t("common.toggle", null, "Toggle")}
-              aria-expanded={actionsOpen}
-              onClick={() => setActionsOpen((value) => !value)}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-                <path
-                  d="M6 9l6 6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+    <div className="dashboard-container">
+      {/* 1. Full-width Balance Card */}
+      <section className="dashboard-balance-card">
+        <div className="dbc-content">
+          <div className="dbc-header">
+            <p>Số dư hiện tại</p>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </div>
-          <div className="range-selector">
-            {["today", "week", "month", "year"].map((preset) => (
-              <button
-                key={preset}
-                className={preset === rangePreset ? "active" : ""}
-                type="button"
-                onClick={() => onSelectPreset(preset)}
-              >
-                {preset}
-              </button>
-            ))}
+          <h2>{currency(summary?.balance || 0)}</h2>
+          <p className="dbc-update">Cập nhật lúc 16:54</p>
+        </div>
+        <div className="dbc-graphic">
+          <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
+            <path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5" stroke="currentColor" strokeWidth="1" fill="none"/>
+            <path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z" stroke="currentColor" strokeWidth="1" fill="none"/>
+            <circle cx="16" cy="14" r="1" />
+          </svg>
+        </div>
+        <div className="dbc-inline-metrics">
+          <div className="metric-card compact">
+            <div className="mc-icon green">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tổng thu nhập</p>
+              <h3>{currency(summary?.total_income || 0)}</h3>
+            </div>
+          </div>
+          <div className="metric-card compact">
+            <div className="mc-icon red">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tổng chi tiêu</p>
+              <h3>{currency(summary?.total_expense || 0)}</h3>
+            </div>
+          </div>
+          <div className="metric-card compact">
+            <div className="mc-icon purple">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5"/><path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z"/><circle cx="16" cy="14" r="1"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tiết kiệm ước tính</p>
+              <h3>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</h3>
+            </div>
           </div>
         </div>
-        {actionsOpen && (
-          <div className="quick-actions quick-actions-dashboard">
-            <button className="ghost qa-add" type="button" onClick={onGoAddTransaction}>
-              {t("dashboard.add_tx")}
-            </button>
-            <button className="ghost qa-reports" type="button" onClick={onGoReports}>
-              {t("dashboard.reports")}
-            </button>
-            <button className="ghost qa-ocr" type="button" onClick={onGoOcr}>
-              {t("dashboard.ocr")}
-            </button>
-          </div>
-        )}
       </section>
 
-      {Array.isArray(anomalies) && anomalies.length > 0 && (
-        <section className="panel anomalies">
-          <div className="panel-header">
-            <h3 style={{ color: "var(--danger)" }}>⚠️ Cảnh báo chi tiêu (Anomaly)</h3>
+      {/* 3. Charts Row */}
+      <section className="dashboard-charts-row">
+        <div className="dashboard-panel chart-cashflow">
+          <div className="dp-header">
+            <h3>Dòng tiền trong tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+            <div className="dp-legend">
+              <span className="legend-dot green"></span> Thu nhập
+              <span className="legend-dot pink"></span> Chi tiêu
+            </div>
           </div>
-          <div className="anomaly-list">
-            {anomalies.map((alert) => (
-              <div key={alert.id} className={`anomaly-item ${alert.severity}`}>
-                <div className="anomaly-info">
-                  <strong>{alert.description}</strong>
-                  <p>{alert.reason}</p>
-                </div>
-                <div className="anomaly-amount">{currency(alert.amount)}</div>
+          <div className="dp-body">
+            {trendChartData.length ? (
+              <div className="line-chart compact wave">
+                <ResponsiveContainer width="100%" height={210}>
+                  <AreaChart data={trendChartData}>
+                    <defs>
+                      <linearGradient id="dashIncome" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02}/>
+                      </linearGradient>
+                      <linearGradient id="dashExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.02}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                    <Area type="monotone" dataKey="expense" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            ))}
+            ) : <p className="empty">Chưa có dữ liệu</p>}
           </div>
-        </section>
-      )}
-
-      <section className="grid">
-        <div className="panel">
-          <div className="panel-header">
-            <h3>{t("reports.category_split", null, "Cơ cấu chi tiêu")}</h3>
-            <span className="badge">{t("reports.badge.expense", null, "Danh mục")}</span>
-          </div>
-          {donutItems.length ? (
-            <>
-              <div className="donut-chart">
-                <svg viewBox="0 0 120 120" aria-hidden="true">
-                  <circle className="donut-bg" cx="60" cy="60" r="46" />
-                  {(() => {
-                    let offset = 0;
-                    return donutItems.map((item) => {
-                      const length = item.share * 2 * Math.PI * 46;
-                      const dash = `${length} ${2 * Math.PI * 46 - length}`;
-                      const segment = (
-                        <circle
-                          key={item.category}
-                          className="donut-segment"
-                          cx="60"
-                          cy="60"
-                          r="46"
-                          stroke={item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail)}
-                          strokeDasharray={dash}
-                          strokeDashoffset={-offset}
-                        />
-                      );
-                      offset += length;
-                      return segment;
-                    });
-                  })()}
-                </svg>
-                <div className="donut-center">
-                  <span>{t("dashboard.total_expense")}</span>
-                  <strong>{currency(summary?.total_expense || donutTotal)}</strong>
-                </div>
-              </div>
-              <div className="donut-legend">
-                {donutItems.map((item) => (
-                  <div key={item.category} className="donut-legend-item">
-                    <div className="donut-legend-label">
-                      <span
-                        className="dot"
-                        style={{
-                          background: item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail)
-                        }}
-                      />
-                      <span>{item.category}</span>
-                    </div>
-                    <div className="donut-legend-meta">
-                      <span>{percent(item.share)}</span>
-                      <strong>{currency(item.spent)}</strong>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="empty">{t("reports.empty_breakdown", null, "Chưa có dữ liệu chi tiêu")}</p>
-          )}
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <h3>{t("reports.net_trend", null, "Xu hướng dòng tiền")}</h3>
-            <span className="badge">{t("reports.badge.monthly", null, "6 tháng gần nhất")}</span>
-          </div>
-          {trendSeries.labels.length ? (
-            <div className="line-chart compact wave">
-              <div className="line-legend">
-                <span className="legend-swatch income" />
-                <span>{t("reports.income", null, "Thu nhập")}</span>
-                <span className="legend-swatch expense" />
-                <span>{t("reports.expense", null, "Chi tiêu")}</span>
-              </div>
-              <svg viewBox={`0 0 ${trendSeries.width} ${trendSeries.height}`} aria-hidden="true">
-                <polyline
-                  className="line-poly income"
-                  points={trendSeries.income.map((point) => `${point.x},${point.y}`).join(" ")}
-                />
-                <polyline
-                  className="line-poly expense"
-                  points={trendSeries.expense.map((point) => `${point.x},${point.y}`).join(" ")}
-                />
-                <path className="line-path income" d={trendSeries.incomePath} />
-                <path className="line-path expense" d={trendSeries.expensePath} />
-              </svg>
-              <div className="line-labels">
-                {trendSeries.labels.map((label, index) => (
-                  <span key={`${label}-${index}`}>{index % labelStep === 0 ? label : ""}</span>
-                ))}
+          <div className="dp-footer-metrics">
+            <div className="fm-item">
+              <div className="fm-icon green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+              <div>
+                <p>Tổng thu nhập</p>
+                <strong>{currency(summary?.total_income || 0)}</strong>
               </div>
             </div>
-          ) : (
-            <p className="empty">{t("reports.empty")}</p>
-          )}
+            <div className="fm-item">
+              <div className="fm-icon red"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+              <div>
+                <p>Tổng chi tiêu</p>
+                <strong>{currency(summary?.total_expense || 0)}</strong>
+              </div>
+            </div>
+            <div className="fm-item">
+              <div className="fm-icon purple"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg></div>
+              <div>
+                <p>Dòng tiền ròng</p>
+                <strong>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-panel chart-structure">
+          <div className="dp-header">
+            <h3>Cơ cấu chi tiêu <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+          </div>
+          <div className="dp-body split-donut">
+             <div className="donut-chart-container">
+               <ResponsiveContainer width="100%" height={220}>
+                 <PieChart>
+                   <Pie
+                     data={donutItems.map((item) => ({ name: item.category, value: item.spent, share: item.share, isOther: item.isOther }))}
+                     dataKey="value"
+                     nameKey="name"
+                     innerRadius={58}
+                     outerRadius={88}
+                     paddingAngle={2}
+                   >
+                     {donutItems.map((item) => (
+                       <Cell key={item.category} fill={item.isOther ? "#cbd5e1" : colorFor(item.category, userEmail)} />
+                     ))}
+                   </Pie>
+                   <Tooltip formatter={(v) => currency(v)} />
+                 </PieChart>
+               </ResponsiveContainer>
+               <div className="donut-center-text">
+                  <strong>{(donutTotal/1000000).toFixed(2).replace('.', ',')}</strong>
+                  <span>triệu đ</span>
+               </div>
+             </div>
+             <div className="donut-legend-list">
+                {donutItems.map((item) => (
+                  <div key={item.category} className="dll-item">
+                    <span className="dll-dot" style={{background: item.isOther ? "#cbd5e1" : colorFor(item.category, userEmail)}}></span>
+                    <span className="dll-label">{item.category}</span>
+                    <span className="dll-value">{currency(item.spent)}</span>
+                    <span className="dll-pct">{percent(item.share)}</span>
+                  </div>
+                ))}
+             </div>
+          </div>
+          <div className="dp-footer-link">
+             <button onClick={onGoReports}>Xem chi tiết báo cáo <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          </div>
         </div>
       </section>
 
-      <section className="panel list">
-        <div className="panel-header">
-          <h3>{t("dashboard.ai_hints")}</h3>
+      {/* 4. Bottom Row */}
+      <section className="dashboard-bottom-row">
+        <div className="dashboard-panel dp-budgets">
+          <div className="dp-header">
+            <h3>Tiến độ ngân sách tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+          </div>
+          <div className="dp-body">
+            {budgetRows.length ? budgetRows.map(b => (
+              <div key={b.label} className="budget-progress-item">
+                <div className="bpi-header">
+                  <div className="bpi-icon" style={{color: b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
+                  <span className="bpi-label">{b.label}</span>
+                  <span className="bpi-pct" style={{color: b.color}}>{b.percent}%</span>
+                </div>
+                <div className="bpi-bar-bg">
+                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.color}}></div>
+                </div>
+                <div className="bpi-amounts">
+                  <span className="bpi-spent">{currency(b.spent)}</span>
+                  <span className="bpi-total">/ {currency(b.total)}</span>
+                </div>
+              </div>
+            )) : <p className="empty">Chưa có dữ liệu ngân sách</p>}
+          </div>
+          <div className="dp-footer-link">
+             <button onClick={() => {}}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          </div>
         </div>
-        {insights.map((insight) => (
-          <p key={insight} className="insight-item">
-            {insight}
-          </p>
-        ))}
-      </section>
 
-      <section className="panel list">
-        <div className="panel-header">
-          <h3>{t("dashboard.recent")}</h3>
-          <button className="ghost" onClick={onViewTransactions} type="button">
-            {t("dashboard.view_all")}
-          </button>
+        <div className="dashboard-panel dp-transactions">
+          <div className="dp-header">
+            <h3>Giao dịch gần đây</h3>
+            <button className="ghost-link" onClick={onViewTransactions}>Xem tất cả</button>
+          </div>
+          <div className="dp-body tx-list">
+            {slicedTransactions.length ? slicedTransactions.map(item => (
+              <div key={item.id} className="tx-item">
+                <div className="txi-icon" style={{background: item.transaction_type === 'income' ? '#ecfdf5' : '#fef2f2', color: item.transaction_type === 'income' ? '#10b981' : '#ef4444'}}>
+                  {item.transaction_type === 'income' ? 
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg> : 
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                  }
+                </div>
+                <div className="txi-main">
+                  <div className="txi-info">
+                    <strong>{item.description || item.categoryLabel}</strong>
+                    <span>{item.categoryLabel}</span>
+                  </div>
+                  <div className="txi-meta">
+                    <span>{item.date?.split("-").reverse().join("/") || "—"}</span>
+                    <span>{(item.tagLabels || []).join(", ") || "Tiền mặt"}</span>
+                  </div>
+                </div>
+                <div className={`txi-amount ${item.transaction_type}`}>
+                  {item.transaction_type === 'income' ? '+' : '-'}{currency(item.amount)}
+                </div>
+              </div>
+            )) : <p className="empty">Không có giao dịch</p>}
+          </div>
         </div>
-        {slicedTransactions.length === 0 ? (
-          <p className="empty">{t("dashboard.empty_tx")}</p>
-        ) : (
-          slicedTransactions.map((item) => (
-            <TransactionRow
-              key={item.id}
-              item={item}
-              categoryLabel={item.categoryLabel}
-              userEmail={userEmail}
-            />
-          ))
-        )}
+
+        <div className="dp-right-col">
+          <div className="dashboard-panel dp-ai-hints">
+            <div className="dp-header">
+              <h3>Gợi ý từ AI <span className="badge-new">Mới</span></h3>
+            </div>
+            <div className="dp-body">
+              {insights.map((message, index) => (
+                <div className="ai-hint-card" key={`${message}-${index}`}>
+                  <div className={`ai-icon ${index % 2 === 0 ? "purple" : "orange"}`}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div>
+                  <div className="ai-text">
+                    <p>{message}</p>
+                    <span>Dữ liệu được cập nhật theo giao dịch trong kỳ đã chọn.</span>
+                  </div>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#cbd5e1" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="dashboard-panel dp-goals">
+            <div className="dp-header">
+              <h3>Mục tiêu tiết kiệm</h3>
+              <button className="ghost-link" onClick={() => {}}>Xem tất cả</button>
+            </div>
+            <div className="dp-body">
+              <p className="empty">Chưa có dữ liệu mục tiêu tiết kiệm.</p>
+            </div>
+          </div>
+        </div>
       </section>
-    </>
+    </div>
   );
 }

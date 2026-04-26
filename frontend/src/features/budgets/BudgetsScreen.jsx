@@ -1,388 +1,225 @@
-import { useEffect, useMemo, useState } from "react";
-import { colorFor, onColor } from "../../utils/colors.js";
-import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
-import { getCategoryPrefs } from "../../utils/userPrefs.js";
-import { t } from "../../utils/i18n.js";
+import { useMemo, useState } from "react";
+import { currency, formatNumberInput, parseNumberInput } from "../../utils/format.js";
+import { getCatMeta } from "../../utils/categoryIcons.jsx";
+import "./budgets.css";
 
-const emptyForm = () => ({
-  name: "",
-  categoryIds: [],
-  amount: "",
-  cycle: "monthly",
-  startDate: toInputDate(new Date()),
-  endDate: "",
-  threshold: "80"
-});
+const emptyForm = () => ({ categoryId: "", amount: "" });
 
-const storageKey = (email) => `finance_local_budgets:${email || "guest"}`;
-
-const daysBetween = (from, to) => {
-  const start = new Date(from);
-  const end = new Date(to);
-  const diff = Math.ceil((end - start) / 86400000);
-  return diff + 1;
-};
-
-const estimatePeriodDays = (plan) => {
-  if (plan.startDate && plan.endDate) {
-    return Math.max(1, daysBetween(plan.startDate, plan.endDate));
-  }
-  if (plan.cycle === "weekly") return 7;
-  if (plan.cycle === "yearly") return 365;
-  return 30;
-};
-
-const computeSpent = (plan, transactions) => {
-  return transactions
-    .filter((item) => item.transaction_type === "expense")
-    .filter((item) =>
-      !plan.categoryIds.length ? true : plan.categoryIds.includes(String(item.category_id))
-    )
-    .filter((item) => (plan.startDate ? item.date >= plan.startDate : true))
-    .filter((item) => (plan.endDate ? item.date <= plan.endDate : true))
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-};
-
-export default function BudgetsScreen({ categories, transactions, userEmail }) {
-  const [form, setForm] = useState(emptyForm);
-  const [plans, setPlans] = useState([]);
+export default function BudgetsScreen({
+  categories,
+  budgets = [],
+  onCreateBudget,
+  onUpdateBudget,
+  onDeleteBudget,
+  loading
+}) {
+  const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState(null);
-  const categoryPrefs = useMemo(() => getCategoryPrefs(userEmail), [userEmail]);
-  const categoryMap = useMemo(() => {
-    const map = {};
-    categories.forEach((category) => {
-      map[String(category.id)] = category.name;
-    });
-    return map;
-  }, [categories]);
+  const [showForm, setShowForm] = useState(false);
+  const [searchText, setSearchText] = useState("");
 
-  useEffect(() => {
-    const raw = localStorage.getItem(storageKey(userEmail));
-    if (!raw) {
-      setPlans([]);
-      return;
-    }
-    try {
-      setPlans(JSON.parse(raw));
-    } catch {
-      setPlans([]);
-    }
-  }, [userEmail]);
+  const plansWithStats = Array.isArray(budgets) ? budgets : [];
+  const totalBudget = plansWithStats.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const totalSpent = plansWithStats.reduce((sum, p) => sum + Number(p.spent || 0), 0);
+  const activePlansCount = plansWithStats.length;
+  const overallProgress = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  const filteredPlans = useMemo(
+    () =>
+      plansWithStats.filter((plan) =>
+        searchText ? String(plan.category || "").toLowerCase().includes(searchText.toLowerCase()) : true
+      ),
+    [plansWithStats, searchText]
+  );
 
-  useEffect(() => {
-    localStorage.setItem(storageKey(userEmail), JSON.stringify(plans));
-  }, [plans, userEmail]);
-
-  const plansWithStats = useMemo(() => {
-    return plans.map((plan) => {
-      const spent = computeSpent(plan, transactions);
-      const budget = Number(plan.amount) || 0;
-      const progress = budget > 0 ? spent / budget : 0;
-      const periodDays = estimatePeriodDays(plan);
-      const elapsedDays = plan.startDate
-        ? Math.max(1, Math.min(periodDays, daysBetween(plan.startDate, toInputDate(new Date()))))
-        : Math.ceil(periodDays / 2);
-      const forecast = elapsedDays > 0 ? (spent / elapsedDays) * periodDays : spent;
-      return {
-        ...plan,
-        spent,
-        budget,
-        progress,
-        forecast,
-        willOverrun: budget > 0 && forecast > budget
-      };
-    });
-  }, [plans, transactions]);
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const amount = parseNumberInput(form.amount);
-    const threshold = Number(form.threshold);
-    if (!form.name.trim()) return;
-    if (!(amount > 0)) return;
-    if (!(threshold > 0 && threshold <= 100)) return;
-
-    const payload = {
-      id: editingId || `plan-${Date.now()}`,
-      name: form.name.trim(),
-      categoryIds: form.categoryIds,
-      amount,
-      cycle: form.cycle,
-      startDate: form.startDate || "",
-      endDate: form.endDate || "",
-      threshold,
-      status: "active"
-    };
-
-    setPlans((current) => {
-      if (!editingId) return [payload, ...current];
-      return current.map((plan) => (plan.id === editingId ? { ...plan, ...payload } : plan));
-    });
-
+    if (!(amount > 0) || !form.categoryId) return;
+    if (editingId) {
+      await onUpdateBudget?.(editingId, { amount });
+    } else {
+      await onCreateBudget?.({ category_id: Number(form.categoryId), amount });
+    }
     setForm(emptyForm());
     setEditingId(null);
+    setShowForm(false);
   };
 
-  const updateStatus = (planId, status) => {
-    setPlans((current) =>
-      current.map((plan) => (plan.id === planId ? { ...plan, status } : plan))
-    );
-  };
-
-  const removePlan = (planId) => {
-    setPlans((current) => current.filter((plan) => plan.id !== planId));
-    if (editingId === planId) {
-      setEditingId(null);
-      setForm(emptyForm());
-    }
+  const removePlan = async (planId) => {
+    await onDeleteBudget?.(planId);
+    if (editingId === planId) setEditingId(null);
   };
 
   const startEdit = (plan) => {
     setEditingId(plan.id);
     setForm({
-      name: plan.name,
-      categoryIds: plan.categoryIds,
-      amount: formatNumberInput(plan.amount),
-      cycle: plan.cycle,
-      startDate: plan.startDate,
-      endDate: plan.endDate,
-      threshold: String(plan.threshold)
+      categoryId: String(plan.category_id),
+      amount: formatNumberInput(plan.amount)
     });
-  };
-
-  const toggleCategory = (categoryId) => {
-    setForm((current) => {
-      const exists = current.categoryIds.includes(categoryId);
-      const next = exists
-        ? current.categoryIds.filter((item) => item !== categoryId)
-        : [...current.categoryIds, categoryId];
-      return { ...current, categoryIds: next };
-    });
+    setShowForm(true);
   };
 
   return (
-    <section className="panel budgets-page">
-      <header className="transactions-header" style={{ marginBottom: 14 }}>
-        <div>
-          <p className="eyebrow">Finance Workspace</p>
-          <h2>{t("budgets.title")}</h2>
+    <div className="bgd-container">
+      {/* Top Header */}
+      <div className="bgd-header-top">
+        <div className="bgd-title-block">
+          <h1 className="bgd-title">Ngân sách</h1>
         </div>
-      </header>
-
-      <form className="form" onSubmit={handleSubmit}>
-        <div className="row">
-          <label className="field">
-            <span>{t("budgets.form.name")}</span>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder={t("budgets.form.name_placeholder")}
-              required
-            />
-          </label>
-
-          <label className="field">
-            <span>{t("budgets.form.amount")}</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={form.amount}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, amount: formatNumberInput(event.target.value) }))
-              }
-              placeholder="0"
-              required
-            />
-          </label>
-        </div>
-
-        <div className="row">
-          <label className="field">
-            <span>{t("budgets.form.categories")}</span>
-            <div className="category-picker">
-              {!categories.length ? (
-                <p className="empty">{t("budgets.empty_categories", null, "Chưa có danh mục nào")}</p>
-              ) : (
-                categories.map((category) => {
-                  const id = String(category.id);
-                  const active = form.categoryIds.includes(id);
-                  const bg = colorFor(category.name, userEmail);
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      className={`category-pill color-pill ${active ? "active" : ""}`}
-                      onClick={() => toggleCategory(id)}
-                      aria-pressed={active}
-                      style={{ "--pill-bg": bg, "--pill-fg": onColor(bg) }}
-                    >
-                      <span className="pill-icon" aria-hidden="true">
-                        {categoryPrefs[category.name]?.icon || "🏷️"}
-                      </span>
-                      <span className="pill-text">{category.name}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            <small className="hint">
-              {form.categoryIds.length
-                ? t("budgets.form.categories_selected", { count: form.categoryIds.length }, `${form.categoryIds.length} danh mục đã chọn`)
-                : t("budgets.form.categories_hint", null, "Chọn 1 hoặc nhiều danh mục")}
-            </small>
-          </label>
-
-          <label className="field">
-            <span>{t("budgets.form.cycle")}</span>
-            <select
-              value={form.cycle}
-              onChange={(event) => setForm((current) => ({ ...current, cycle: event.target.value }))}
-            >
-              <option value="weekly">{t("budgets.cycle.weekly")}</option>
-              <option value="monthly">{t("budgets.cycle.monthly")}</option>
-              <option value="yearly">{t("budgets.cycle.yearly")}</option>
-              <option value="one-time">{t("budgets.cycle.one_time")}</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="row">
-          <label className="field">
-            <span>{t("budgets.form.start")}</span>
-            <input
-              type="date"
-              value={form.startDate}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, startDate: event.target.value }))
-              }
-            />
-          </label>
-          <label className="field">
-            <span>{t("budgets.form.end")}</span>
-            <input
-              type="date"
-              value={form.endDate}
-              onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))}
-            />
-          </label>
-          <label className="field">
-            <span>{t("budgets.form.threshold")}</span>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={form.threshold}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, threshold: event.target.value }))
-              }
-            />
-          </label>
-        </div>
-
-        <div className="row-actions">
-          {editingId && (
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => {
-                setEditingId(null);
-                setForm(emptyForm());
-              }}
-            >
-              {t("budgets.action.cancel_edit")}
-            </button>
-          )}
-          <button className="primary" type="submit">
-            {editingId ? t("budgets.action.save_changes") : t("budgets.action.create")}
+        <div className="bgd-header-actions">
+          <button className="bgd-btn-add" onClick={() => { setForm(emptyForm()); setEditingId(null); setShowForm(!showForm); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Ngân sách
           </button>
         </div>
-      </form>
-
-      <div className="list">
-        {!plansWithStats.length ? (
-          <p className="empty">{t("budgets.empty")}</p>
-        ) : (
-          plansWithStats.map((plan) => {
-            const planCategories = plan.categoryIds
-              .map((id) => categoryMap[id])
-              .filter(Boolean);
-            return (
-              <article key={plan.id} className="item-row budget-card">
-                <div className="panel-header">
-                  <div>
-                    <h4>{plan.name}</h4>
-                    <p className="budget-meta">
-                      {currency(plan.spent)} / {currency(plan.budget)} -{" "}
-                      {t(`budgets.cycle.${plan.cycle === "one-time" ? "one_time" : plan.cycle}`)}
-                    </p>
-                    <div className="budget-tags">
-                      {planCategories.length ? (
-                        planCategories.map((label) => (
-                          <span key={label} className="budget-tag">
-                            <span className="dot" style={{ background: colorFor(label, userEmail) }} />
-                            {label}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="budget-tag muted">
-                          {t("budgets.tag.all", null, "Tất cả danh mục")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className={`badge ${plan.status === "paused" ? "muted" : ""}`}>
-                    {t(`budgets.status.${plan.status}`)}
-                  </span>
-                </div>
-
-              <div className="progress">
-                <span
-                  style={{ width: `${Math.min(100, Math.max(2, plan.progress * 100))}%` }}
-                  className={plan.progress >= 1 ? "danger" : ""}
-                />
-              </div>
-
-              <div className="budget-insights">
-                <p>
-                  {t("budgets.forecast")}: <strong>{currency(plan.forecast)}</strong>
-                </p>
-                <p>
-                  {plan.willOverrun
-                    ? t("budgets.ai_overrun")
-                    : t("budgets.ai_ok")}
-                </p>
-              </div>
-
-              <div className="row-actions">
-                <button className="ghost" type="button" onClick={() => startEdit(plan)}>
-                  {t("budgets.action.edit")}
-                </button>
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={() =>
-                    updateStatus(plan.id, plan.status === "paused" ? "active" : "paused")
-                  }
-                >
-                  {plan.status === "paused" ? t("budgets.action.resume") : t("budgets.action.pause")}
-                </button>
-                <button
-                  className="ghost"
-                  type="button"
-                  onClick={() => updateStatus(plan.id, "completed")}
-                >
-                  {t("budgets.action.complete")}
-                </button>
-                <button className="ghost danger" type="button" onClick={() => removePlan(plan.id)}>
-                  {t("budgets.action.delete")}
-                </button>
-              </div>
-              </article>
-            );
-          })
-        )}
       </div>
-    </section>
+
+      {/* KPIs Row */}
+      <div className="bgd-kpi-row">
+        <div className="bgd-kpi-card">
+          <div className="bgd-kpi-icon total"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
+          <div className="bgd-kpi-text">
+            <div className="bgd-kpi-label">Tổng ngân sách tháng</div>
+            <div className="bgd-kpi-value total">{currency(totalBudget)}</div>
+          </div>
+        </div>
+        <div className="bgd-kpi-card">
+          <div className="bgd-kpi-icon spent"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+          <div className="bgd-kpi-text">
+            <div className="bgd-kpi-label">Đã sử dụng</div>
+            <div className="bgd-kpi-value spent">{currency(totalSpent)} <span className="pct">({overallProgress.toFixed(1)}%)</span></div>
+            <div className="bgd-kpi-bar">
+              <div className="bgd-kpi-bar-fill" style={{width: `${Math.min(100, Math.max(0, overallProgress))}%`}}></div>
+            </div>
+          </div>
+        </div>
+        <div className="bgd-kpi-card">
+          <div className="bgd-kpi-icon count"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <div className="bgd-kpi-text">
+            <div className="bgd-kpi-label">Đang hoạt động</div>
+            <div className="bgd-kpi-value count">{activePlansCount} ngân sách</div>
+          </div>
+        </div>
+      </div>
+      {/* FORM (Tạo / Chỉnh sửa) */}
+      {showForm && (
+        <form className="budget-form-card" onSubmit={handleSubmit}>
+          <h3>{editingId ? "Chỉnh sửa ngân sách" : "Tạo / Chỉnh sửa ngân sách"}</h3>
+          
+          <div className="bd-form-row">
+            <div className="bd-field">
+              <label>Danh mục</label>
+              <select
+                value={form.categoryId}
+                onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                required
+                disabled={Boolean(editingId)}
+              >
+                <option value="">Chọn danh mục</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="bd-field">
+              <label>Ngân sách mục tiêu</label>
+              <input type="text" inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: formatNumberInput(e.target.value) })} placeholder="0 đ" required />
+            </div>
+          </div>
+
+          <div className="bd-form-actions">
+            <button type="button" className="bd-btn-cancel" onClick={() => setShowForm(false)}>Hủy</button>
+            <button type="submit" className="bd-btn-save" disabled={loading}>Lưu ngân sách</button>
+          </div>
+        </form>
+      )}
+
+      {/* Filters Row */}
+      <div className="bgd-filters-row">
+         <div className="bgd-filters-left">
+            <div className="bgd-date-dropdown">
+               Tháng <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <div className="bgd-searchbox">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+               <input type="text" placeholder="Tìm kiếm ngân sách..." value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+            </div>
+         </div>
+         <div className="bgd-filters-right">
+            <div className="bgd-fsel">
+               <span>Loại ngân sách:</span>
+               <select><option>Tất cả</option></select>
+            </div>
+            <div className="bgd-fsel">
+               <span>Sắp xếp:</span>
+               <select><option>Tiến độ cao nhất</option></select>
+            </div>
+         </div>
+      </div>
+
+      {/* Main Budget List Grid (Actually a column of thick cards) */}
+      <div className="bgd-list">
+        {filteredPlans.map(plan => {
+          const meta = getCatMeta(plan.category || "Khác");
+          
+          let statusText = "Bình thường";
+          let statusColor = "#10b981"; // green
+          let statusBg = "#d1fae5";
+          
+          if (Number(plan.progress || 0) >= 100) {
+            statusText = "Vượt ngân sách";
+            statusColor = "#ef4444";
+            statusBg = "#fee2e2";
+          } else if (Number(plan.progress || 0) >= 80) {
+            statusText = "Sắp vượt";
+            statusColor = "#f59e0b";
+            statusBg = "#fef3c7";
+          }
+
+          return (
+            <div key={plan.id} className="bgd-card" onClick={() => startEdit(plan)}>
+               {/* Left: Icon & Name */}
+               <div className="bgd-card-left">
+                  <div className="bgd-card-icon" style={{background: meta.light, color: meta.bg}}>
+                     <meta.SvgIcon size={24} />
+                  </div>
+                  <div className="bgd-card-info">
+                     <h3>Ngân sách {plan.category || "Khác"}</h3>
+                     <p>Theo dõi: {plan.category || "Khác"} • Theo kỳ lọc hiện tại</p>
+                  </div>
+               </div>
+
+               {/* Middle: Progress Bar */}
+               <div className="bgd-card-mid">
+                  <div className="bgd-progress-labels">
+                     <span className="spent">{currency(plan.spent || 0)}</span>
+                     <span className="budget">/ {currency(plan.amount || 0)}</span>
+                  </div>
+                  <div className="bgd-progress-bar">
+                     <div className="bgd-bar-fill" style={{width: `${Math.min(100, Math.max(0, Number(plan.progress || 0)))}%`, background: statusColor}}></div>
+                  </div>
+                  <div className="bgd-progress-rem">
+                     Còn lại {currency(Math.max(0, Number(plan.remaining || 0)))} ({Math.max(0, 100 - Number(plan.progress || 0)).toFixed(0)}%)
+                  </div>
+               </div>
+
+               {/* Right: Status & Actions */}
+               <div className="bgd-card-right">
+                  <div className="bgd-status-badge" style={{background: statusBg, color: statusColor}}>
+                     <span className="dot" style={{background: statusColor}}></span> {statusText}
+                  </div>
+                  <button className="bgd-action-btn" onClick={(e) => { e.stopPropagation(); removePlan(plan.id); }}>
+                     ×
+                  </button>
+               </div>
+            </div>
+          );
+        })}
+        {!filteredPlans.length && <div className="bgd-card">Chưa có ngân sách. Hãy bấm "Tạo ngân sách" để thêm mới.</div>}
+      </div>
+
+    </div>
   );
 }

@@ -1,59 +1,58 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { currency, formatNumberInput, parseNumberInput } from "../../utils/format.js";
-import { t } from "../../utils/i18n.js";
-
-const storageKey = (email) => `finance_local_accounts:${email || "guest"}`;
+import "./accounts.css";
 
 const emptyAccount = {
   name: "",
-  type: "cash",
+  type: "bank",
   provider: "",
   last4: "",
-  balance: ""
+  balance: "",
+  note: "",
+  color: "#ec4899"
 };
 
-const mask = (last4) => (last4 ? `****${last4}` : "--");
+const mask = (last4) => (last4 ? `•••• ${last4}` : "--");
+const typeText = (type) => {
+  if (type === "cash") return "Tiền mặt";
+  if (type === "bank") return "Ngân hàng";
+  if (type === "wallet") return "Ví điện tử";
+  return "Thẻ tín dụng";
+};
+const typeClass = (type) => {
+  if (type === "cash") return "cash";
+  if (type === "bank") return "bank";
+  if (type === "wallet") return "wallet";
+  return "credit";
+};
 
-export default function AccountsScreen({ userEmail }) {
-  const [accounts, setAccounts] = useState([]);
+export default function AccountsScreen({
+  accounts = [],
+  onCreateAccount,
+  onUpdateAccount,
+  onDeleteAccount,
+  loading
+}) {
   const [form, setForm] = useState(emptyAccount);
   const [editingId, setEditingId] = useState(null);
+  const [activeType, setActiveType] = useState("all");
 
-  useEffect(() => {
-    const raw = localStorage.getItem(storageKey(userEmail));
-    if (!raw) {
-      setAccounts([]);
-      return;
-    }
-    try {
-      setAccounts(JSON.parse(raw));
-    } catch {
-      setAccounts([]);
-    }
-  }, [userEmail]);
-
-  useEffect(() => {
-    localStorage.setItem(storageKey(userEmail), JSON.stringify(accounts));
-  }, [accounts, userEmail]);
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const name = form.name.trim();
     if (!name) return;
 
     const payload = {
-      id: editingId || `account-${Date.now()}`,
       name,
       type: form.type,
       provider: form.provider.trim(),
       last4: form.last4.trim().slice(-4),
-      balance: parseNumberInput(form.balance)
+      balance: parseNumberInput(form.balance),
+      note: form.note.trim(),
+      color: form.color
     };
-
-    setAccounts((current) => {
-      if (!editingId) return [payload, ...current];
-      return current.map((item) => (item.id === editingId ? payload : item));
-    });
+    if (editingId) await onUpdateAccount?.(editingId, payload);
+    else await onCreateAccount?.(payload);
 
     setEditingId(null);
     setForm(emptyAccount);
@@ -66,147 +65,195 @@ export default function AccountsScreen({ userEmail }) {
       type: account.type,
       provider: account.provider,
       last4: account.last4,
-      balance: formatNumberInput(account.balance)
+      balance: formatNumberInput(account.balance),
+      note: account.note || "",
+      color: account.color || "#ec4899"
     });
   };
 
-  const removeAccount = (id) => {
-    setAccounts((current) => current.filter((item) => item.id !== id));
+  const removeAccount = async (id) => {
+    await onDeleteAccount?.(id);
     if (editingId === id) {
       setEditingId(null);
       setForm(emptyAccount);
     }
   };
 
+  const filteredAccounts = useMemo(() => {
+    if (activeType === "all") return accounts;
+    return accounts.filter((item) => item.type === activeType);
+  }, [accounts, activeType]);
+
+  const totalBalance = filteredAccounts.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+  const walletCount = filteredAccounts.filter((item) => item.type === "wallet").length;
+  const cardCount = filteredAccounts.filter((item) => item.type === "credit").length;
+
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <h3>{t("accounts.title")}</h3>
-      </div>
+    <section className="acc-page">
+      <header className="acc-header">
+        <h1>Thẻ & Tài khoản</h1>
+        <p>Quản lý thủ công các tài khoản thanh toán, ví điện tử và thẻ để theo dõi số dư và ghi nhận giao dịch.</p>
+      </header>
 
-      <form className="form" onSubmit={handleSubmit}>
-        <div className="row">
-          <label className="field">
-            <span>{t("accounts.form.name")}</span>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder={t("accounts.form.name_placeholder")}
-              required
-            />
-          </label>
+      <div className="acc-grid">
+        <div className="acc-left">
+          <section className="acc-kpis">
+            <article><span>Tổng số dư</span><strong>{currency(totalBalance)}</strong></article>
+            <article><span>Tài khoản đang quản lý</span><strong>{filteredAccounts.length}</strong></article>
+            <article><span>Thẻ đang lưu</span><strong>{cardCount}</strong></article>
+            <article><span>Ví điện tử</span><strong>{walletCount}</strong></article>
+          </section>
 
-          <label className="field">
-            <span>{t("accounts.form.type")}</span>
-            <select
-              value={form.type}
-              onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
-            >
-              <option value="cash">{t("accounts.type.cash")}</option>
-              <option value="card">{t("accounts.type.card")}</option>
-              <option value="wallet">{t("accounts.type.wallet")}</option>
-              <option value="bank">{t("accounts.type.bank")}</option>
-            </select>
-          </label>
+          <section className="acc-list-card">
+            <div className="acc-tabs">
+              {[
+                { id: "all", label: "Tất cả" },
+                { id: "bank", label: "Tài khoản" },
+                { id: "credit", label: "Thẻ" },
+                { id: "wallet", label: "Ví điện tử" },
+                { id: "cash", label: "Tiền mặt" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={activeType === tab.id ? "active" : ""}
+                  onClick={() => setActiveType(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="acc-list">
+              {!filteredAccounts.length ? (
+                <p className="empty">Chưa có tài khoản nào.</p>
+              ) : (
+                filteredAccounts.map((account) => (
+                  <article key={account.id} className="acc-item">
+                    <div className="acc-item-main">
+                      <div className={`acc-type-dot ${typeClass(account.type)}`} />
+                      <div>
+                        <strong>{account.name}</strong>
+                        <p>{account.provider || "Không có nhà cung cấp"} · {mask(account.last4)}</p>
+                      </div>
+                    </div>
+                    <div className="acc-item-right">
+                      <span className={`acc-badge ${typeClass(account.type)}`}>{typeText(account.type)}</span>
+                      <strong>{currency(account.balance || 0)}</strong>
+                      <div className="acc-item-actions">
+                        <button type="button" onClick={() => startEdit(account)}>Sửa</button>
+                        <button type="button" className="danger" onClick={() => removeAccount(account.id)}>Xóa</button>
+                      </div>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
         </div>
 
-        <div className="row">
-          <label className="field">
-            <span>{t("accounts.form.provider")}</span>
-            <input
-              type="text"
-              value={form.provider}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, provider: event.target.value }))
-              }
-              placeholder={t("accounts.form.provider_placeholder")}
-            />
-          </label>
+        <aside className="acc-form-card">
+          <h3>Thêm tài khoản / thẻ thủ công</h3>
+          <form className="acc-form" onSubmit={handleSubmit}>
+            <label>
+              Tên tài khoản / thẻ *
+              <input
+                type="text"
+                value={form.name}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                placeholder="Ví dụ: Tài khoản lương, Thẻ Visa..."
+                required
+              />
+            </label>
 
-          <label className="field">
-            <span>{t("accounts.form.last4")}</span>
-            <input
-              type="text"
-              maxLength="4"
-              value={form.last4}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  last4: event.target.value.replace(/\D/g, "")
-                }))
-              }
-              placeholder="1234"
-            />
-          </label>
+            <label>
+              Loại *
+              <select
+                value={form.type}
+                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}
+              >
+                <option value="cash">Tiền mặt</option>
+                <option value="bank">Ngân hàng</option>
+                <option value="wallet">Ví điện tử</option>
+                <option value="credit">Thẻ tín dụng</option>
+              </select>
+            </label>
 
-          <label className="field">
-            <span>{t("accounts.form.balance")}</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={form.balance}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  balance: formatNumberInput(event.target.value)
-                }))
-              }
-            />
-          </label>
-        </div>
+            <label>
+              Nhà cung cấp
+              <input
+                type="text"
+                value={form.provider}
+                onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value }))}
+                placeholder="Ví dụ: Vietcombank, MoMo"
+              />
+            </label>
 
-        <div className="row-actions">
-          {editingId && (
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => {
-                setEditingId(null);
-                setForm(emptyAccount);
-              }}
-            >
-              {t("accounts.action.cancel_edit")}
-            </button>
-          )}
-          <button className="primary" type="submit">
-            {editingId ? t("accounts.action.save") : t("accounts.action.add")}
-          </button>
-        </div>
-      </form>
+            <div className="acc-row-2">
+              <label>
+                4 số cuối
+                <input
+                  type="text"
+                  maxLength="4"
+                  value={form.last4}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, last4: event.target.value.replace(/\D/g, "") }))
+                  }
+                  placeholder="1234"
+                />
+              </label>
+              <label>
+                Số dư hiện tại
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.balance}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, balance: formatNumberInput(event.target.value) }))
+                  }
+                  placeholder="0"
+                />
+              </label>
+            </div>
 
-      <div className="list">
-        {!accounts.length ? (
-          <p className="empty">{t("accounts.empty")}</p>
-        ) : (
-          accounts.map((account) => (
-            <article key={account.id} className="item-row account-row">
-              <div>
-                <p>
-                  <strong>{account.name}</strong> - {t(`accounts.type.${account.type}`)}
-                </p>
-                <small>
-                  {account.provider || t("accounts.no_provider")} - {mask(account.last4)}
-                </small>
-              </div>
-              <div className="account-right">
-                <p>{currency(account.balance || 0)}</p>
-                <div className="row-actions">
-                  <button className="ghost" type="button" onClick={() => startEdit(account)}>
-                    {t("accounts.action.edit")}
-                  </button>
-                  <button
-                    className="ghost danger"
-                    type="button"
-                    onClick={() => removeAccount(account.id)}
-                  >
-                    {t("accounts.action.delete")}
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))
-        )}
+            <label>
+              Màu sắc
+              <input
+                type="color"
+                value={form.color}
+                onChange={(event) => setForm((current) => ({ ...current, color: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Ghi chú
+              <textarea
+                rows={3}
+                value={form.note}
+                onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Nhập ghi chú..."
+              />
+            </label>
+
+            <div className="acc-form-actions">
+              {editingId ? (
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm(emptyAccount);
+                  }}
+                >
+                  Hủy
+                </button>
+              ) : null}
+              <button className="primary" type="submit" disabled={loading}>
+                {loading ? "Đang lưu..." : editingId ? "Lưu tài khoản" : "Thêm tài khoản"}
+              </button>
+            </div>
+          </form>
+        </aside>
       </div>
     </section>
   );

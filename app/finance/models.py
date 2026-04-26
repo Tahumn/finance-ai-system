@@ -51,10 +51,31 @@ class Account(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
+    account_type = Column("type", String, nullable=False, default="bank")
+    provider = Column(String, nullable=True)
+    last4 = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+    color = Column(String, nullable=False, default="#ec4899")
     currency = Column(String, nullable=False, default="VND")
     opening_balance = Column(Float, nullable=False, default=0.0)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("user_id", "name", name="uq_user_account_name"),)
+
+    @property
+    def type(self) -> str:
+        return self.account_type
+
+    @type.setter
+    def type(self, value: str) -> None:
+        self.account_type = value
+
+    @property
+    def balance(self) -> float:
+        return float(self.opening_balance or 0.0)
+
+    @balance.setter
+    def balance(self, value: float) -> None:
+        self.opening_balance = value
 
 
 class Transaction(Base):
@@ -125,6 +146,29 @@ class Goal(Base):
     target_date = Column(Date, nullable=True)
 
 
+class SavingsGoal(Base):
+    __tablename__ = "savings_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    goal_type = Column(String, nullable=True)
+    funding_source = Column(String, nullable=True)
+    priority = Column(String, nullable=True)
+    note = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    target_amount = Column(Float, nullable=False, default=0.0)
+    saved_amount = Column(Float, nullable=False, default=0.0)
+    monthly_contribution = Column(Float, nullable=False, default=0.0)
+    start_date = Column(Date, nullable=True)
+    target_date = Column(Date, nullable=True)
+    auto_deposit = Column(Boolean, nullable=False, default=False)
+    auto_transfer = Column(Boolean, nullable=False, default=False)
+    status = Column(String, nullable=False, default="active")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Reminder(Base):
     __tablename__ = "reminders"
 
@@ -134,4 +178,3 @@ class Reminder(Base):
     remind_date = Column(Date, nullable=True)
     channel = Column(String, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
