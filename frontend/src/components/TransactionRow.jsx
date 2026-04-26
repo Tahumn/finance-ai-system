@@ -28,7 +28,7 @@ export default function TransactionRow({ item, categoryLabel, userEmail }) {
 
         <div className="tx-info">
           <div className="tx-top">
-            <p className="tx-desc">{item.description}</p>
+            <p className="tx-desc">{item.description || t("transactions.none", null, "Không có mô tả")}</p>
             <strong className={`tx-amount ${item.transaction_type === "income" ? "income" : "expense"}`}>
               {currency(item.amount)}
             </strong>

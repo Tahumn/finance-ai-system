@@ -294,7 +294,10 @@ OCR_ESTIMATE_KEYWORDS = (
 )
 OCR_PRETAX_KEYWORDS = ("truoc thue", "pre tax", "before tax")
 OCR_NOTE_KEYWORDS = ("ghi chu", "note", "chu thich")
-OCR_MERCHANT_HINTS = ("don vi ban hang", "cua hang", "cong ty", "store", "shop", "market")
+OCR_MERCHANT_HINTS = (
+    "don vi ban hang", "cua hang", "cong ty", "store", "shop", "market", 
+    "nha hang", "quan", "tiem", "sieu thi", "tttm", "dai ly", "nha phan phoi"
+)
 OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
 
 STOPWORDS = {
@@ -2550,10 +2553,10 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
                 "CHIẾN LƯỢC KIỂM TOÁN TỐI THƯỢNG:\n"
                 "1. QUY TẮC CON SỐ (VND): Dấu chấm (.) là phân cách hàng nghìn (35.000 = ba mươi lăm nghìn). Tuyệt đối không nhầm thành số 35.\n"
                 "2. KIỂM TRÁO CHỨNG TỪ: Tìm kiếm TỔNG THANH TOÁN (Total) ở cuối hóa đơn. Luôn đối chiếu: Tổng = Tổng tiền hàng + Thuế - Giảm giá. Nếu con số lộn xộn, hãy dùng tư duy logic để suy luận số nào là số thực tế người dùng phải trả.\n"
-                "3. NHẬN DIỆN THƯƠNG HIỆU: Đọc kỹ tên Merchant ở đầu hóa đơn. Nếu chữ mờ, hãy dựa vào logo hoặc các cụm từ liên quan (Ví dụ: 'TiniWorld' thường đi kèm với 'Khu vui chơi').\n"
+                "3. NHẬN DIỆN THƯƠNG HIỆU: Tìm tên Nhà hàng, Cửa hàng, Công ty ở 3-5 dòng đầu tiên của hóa đơn. Thường là dòng có kích thước chữ lớn nhất hoặc nằm ngay dưới Logo. Ví dụ: 'Haidilao', 'Phúc Long', 'Starbucks', 'WinMart'. Tuyệt đối không lấy các tiêu đề như 'PHIẾU TẠM TÍNH', 'HÓA ĐƠN BÁN LẺ'. Nếu có mã số thuế (MST) đi kèm, hãy lấy tên công ty đứng tên MST đó.\n"
                 "4. KHÔNG HÀN THỨ: Nếu thấy các số nhỏ như 1.0, 2.0 (số lượng), đừng bao giờ nhầm chúng là Tổng tiền.\n\n"
                 "Cấu trúc JSON yêu cầu:\n"
-                "- total (số nguyên), subtotal, vat, merchant, invoice_id, date (YYYY-MM-DD), category, items, qr_data, text.\n\n"
+                "- total (số nguyên), subtotal, vat, merchant (Tên cửa hàng/Công ty), merchant_confidence (0.0-1.0), invoice_id, date (YYYY-MM-DD), category, items, qr_data, text.\n\n"
                 "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH. NẾU KHÔNG ĐỌC ĐƯỢC GÌ, TRẢ VỀ JSON TRỐNG {}."
             )
         )
@@ -2765,35 +2768,53 @@ def _extract_date_from_lines(lines: list[str]) -> DateType | None:
 
 
 def _extract_merchant_from_lines(lines: list[str]) -> str | None:
-    for line in lines:
+    if not lines:
+        return None
+        
+    # Phase 1: Look for explicit hints in early lines (first 5 lines)
+    for i, line in enumerate(lines[:5]):
         normalized = _normalize_text(line)
         if _line_has_any_keyword(normalized, OCR_MERCHANT_IGNORE):
             continue
         if _line_has_any_keyword(normalized, OCR_MERCHANT_HINTS):
+            # If hint is followed by colon, take the part after it
             if ":" in line:
                 value = line.split(":", 1)[1].strip()
-                if value:
+                if value and len(value) > 2:
                     return value
-            cleaned = normalized
-            for keyword in OCR_MERCHANT_HINTS:
-                cleaned = cleaned.replace(keyword, "")
-            if cleaned:
-                return line.strip()
+            # Otherwise, try to clean the line
+            cleaned = line.strip()
+            # If the line IS just the keyword (e.g. "NHÀ HÀNG:"), take the next line
+            if len(normalized.strip(":")) < 10 and i + 1 < len(lines):
+                next_line = lines[i+1].strip()
+                if next_line and not any(k in _normalize_text(next_line) for k in ("mst", "dia chi", "tel")):
+                    return next_line
+            return cleaned
 
-    for line in lines:
+    # Phase 2: Heuristics for the first few non-header lines
+    for i, line in enumerate(lines[:8]):
         normalized = _normalize_text(line)
-        if re.search(r"\d", normalized):
+        # Skip if too short or too long
+        if len(normalized) < 3 or len(normalized) > 50:
             continue
+        # Skip common headers/junk
+        if _line_has_any_keyword(normalized, ("hoa don", "phieu", "tam tinh", "thanh toan", "order", "invoice", "receipt")):
+            continue
+        # Skip address-like lines
+        if _line_has_any_keyword(normalized, ("dia chi", "address", "duong", "quan ", "phuong ", "tp.", "hcm", "ha noi")):
+            continue
+        # Skip contact-like lines
+        if _line_has_any_keyword(normalized, ("tel", "phone", "sdt", "mst", "tax", "email", "web", "http")):
+            continue
+        # Skip if it has many digits (likely a phone or MST)
+        if len(re.sub(r"\D", "", normalized)) > 5:
+            continue
+        # Must have letters
         if not re.search(r"[a-z]", normalized):
             continue
-        if _line_has_any_keyword(normalized, OCR_MERCHANT_SKIP_KEYWORDS):
-            continue
-        word_count = len([token for token in normalized.split() if token])
-        if word_count >= 2:
-            return line.strip()
-        if _parse_amount(line) is not None and len(normalized) < 6:
-            continue
+            
         return line.strip()
+
     return None
 
 
@@ -2872,6 +2893,18 @@ def extract_ocr(image_bytes: bytes) -> dict:
         category_hint = gemini_result.get("category")
         qr_data = gemini_result.get("qr_data")
         
+        # Thử trích xuất số tiền từ VietQR nếu có
+        if qr_data and not total:
+            # Field 54 in EMVCo/VietQR is transaction amount
+            import re
+            amount_match = re.search(r"54(\d{2})(\d+)", qr_data)
+            if amount_match:
+                length = int(amount_match.group(1))
+                value = amount_match.group(2)[:length]
+                if value.isdigit():
+                    total = float(value)
+                    print(f"[OCR] QR Engine | Extracted amount from VietQR: {total}")
+
         date_value = _coerce_date_value(gemini_result.get("date"))
 
     # --- PHASE 3: HYBRID FALLBACK (Tesseract/Regex) ---
@@ -2915,7 +2948,10 @@ def extract_ocr(image_bytes: bytes) -> dict:
     
     return {
         "merchant": merchant,
+        "merchant_confidence": gemini_result.get("merchant_confidence") if gemini_result else 0.4,
         "total": total,
+        "estimated": estimated,
+        "vat": vat_amount,
         "date": date_value,
         "category": gemini_result.get("category") if gemini_result else None,
         "note": note,

@@ -72,3 +72,6 @@ export const getCategoryBreakdown = (params) =>
 
 export const getChartData = (params) =>
   request(`/finance/reports/chart${buildQuery(params)}`);
+
+export const getAnomalies = () =>
+  request("/finance/reports/anomalies");

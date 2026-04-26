@@ -54,6 +54,7 @@ class ChatHistoryResponse(BaseModel):
 
 class OcrResponse(BaseModel):
     merchant: str | None = None
+    merchant_confidence: float | None = None
     total: float | None = None
     date: DateType | None = None
     vat: float | None = None

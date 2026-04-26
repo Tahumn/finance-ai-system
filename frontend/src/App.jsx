@@ -150,6 +150,7 @@ export default function App() {
   const [incomeBreakdown, setIncomeBreakdown] = useState([]);
   const [monthlySeries, setMonthlySeries] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
+  const [globalRecentTransactions, setGlobalRecentTransactions] = useState([]);
   const [filters, setFilters] = useState(defaultFilters());
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -476,7 +477,17 @@ export default function App() {
         limit: 20,
         offset: 0
       };
-      const [cats, tagsList, txs, sum, catsBreakdown] = await Promise.all([
+      const [
+        cats, 
+        tagsList, 
+        txs, 
+        sum, 
+        catsBreakdown, 
+        incBreakdown, 
+        charts, 
+        anomalyList,
+        allTxs
+      ] = await Promise.all([
         listCategories(),
         listTags(),
         listTransactions(params),
@@ -484,13 +495,28 @@ export default function App() {
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "expense" }),
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "income" }),
         getChartData({ limit_months: 6 }),
-        getAnomalies()
+        getAnomalies(),
+        listTransactions({ limit: 10, offset: 0 })
       ]);
+
       setCategories(cats);
       setTags(tagsList);
       setTransactions(txs);
       setSummary(sum);
       setBreakdown(catsBreakdown);
+      setIncomeBreakdown(incBreakdown);
+      setMonthlySeries(charts?.series || []);
+      setAnomalies(anomalyList || []);
+      const catMap = {};
+      cats.forEach((c) => { catMap[c.id] = c.name; });
+
+      setGlobalRecentTransactions(
+        (allTxs?.items || []).map((item) => ({
+          ...item,
+          categoryLabel: item.category_id ? catMap[item.category_id] || t("transactions.none") : t("transactions.none")
+        }))
+      );
+
       const email = authState.user?.email || "guest";
       await mergeNotifications(
         email,
@@ -814,6 +840,7 @@ export default function App() {
             breakdown={breakdownWithShare}
             incomeBreakdown={incomeBreakdownWithShare}
             transactions={transactionsWithLabels}
+            recentTransactions={globalRecentTransactions}
             monthlySeries={monthlySeries}
             onViewTransactions={() => handleChangeView("transactions")}
             onGoOcr={() => handleChangeView("ocr")}

@@ -129,6 +129,7 @@ export default function DashboardScreen({
   breakdown = [],
   incomeBreakdown,
   transactions = [],
+  recentTransactions = [],
   monthlySeries = [],
   anomalies = [],
   onViewTransactions,
@@ -143,7 +144,7 @@ export default function DashboardScreen({
   const [actionsOpen, setActionsOpen] = useState(true);
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const maxVal = Math.max(1, ...safeMonthly.flatMap((item) => [item.income, item.expense]));
-  const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 4);
+  const slicedTransactions = (Array.isArray(recentTransactions) ? recentTransactions : []).slice(0, 10);
   const insights = buildAiInsights(summary || {}, transactions, breakdown);
   const donutItems = buildDonutItems(breakdown, 4, t("reports.other", null, "Khác"));
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
@@ -330,8 +331,8 @@ export default function DashboardScreen({
         </div>
         <div className="insight-grid">
           {insights.map((insight) => (
-            <button 
-              key={insight.id} 
+            <button
+              key={insight.id}
               className={`insight-card ${insight.type}`}
               onClick={() => onGoChat(insight.query)}
               type="button"

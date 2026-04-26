@@ -963,6 +963,7 @@ export default function TransactionsScreen({
               userEmail={userEmail}
               onCreateTag={onCreateTag}
               onCreateTransaction={onCreateTransaction}
+              onSuccess={() => setActiveModal(null)}
               loading={loading}
               embedded
             />

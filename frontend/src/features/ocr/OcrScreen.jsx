@@ -10,6 +10,8 @@ const baseParsedState = () => ({
   date: toInputDate(new Date()),
   merchant: "",
   total: "",
+  subtotal: "",
+  vat: "",
   categoryId: "",
   note: ""
 });
@@ -17,7 +19,9 @@ const baseParsedState = () => ({
 const baseConfidence = {
   date: 0,
   merchant: 0,
-  total: 0
+  total: 0,
+  subtotal: 0,
+  vat: 0
 };
 
 const sanitizeName = (name) =>
@@ -39,6 +43,7 @@ export default function OcrScreen({
   userEmail,
   onCreateTag,
   onCreateTransaction,
+  onSuccess,
   loading,
   embedded = false
 }) {
@@ -108,6 +113,8 @@ export default function OcrScreen({
         ...current,
         merchant: result.merchant || current.merchant || t("ocr.merchant_guess"),
         total: result.total ? formatNumberInput(String(result.total)) : current.total,
+        subtotal: result.estimated ? formatNumberInput(String(result.estimated)) : "",
+        vat: result.vat ? formatNumberInput(String(result.vat)) : "",
         note: result.note || current.note,
         date: result.date || current.date,
         categoryId: result.category ? (categories.find(c => c.name.toLowerCase() === result.category.toLowerCase())?.id || "") : current.categoryId
@@ -115,8 +122,10 @@ export default function OcrScreen({
 
       setConfidence({
         date: result.date ? 0.9 : 0.4,
-        merchant: result.merchant ? 0.85 : 0.4,
-        total: result.total ? 0.95 : 0.3
+        merchant: result.merchant_confidence || (result.merchant ? 0.85 : 0.4),
+        total: result.total ? 0.95 : 0.3,
+        subtotal: result.estimated ? 0.9 : 0,
+        vat: result.vat ? 0.9 : 0
       });
 
       setNotice(t("ocr.notice.extracted", null, "Đã trích xuất xong. Vui lòng kiểm tra lại số liệu."));
@@ -129,7 +138,10 @@ export default function OcrScreen({
 
   const handleCreate = async (event) => {
     event.preventDefault();
-    if (!canCreate) return;
+    if (!canCreate) {
+      setError("Vui lòng nhập đầy đủ Tổng tiền và Ngày hóa đơn.");
+      return;
+    }
 
     setError("");
     setNotice("");
@@ -147,16 +159,21 @@ export default function OcrScreen({
         date: parsed.date,
         tag_ids: selectedTagIds
       });
+      
       setNotice(t("ocr.notice.created", null, "Giao dịch đã được tạo thành công!"));
-      setParsed(baseParsedState());
-      setConfidence(baseConfidence);
-      setFile(null);
-      setOcrState("idle");
-      setWarnings([]);
-      setSelectedTagIds([]);
-      setTagInput("");
-    } catch {
-      setError(t("ocr.error.create_failed", null, "Không thể tạo giao dịch."));
+      if (onSuccess) {
+        setTimeout(() => onSuccess(), 1000);
+      } else {
+        setParsed(baseParsedState());
+        setConfidence(baseConfidence);
+        setFile(null);
+        setOcrState("idle");
+        setWarnings([]);
+        setSelectedTagIds([]);
+        setTagInput("");
+      }
+    } catch (err) {
+      setError(err.message || t("ocr.error.create_failed", null, "Không thể tạo giao dịch."));
     }
   };
 
@@ -207,7 +224,7 @@ export default function OcrScreen({
   const Shell = embedded ? "div" : "section";
 
   return (
-    <Shell className={embedded ? "ocr-embedded" : "panel"}>
+    <Shell className={`${embedded ? "ocr-embedded" : "panel"} ocr-container-pro ${ocrState === "running" ? "running" : ""}`}>
       {!embedded && (
         <div className="panel-header">
           <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
@@ -257,6 +274,18 @@ export default function OcrScreen({
         <form className="ocr-form-card" onSubmit={handleCreate}>
           <div className="form-section-title">Thông tin giao dịch</div>
 
+          <div className="confidence-legend">
+             <div className="legend-item">
+               <span className="dot high"></span> Tốt
+             </div>
+             <div className="legend-item">
+               <span className="dot med"></span> Trung bình
+             </div>
+             <div className="legend-item">
+               <span className="dot low"></span> Cần kiểm tra
+             </div>
+           </div>
+
           <div className="field-pro">
             <label>Cửa hàng (Merchant)</label>
             <div className="input-wrapper-pro">
@@ -268,6 +297,11 @@ export default function OcrScreen({
               />
               <div className={`confidence-dot ${getConfClass(confidence.merchant)}`} title="Độ tin cậy của AI"></div>
             </div>
+            {confidence.merchant > 0 && (
+              <div className="confidence-score-text">
+                Độ tin cậy AI: <span className={`score ${getConfClass(confidence.merchant)}`}>{(confidence.merchant * 100).toFixed(0)}%</span>
+              </div>
+            )}
           </div>
 
             <div className="field-pro">
@@ -285,6 +319,32 @@ export default function OcrScreen({
 
 
           <div className="field-pro">
+            <label>Tạm tính (Subtotal)</label>
+            <div className="input-wrapper-pro">
+              <input
+                className="input-pro"
+                value={parsed.subtotal}
+                onChange={(e) => setParsed(p => ({ ...p, subtotal: formatNumberInput(e.target.value) }))}
+                placeholder="0"
+              />
+              <div className={`confidence-dot ${getConfClass(confidence.subtotal)}`}></div>
+            </div>
+          </div>
+
+          <div className="field-pro">
+            <label>Thuế (VAT)</label>
+            <div className="input-wrapper-pro">
+              <input
+                className="input-pro"
+                value={parsed.vat}
+                onChange={(e) => setParsed(p => ({ ...p, vat: formatNumberInput(e.target.value) }))}
+                placeholder="0"
+              />
+              <div className={`confidence-dot ${getConfClass(confidence.vat)}`}></div>
+            </div>
+          </div>
+
+          <div className="field-pro">
             <label>TỔNG THANH TOÁN (Grand Total)</label>
             <div className="input-wrapper-pro">
               <input
@@ -300,6 +360,19 @@ export default function OcrScreen({
             <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block' }}>
               {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
             </small>
+          </div>
+
+          <div className="field-pro">
+            <label>Ghi chú (Note)</label>
+            <div className="input-wrapper-pro">
+              <textarea
+                className="input-pro"
+                rows="2"
+                value={parsed.note}
+                onChange={(e) => setParsed(p => ({ ...p, note: e.target.value }))}
+                placeholder="Nhập ghi chú thêm nếu cần..."
+              />
+            </div>
           </div>
 
           <label className="field">
@@ -426,7 +499,17 @@ export default function OcrScreen({
             >
               Làm lại
             </button>
-            <button className="primary" type="submit" style={{ flex: 1 }} disabled={!canCreate || ocrState === "running" || loading}>
+            <button 
+              className="primary" 
+              type="submit" 
+              style={{ flex: 1 }} 
+              disabled={ocrState === "running" || loading}
+              onClick={() => {
+                if (!canCreate) {
+                  setError("Vui lòng nhập đầy đủ Tổng tiền và Ngày hóa đơn.");
+                }
+              }}
+            >
               {loading ? "Đang xử lý..." : "Xác nhận & Lưu Giao Dịch"}
             </button>
           </div>
