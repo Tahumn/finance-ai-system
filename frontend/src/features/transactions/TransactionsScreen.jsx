@@ -107,6 +107,28 @@ const formatRangeLabel = (start, end) => {
   return `${fmt(start)} – ${fmt(end)}`;
 };
 
+const formatAnomalyTip = (anomaly) => {
+  if (anomaly == null) return "";
+  if (typeof anomaly === "string" || typeof anomaly === "number") return String(anomaly);
+  if (typeof anomaly !== "object") return String(anomaly);
+
+  if (anomaly.message) return String(anomaly.message);
+
+  const headParts = [];
+  if (anomaly.severity) headParts.push(String(anomaly.severity).toUpperCase());
+  if (anomaly.reason) headParts.push(String(anomaly.reason));
+  const head = headParts.join(": ");
+
+  const tailParts = [];
+  if (anomaly.description) tailParts.push(String(anomaly.description));
+  if (anomaly.amount != null && !Number.isNaN(Number(anomaly.amount))) tailParts.push(currency(Number(anomaly.amount)));
+  if (anomaly.date) tailParts.push(String(anomaly.date).slice(0, 10));
+  const tail = tailParts.join(" · ");
+
+  if (head && tail) return `${head} — ${tail}`;
+  return head || tail || JSON.stringify(anomaly);
+};
+
 /* ─── main component ─── */
 export default function TransactionsScreen({
   transactions,
@@ -491,19 +513,19 @@ export default function TransactionsScreen({
               </div>
 
               {/* AI Insights Card - below category sidebar */}
-              {anomalies && anomalies.length > 0 && (
-                <div className="txd-ai-card">
-                  <div className="txd-ai-card-header">
-                    <span>✨</span>
-                    <h4>Gợi ý AI</h4>
-                    <span className="txd-ai-badge">Mới</span>
-                  </div>
-                  {anomalies.slice(0, 2).map((a, idx) => (
-                    <p key={idx} className="txd-ai-tip">• {a.message || a}</p>
-                  ))}
-                </div>
-              )}
-           </div>
+	              {anomalies && anomalies.length > 0 && (
+	                <div className="txd-ai-card">
+	                  <div className="txd-ai-card-header">
+	                    <span>✨</span>
+	                    <h4>Gợi ý AI</h4>
+	                    <span className="txd-ai-badge">Mới</span>
+	                  </div>
+	                  {anomalies.slice(0, 2).map((a, idx) => (
+	                    <p key={idx} className="txd-ai-tip">• {formatAnomalyTip(a)}</p>
+	                  ))}
+	                </div>
+	              )}
+	           </div>
 
            {/* Right Column (List + Filters) */}
            <div className="txd-col-right">
