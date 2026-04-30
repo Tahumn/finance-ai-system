@@ -53,14 +53,20 @@ class ChatHistoryResponse(BaseModel):
 
 
 class OcrParsedResult(BaseModel):
+    document_type: str | None = None
     merchant: str | None = None
+    merchant_address: str | None = None
     merchant_confidence: float = 0.0
     date: DateType | None = None
+    transaction_time: str | None = None
     date_confidence: float = 0.0
     total: float | None = None
     total_confidence: float = 0.0
     vat: float | None = None
     vat_confidence: float = 0.0
+    currency: str = "VND"
+    payment_method: str | None = None
+    reference_number: str | None = None
     estimated: float | None = None
     estimated_confidence: float = 0.0
     note: str | None = None
@@ -82,10 +88,16 @@ class OcrResponse(BaseModel):
     trace_id: str | None = None
 
     # Backward-compatible legacy fields for existing frontend mapping.
+    document_type: str | None = None
     merchant: str | None = None
+    merchant_address: str | None = None
     total: float | None = None
     date: DateType | None = None
+    transaction_time: str | None = None
     vat: float | None = None
+    currency: str = "VND"
+    payment_method: str | None = None
+    reference_number: str | None = None
     estimated: float | None = None
     note: str | None = None
     computed_total: float | None = None

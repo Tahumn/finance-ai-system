@@ -118,6 +118,10 @@ DATE_EN_DAY_FIRST_REGEX = re.compile(
     r"(?:,)?\s+(?P<year>\d{2,4})\b",
     re.IGNORECASE,
 )
+TIME_12_24_REGEX = re.compile(
+    r"\b(?P<hour>\d{1,2})[:h](?P<minute>\d{2})(?:\s*(?P<ampm>am|pm))?\b",
+    re.IGNORECASE,
+)
 MONTH_REGEX = re.compile(r"thang\s*(?P<month>\d{1,2})")
 YEAR_REGEX = re.compile(r"nam\s*(?P<year>\d{4})")
 
@@ -395,6 +399,57 @@ OCR_NOTE_KEYWORDS = ("ghi chu", "note", "chu thich")
 OCR_MERCHANT_HINTS = ("don vi ban hang", "cua hang", "cong ty", "store", "shop", "market")
 OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
 OCR_GENERIC_MERCHANT_WORDS = ("hoa don", "bien lai", "receipt", "invoice", "vat invoice")
+OCR_DOCUMENT_TYPE_VALUES = ("retail_receipt", "vat_invoice", "receipt", "service_bill", "other")
+OCR_REFERENCE_KEYWORDS = (
+    "receipt no",
+    "receipt number",
+    "invoice no",
+    "invoice number",
+    "ref no",
+    "reference",
+    "so hoa don",
+    "ma giao dich",
+    "transaction id",
+)
+OCR_ADDRESS_HINTS = (
+    "dist",
+    "district",
+    "quan",
+    "duong",
+    "street",
+    "st.",
+    "phuong",
+    "ward",
+    "city",
+    "tp",
+    "thanh pho",
+)
+OCR_ADDRESS_IGNORE = (
+    "receipt",
+    "invoice",
+    "date",
+    "cashier",
+    "description",
+    "item",
+    "cash",
+    "change",
+    "vat",
+    "thank you",
+    "tel",
+    "phone",
+    "sdt",
+    "www",
+    ".com",
+    ".vn",
+)
+OCR_PAYMENT_METHOD_LABELS = {
+    "cash": "Tiền mặt",
+    "card": "Thẻ",
+    "bank_transfer": "Chuyển khoản",
+    "ewallet": "Ví điện tử",
+    "unknown": "Không rõ",
+}
+OCR_CURRENCY_VALUES = ("VND", "USD", "EUR", "JPY")
 OCR_KNOWN_MERCHANTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Circle K", ("circle k", "circlek")),
     ("WinMart", ("winmart", "vinmart")),
@@ -772,6 +827,66 @@ def _coerce_date_value(value: object) -> DateType | None:
         return value
     if isinstance(value, str):
         return _parse_iso_date(value) or _parse_date(value)
+    return None
+
+
+def _coerce_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    return str(value).strip() or None
+
+
+def _normalize_currency_code(value: object, fallback: str = "VND") -> str:
+    raw = _coerce_optional_text(value) or fallback
+    normalized = raw.upper().strip()
+    if normalized in OCR_CURRENCY_VALUES:
+        return normalized
+    return fallback
+
+
+def _normalize_document_type(value: object) -> str | None:
+    raw = _coerce_optional_text(value)
+    if not raw:
+        return None
+    normalized = _normalize_text(raw).replace(" ", "_")
+    alias_map = {
+        "retail_receipt": "retail_receipt",
+        "retailreceipt": "retail_receipt",
+        "hoa_don_ban_le": "retail_receipt",
+        "vat_invoice": "vat_invoice",
+        "invoice_vat": "vat_invoice",
+        "hoa_don_gtgt": "vat_invoice",
+        "receipt": "receipt",
+        "bien_lai": "receipt",
+        "service_bill": "service_bill",
+        "bill_dich_vu": "service_bill",
+        "other": "other",
+        "khac": "other",
+    }
+    mapped = alias_map.get(normalized)
+    if mapped in OCR_DOCUMENT_TYPE_VALUES:
+        return mapped
+    return None
+
+
+def _normalize_payment_method(value: object) -> str | None:
+    raw = _coerce_optional_text(value)
+    if not raw:
+        return None
+    normalized = _normalize_text(raw)
+    if normalized in {"cash", "tien mat"}:
+        return "cash"
+    if normalized in {"card", "the", "credit card", "debit card"}:
+        return "card"
+    if normalized in {"bank transfer", "chuyen khoan", "transfer"}:
+        return "bank_transfer"
+    if normalized in {"ewallet", "vi dien tu", "momo", "zalopay", "shopeepay"}:
+        return "ewallet"
+    if normalized in {"unknown", "khong ro"}:
+        return "unknown"
     return None
 
 
@@ -3032,6 +3147,142 @@ def _extract_note_from_lines(lines: list[str]) -> str | None:
     return None
 
 
+def _extract_document_type(text: str) -> str:
+    normalized = _normalize_text(text or "")
+    if any(token in normalized for token in ("gtgt", "vat invoice", "value added tax invoice")):
+        return "vat_invoice"
+    if "service bill" in normalized or "hoa don dich vu" in normalized:
+        return "service_bill"
+    if "receipt" in normalized and ("item" in normalized or "shopping" in normalized):
+        return "retail_receipt"
+    if "bien lai" in normalized:
+        return "receipt"
+    if "hoa don" in normalized or "invoice" in normalized:
+        return "retail_receipt"
+    if "bill" in normalized:
+        return "service_bill"
+    return "other"
+
+
+def _extract_transaction_time(lines: list[str]) -> str | None:
+    candidates: list[tuple[float, str]] = []
+    if not lines:
+        return None
+    for idx, line in enumerate(lines):
+        normalized = _normalize_text(line)
+        for match in TIME_12_24_REGEX.finditer(normalized):
+            hour = int(match.group("hour"))
+            minute = int(match.group("minute"))
+            ampm = (match.group("ampm") or "").lower()
+            if minute > 59:
+                continue
+            if ampm:
+                if hour < 1 or hour > 12:
+                    continue
+                if ampm == "pm" and hour != 12:
+                    hour += 12
+                if ampm == "am" and hour == 12:
+                    hour = 0
+            elif hour > 23:
+                continue
+
+            score = max(0.0, 1.0 - idx * 0.08)
+            if _line_has_any_keyword(normalized, OCR_DATE_HINTS):
+                score += 1.2
+            if "cashier" in normalized or _line_has_any_keyword(normalized, OCR_TOTAL_EXCLUDE_KEYWORDS):
+                score -= 0.4
+            candidates.append((score, f"{hour:02d}:{minute:02d}"))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _extract_payment_method(lines: list[str], text: str) -> str:
+    normalized = _normalize_text(text or "")
+    for line in lines:
+        normalized += f" {_normalize_text(line)}"
+    if any(token in normalized for token in ("cash", "tien mat")):
+        return "cash"
+    if any(token in normalized for token in ("visa", "mastercard", "jcb", "amex", "credit", "debit", "card", "the")):
+        return "card"
+    if any(token in normalized for token in ("chuyen khoan", "bank transfer", "wire transfer", "qr transfer", "internet banking")):
+        return "bank_transfer"
+    if any(token in normalized for token in ("momo", "zalopay", "shopeepay", "ewallet", "vi dien tu")):
+        return "ewallet"
+    return "unknown"
+
+
+def _extract_reference_number(lines: list[str]) -> str | None:
+    if not lines:
+        return None
+    for line in lines:
+        normalized = _normalize_text(line)
+        if not _line_has_any_keyword(normalized, OCR_REFERENCE_KEYWORDS):
+            continue
+        candidate = line.split(":", 1)[1] if ":" in line else line
+        candidate = _normalize_ocr_numeric_tokens(candidate)
+        digits = re.sub(r"\D", "", candidate)
+        if len(digits) >= 8:
+            return digits
+        tokens = re.findall(r"[A-Za-z0-9-]{6,}", candidate)
+        if tokens:
+            return tokens[0]
+    return None
+
+
+def _extract_merchant_address(lines: list[str]) -> str | None:
+    if not lines:
+        return None
+    candidates: list[tuple[float, str]] = []
+    for idx, line in enumerate(lines[:12]):
+        candidate = re.sub(r"[`|~_=]+", " ", line).strip()
+        candidate = re.sub(r"\s+", " ", candidate).strip(" -:,.")
+        if not candidate:
+            continue
+        normalized = _normalize_text(candidate)
+        if _line_has_any_keyword(normalized, OCR_ADDRESS_IGNORE):
+            continue
+        if not re.search(r"[a-z]", normalized):
+            continue
+        if len(candidate) < 6:
+            continue
+
+        has_indicator = any(hint in normalized for hint in OCR_ADDRESS_HINTS)
+        has_digit_and_alpha = bool(re.search(r"\d", candidate) and re.search(r"[A-Za-z]", candidate))
+        if not has_indicator and not has_digit_and_alpha:
+            continue
+
+        score = max(0.0, 1.2 - idx * 0.12)
+        if has_indicator:
+            score += 2.0
+        if "," in candidate:
+            score += 0.6
+        if has_digit_and_alpha:
+            score += 0.9
+
+        # Remove leading OCR glyph + merchant icon residue.
+        candidate = re.sub(r"^[^\w]*", "", candidate)
+        candidate = re.sub(r"^[A-Za-z]\s+(?=\d)", "", candidate)
+        candidates.append((score, candidate))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def _extract_currency(text: str) -> str:
+    normalized = _normalize_text(text or "")
+    wrapped = f" {normalized} "
+    if "$" in text or " usd " in wrapped or " dollar " in wrapped:
+        return "USD"
+    if " eur " in wrapped:
+        return "EUR"
+    if " jpy " in wrapped or " yen " in wrapped:
+        return "JPY"
+    return "VND"
+
+
 def _validate_ocr_totals(total: float | None, estimated: float | None, vat: float | None) -> tuple[float | None, float | None, bool | None, list[str]]:
     if total is None:
         return None, None, None, []
@@ -3303,10 +3554,16 @@ def _run_gemini_ocr_provider(image_bytes: bytes) -> _OCRProviderResult | None:
 
     raw_text = (gemini_result.get("text") or "").strip()
     fields = {
+        "document_type": _normalize_document_type(gemini_result.get("document_type")),
         "merchant": gemini_result.get("merchant"),
+        "merchant_address": _coerce_optional_text(gemini_result.get("merchant_address")),
         "total": _coerce_amount(gemini_result.get("total")),
         "date": _coerce_date_value(gemini_result.get("date")),
+        "transaction_time": _coerce_optional_text(gemini_result.get("transaction_time")),
         "vat": _coerce_amount(gemini_result.get("vat")),
+        "currency": _normalize_currency_code(gemini_result.get("currency"), fallback="VND"),
+        "payment_method": _normalize_payment_method(gemini_result.get("payment_method")),
+        "reference_number": _coerce_optional_text(gemini_result.get("reference_number")),
         "estimated": _coerce_amount(gemini_result.get("estimated")),
         "note": gemini_result.get("note"),
     }
@@ -3418,15 +3675,35 @@ def extract_ocr(
         )
 
     text = (provider_result.raw_text or "").strip()
+    document_type = _normalize_document_type(provider_result.fields.get("document_type"))
     merchant = _normalize_merchant_value(provider_result.fields.get("merchant"))
+    merchant_address = _coerce_optional_text(provider_result.fields.get("merchant_address"))
     total = _coerce_amount(provider_result.fields.get("total"))
     date_value = _coerce_date_value(provider_result.fields.get("date"))
+    transaction_time = _coerce_optional_text(provider_result.fields.get("transaction_time"))
     vat_amount = _coerce_amount(provider_result.fields.get("vat"))
+    currency = _normalize_currency_code(
+        provider_result.fields.get("currency"),
+        fallback=_extract_currency(text),
+    )
+    payment_method = _normalize_payment_method(provider_result.fields.get("payment_method"))
+    reference_number = _coerce_optional_text(provider_result.fields.get("reference_number"))
     estimated = _coerce_amount(provider_result.fields.get("estimated"))
     note = provider_result.fields.get("note")
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     warnings: list[str] = []
+
+    if document_type is None:
+        document_type = _extract_document_type(text)
+    if transaction_time is None:
+        transaction_time = _extract_transaction_time(lines)
+    if payment_method is None:
+        payment_method = _extract_payment_method(lines, text)
+    if reference_number is None:
+        reference_number = _extract_reference_number(lines)
+    if merchant_address is None:
+        merchant_address = _extract_merchant_address(lines)
 
     line_merchant = _normalize_merchant_value(
         _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
@@ -3513,7 +3790,17 @@ def extract_ocr(
 
     has_signal = bool(text.strip()) or any(
         value not in (None, "")
-        for value in (merchant, total, date_value, vat_amount, estimated, note)
+        for value in (
+            merchant,
+            merchant_address,
+            reference_number,
+            total,
+            date_value,
+            transaction_time,
+            vat_amount,
+            estimated,
+            note,
+        )
     )
     if not has_signal:
         raise OcrProcessingError(
@@ -3553,14 +3840,20 @@ def extract_ocr(
     warnings = list(dict.fromkeys(warnings))
 
     parsed_payload = {
+        "document_type": document_type,
         "merchant": merchant,
+        "merchant_address": merchant_address,
         "merchant_confidence": field_confidences["merchant_confidence"],
         "date": date_value,
+        "transaction_time": transaction_time,
         "date_confidence": field_confidences["date_confidence"],
         "total": total,
         "total_confidence": field_confidences["total_confidence"],
         "vat": vat_amount,
         "vat_confidence": field_confidences["vat_confidence"],
+        "currency": currency,
+        "payment_method": payment_method,
+        "reference_number": reference_number,
         "estimated": estimated,
         "estimated_confidence": field_confidences["estimated_confidence"],
         "note": note,
@@ -3605,10 +3898,16 @@ def extract_ocr(
         "warnings": warnings,
         "trace_id": trace_id,
         # Backward-compatible legacy fields
+        "document_type": document_type,
         "merchant": merchant,
+        "merchant_address": merchant_address,
         "total": total,
         "date": date_value,
+        "transaction_time": transaction_time,
         "vat": vat_amount,
+        "currency": currency,
+        "payment_method": payment_method,
+        "reference_number": reference_number,
         "estimated": estimated,
         "note": note,
         "computed_total": computed_total,
@@ -3617,6 +3916,7 @@ def extract_ocr(
         "text": text,
     }
     return response
+
 
 
 

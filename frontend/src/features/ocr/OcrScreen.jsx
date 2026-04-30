@@ -8,9 +8,15 @@ import { t } from "../../utils/i18n.js";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
+  transactionTime: "",
+  documentType: "retail_receipt",
   merchant: "",
+  merchantAddress: "",
+  referenceNumber: "",
   total: "",
+  currency: "VND",
   vat: "",
+  paymentMethod: "unknown",
   estimated: "",
   categoryId: "",
   note: ""
@@ -43,6 +49,24 @@ const normalizeCategoryKey = (value) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+
+const documentTypeOptions = [
+  { value: "retail_receipt", label: "Hóa đơn bán lẻ" },
+  { value: "vat_invoice", label: "Hóa đơn GTGT" },
+  { value: "receipt", label: "Biên lai" },
+  { value: "service_bill", label: "Bill dịch vụ" },
+  { value: "other", label: "Khác" }
+];
+
+const paymentMethodOptions = [
+  { value: "cash", label: "Tiền mặt" },
+  { value: "card", label: "Thẻ" },
+  { value: "bank_transfer", label: "Chuyển khoản" },
+  { value: "ewallet", label: "Ví điện tử" },
+  { value: "unknown", label: "Không rõ" }
+];
+
+const currencyOptions = ["VND", "USD", "EUR", "JPY"];
 
 export default function OcrScreen({
   categories,
@@ -129,10 +153,16 @@ export default function OcrScreen({
         : "";
       setParsed((current) => ({
         ...current,
+        documentType: parsedResult.document_type || "retail_receipt",
+        transactionTime: parsedResult.transaction_time || "",
         merchant:
           parsedResult.merchant || current.merchant || sanitizeName(file.name) || t("ocr.merchant_guess"),
+        merchantAddress: parsedResult.merchant_address || "",
+        referenceNumber: parsedResult.reference_number || "",
         total: parsedResult.total == null ? "" : toFormattedNumber(parsedResult.total, current.total),
+        currency: parsedResult.currency || "VND",
         vat: parsedResult.vat == null ? "" : toFormattedNumber(parsedResult.vat, current.vat),
+        paymentMethod: parsedResult.payment_method || "unknown",
         estimated: parsedResult.estimated == null ? "" : toFormattedNumber(parsedResult.estimated, current.estimated),
         note: parsedResult.note || (rawText ? `OCR: ${rawText.slice(0, 200)}` : current.note),
         date: parsedResult.date || current.date,
@@ -182,7 +212,20 @@ export default function OcrScreen({
     setError("");
     setNotice("");
 
-    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.note]
+    const metadataParts = [
+      parsed.transactionTime ? `Time ${parsed.transactionTime}` : "",
+      parsed.paymentMethod && parsed.paymentMethod !== "unknown"
+        ? `PM ${paymentMethodOptions.find((item) => item.value === parsed.paymentMethod)?.label || parsed.paymentMethod}`
+        : "",
+      parsed.referenceNumber ? `Ref ${parsed.referenceNumber}` : "",
+      parsed.merchantAddress ? `Addr ${parsed.merchantAddress}` : "",
+      parsed.documentType && parsed.documentType !== "retail_receipt"
+        ? `Doc ${documentTypeOptions.find((item) => item.value === parsed.documentType)?.label || parsed.documentType}`
+        : "",
+      parsed.currency && parsed.currency !== "VND" ? `Currency ${parsed.currency}` : ""
+    ].filter(Boolean);
+
+    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.note, metadataParts.join(" | ")]
       .filter(Boolean)
       .join(" - ");
 
@@ -312,6 +355,51 @@ export default function OcrScreen({
 
           <div className="row">
             <label className="field">
+              <span>Giờ giao dịch</span>
+              <input
+                type="time"
+                value={parsed.transactionTime}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, transactionTime: event.target.value }))
+                }
+              />
+            </label>
+
+            <label className="field">
+              <span>Loại chứng từ</span>
+              <select
+                value={parsed.documentType}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, documentType: event.target.value }))
+                }
+              >
+                {documentTypeOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Phương thức thanh toán</span>
+              <select
+                value={parsed.paymentMethod}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, paymentMethod: event.target.value }))
+                }
+              >
+                {paymentMethodOptions.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="row">
+            <label className="field">
               <span>{t("ocr.form.total", null, "Total")}</span>
               <input
                 type="text"
@@ -331,6 +419,22 @@ export default function OcrScreen({
                   Math.round(confidence.total * 100)
                 }%`)}
               </small>
+            </label>
+
+            <label className="field">
+              <span>Tiền tệ</span>
+              <select
+                value={parsed.currency}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, currency: event.target.value }))
+                }
+              >
+                {currencyOptions.map((currencyCode) => (
+                  <option key={currencyCode} value={currencyCode}>
+                    {currencyCode}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="field">
@@ -387,6 +491,32 @@ export default function OcrScreen({
               })}
             </div>
           </label>
+
+          <div className="row">
+            <label className="field">
+              <span>Số hóa đơn / Mã giao dịch</span>
+              <input
+                type="text"
+                value={parsed.referenceNumber}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, referenceNumber: event.target.value }))
+                }
+                placeholder="Ví dụ: 09102201604290234"
+              />
+            </label>
+
+            <label className="field">
+              <span>Địa chỉ cửa hàng</span>
+              <input
+                type="text"
+                value={parsed.merchantAddress}
+                onChange={(event) =>
+                  setParsed((current) => ({ ...current, merchantAddress: event.target.value }))
+                }
+                placeholder="Ví dụ: 162 Nguyen Cong Tru, Dist 1"
+              />
+            </label>
+          </div>
 
           <div className="row">
             <label className="field">
