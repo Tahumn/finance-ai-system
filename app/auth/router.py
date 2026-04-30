@@ -88,6 +88,6 @@ def password_reset_confirm(
 
 
 @router.get("/me", response_model=schemas.UserRead)
-def me(current_user: User = Depends(service.get_current_user)):
+def me(current_user: User = Depends(service.get_current_active_user)):
     return current_user
 

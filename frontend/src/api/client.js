@@ -10,8 +10,11 @@ const API_BASE = inferApiBase();
 
 const TOKEN_KEY = "finance_token";
 
-export const getToken = () =>
-  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+export const getToken = () => {
+  const token = sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  if (!token || token === "undefined" || token === "null") return null;
+  return token;
+};
 
 export const setToken = (token, remember = true) => {
   clearToken();
@@ -35,11 +38,19 @@ export async function request(path, options = {}) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: options.method || "GET",
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+  } catch (err) {
+    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
+    error.cause = err;
+    throw error;
+  }
 
   if (response.status === 204) return null;
 
@@ -49,6 +60,52 @@ export async function request(path, options = {}) {
     : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
+    let message = payload?.detail || payload?.message || "Request failed";
+    if (Array.isArray(message)) {
+      message = message.map((item) => item?.msg || "Invalid input").join(", ");
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+export async function requestForm(path, formData) {
+  const token = getToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers,
+      body: formData
+    });
+  } catch (err) {
+    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
+    error.cause = err;
+    throw error;
+  }
+
+  if (response.status === 204) return null;
+
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent("finance:logout"));
+    }
     let message = payload?.detail || payload?.message || "Request failed";
     if (Array.isArray(message)) {
       message = message.map((item) => item?.msg || "Invalid input").join(", ");

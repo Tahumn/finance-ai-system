@@ -1,20 +1,138 @@
+import { useState } from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Cell
+} from "recharts";
 import TransactionRow from "../../components/TransactionRow.jsx";
 import { colorFor } from "../../utils/colors.js";
 import { currency, percent } from "../../utils/format.js";
+import { t } from "../../utils/i18n.js";
 
-const buildDonutGradient = (breakdown) => {
-  if (!breakdown.length) {
-    return "conic-gradient(#e6edf6 0deg, #e6edf6 360deg)";
+const buildDonutItems = (breakdown, limit, otherLabel) => {
+  const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
+  if (!safeBreakdown.length) return [];
+  const sorted = [...safeBreakdown].sort((a, b) => b.spent - a.spent);
+  const primary = sorted.slice(0, limit);
+  const rest = sorted.slice(limit);
+  const restSpent = rest.reduce((sum, item) => sum + item.spent, 0);
+  const total = sorted.reduce((sum, item) => sum + item.spent, 0) || 1;
+  const items = primary.map((item) => ({
+    category: item.category,
+    spent: item.spent,
+    share: item.spent / total
+  }));
+  if (restSpent > 0) {
+    items.push({
+      category: otherLabel,
+      spent: restSpent,
+      share: restSpent / total,
+      isOther: true
+    });
   }
-  let start = 0;
-  const parts = breakdown.map((item) => {
-    const color = colorFor(item.category);
-    const end = start + item.share * 360;
-    const slice = `${color} ${start}deg ${end}deg`;
-    start = end;
-    return slice;
+  return items;
+};
+
+const buildLineSeries = (series) => {
+  const safeSeries = Array.isArray(series) ? series : [];
+  const length = safeSeries.length;
+  if (!length) {
+    return {
+      width: 100,
+      height: 60,
+      income: [],
+      expense: [],
+      incomePath: "",
+      expensePath: "",
+      labels: []
+    };
+  }
+  const income = safeSeries.map((item) => Number(item.income || 0));
+  const expense = safeSeries.map((item) => Number(item.expense || 0));
+  const values = [...income, ...expense, 0];
+  const min = Math.min(...values);
+  const max = Math.max(...values, 1);
+  const range = max - min || 1;
+  const width = 100;
+  const height = 60;
+  const padding = 6;
+  const scaleX = (index) =>
+    length === 1 ? width / 2 : padding + (index / (length - 1)) * (width - padding * 2);
+  const scaleY = (value) => height - padding - ((value - min) / range) * (height - padding * 2);
+  const mapPoints = (valuesList) =>
+    valuesList.map((value, index) => ({
+      x: scaleX(index),
+      y: scaleY(value),
+      value
+    }));
+  const buildSmoothPath = (points) => {
+    if (points.length <= 1) return points.length ? `M ${points[0].x} ${points[0].y}` : "";
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i += 1) {
+      const prev = points[i - 1];
+      const current = points[i];
+      const midX = (prev.x + current.x) / 2;
+      const midY = (prev.y + current.y) / 2;
+      d += ` Q ${prev.x} ${prev.y} ${midX} ${midY}`;
+    }
+    const last = points[points.length - 1];
+    d += ` T ${last.x} ${last.y}`;
+    return d;
+  };
+
+  const incomePoints = mapPoints(income);
+  const expensePoints = mapPoints(expense);
+  if (incomePoints.length === 1) incomePoints.push({ ...incomePoints[0], x: incomePoints[0].x + 1 });
+  if (expensePoints.length === 1) expensePoints.push({ ...expensePoints[0], x: expensePoints[0].x + 1 });
+
+  return {
+    width,
+    height,
+    income: incomePoints,
+    expense: expensePoints,
+    incomePath: buildSmoothPath(incomePoints),
+    expensePath: buildSmoothPath(expensePoints),
+    labels: safeSeries.map((item) => item.month.slice(5))
+  };
+};
+
+const buildWaveSeries = (transactions, fallbackSeries) => {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  if (!safeTransactions.length) {
+    return { series: Array.isArray(fallbackSeries) ? fallbackSeries : [], mode: "month" };
+  }
+  const dates = safeTransactions.map((item) => item.date).filter(Boolean).sort();
+  if (!dates.length) {
+    return { series: Array.isArray(fallbackSeries) ? fallbackSeries : [], mode: "month" };
+  }
+  const start = new Date(dates[0]);
+  const end = new Date(dates[dates.length - 1]);
+  const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+  const useDaily = diffDays <= 45;
+  const buckets = {};
+  safeTransactions.forEach((item) => {
+    if (!item.date) return;
+    const key = useDaily ? item.date : item.date.slice(0, 7);
+    if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
+    if (item.transaction_type === "income") buckets[key].income += Number(item.amount || 0);
+    if (item.transaction_type === "expense") buckets[key].expense += Number(item.amount || 0);
   });
-  return `conic-gradient(${parts.join(", ")})`;
+  const series = Object.entries(buckets)
+    .map(([key, values]) => ({
+      month: key,
+      income: values.income,
+      expense: values.expense
+    }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  return { series, mode: useDaily ? "day" : "month" };
 };
 
 const normalizeText = (value) =>
@@ -24,12 +142,17 @@ const normalizeText = (value) =>
     .replace(/[\u0300-\u036f]/g, "");
 
 const buildAiInsights = (summary, transactions, breakdown) => {
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
   const insights = [];
 
-  const topCategory = breakdown[0];
+  const topCategory = safeBreakdown[0];
   if (topCategory) {
     insights.push(
-      `Danh mục chi cao nhất hiện tại: ${topCategory.category} (${currency(topCategory.spent)}).`
+      t("dashboard.insight.top_category", {
+        category: topCategory.category,
+        amount: currency(topCategory.spent)
+      })
     );
   }
 
@@ -38,14 +161,15 @@ const buildAiInsights = (summary, transactions, breakdown) => {
   const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, "0")}`;
 
-  const coffeeSpendingByMonth = transactions
+  const coffeeSpendingByMonth = safeTransactions
     .filter((item) => item.transaction_type === "expense")
     .filter((item) => {
       const text = normalizeText(item.description || "");
       return text.includes("coffee") || text.includes("cafe") || text.includes("ca phe");
     })
     .reduce((acc, item) => {
-      const key = item.date.slice(0, 7);
+      const key = String(item.date || "").slice(0, 7);
+      if (!key) return acc;
       acc[key] = (acc[key] || 0) + Number(item.amount || 0);
       return acc;
     }, {});
@@ -55,145 +179,357 @@ const buildAiInsights = (summary, transactions, breakdown) => {
   if (previousCoffee > 0 && currentCoffee > previousCoffee) {
     const delta = ((currentCoffee - previousCoffee) / previousCoffee) * 100;
     insights.push(
-      `Chi cà phê tháng này tăng ${Math.round(delta)}% so với tháng trước (${currency(
-        previousCoffee
-      )} -> ${currency(currentCoffee)}).`
+      t("dashboard.insight.coffee_up", {
+        delta: Math.round(delta),
+        prev: currency(previousCoffee),
+        current: currency(currentCoffee)
+      })
     );
   }
 
-  if (summary.total_expense > summary.total_income) {
-    insights.push("Chi tiêu đang vượt thu nhập trong kỳ hiện tại. Nên rà soát danh mục không thiết yếu.");
+  if ((summary?.total_expense || 0) > (summary?.total_income || 0)) {
+    insights.push(t("dashboard.insight.over_spend"));
   }
 
-  if (!insights.length) {
-    insights.push("Dữ liệu hiện ổn định. Bạn có thể tạo thêm ngân sách để theo dõi chủ động hơn.");
-  }
-
+  if (!insights.length) insights.push(t("dashboard.insight.stable"));
   return insights.slice(0, 3);
 };
 
 export default function DashboardScreen({
   summary,
-  breakdown,
-  transactions,
-  monthlySeries,
+  breakdown = [],
+  incomeBreakdown,
+  transactions = [],
+  monthlySeries = [],
+  anomalies = [],
   onViewTransactions,
   onGoOcr,
   onGoChat,
   onGoAddTransaction,
   onGoReports,
   rangePreset,
-  onSelectPreset
+  onSelectPreset,
+  userEmail,
+  savingsGoals = [],
 }) {
-  const maxAbs = Math.max(1, ...monthlySeries.map((item) => Math.abs(item.value)));
-  const slicedTransactions = transactions.slice(0, 4);
-  const insights = buildAiInsights(summary, transactions, breakdown);
+  const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
+  const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
+  const insights = buildAiInsights(summary || {}, transactions, breakdown);
+  const donutItems = buildDonutItems(breakdown, 6, t("reports.other", null, "Khác"));
+  const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
+  const { series: waveSource } = buildWaveSeries(transactions, monthlySeries);
+  const trendSeries = buildLineSeries(waveSource);
+  const trendChartDataRaw = waveSource.map((item) => ({
+    label: String(item.month || "").slice(5).replace("-", "/"),
+    income: Number(item.income || 0),
+    expense: Number(item.expense || 0)
+  }));
+  const trendChartData = trendChartDataRaw.length >= 2
+    ? trendChartDataRaw
+    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => ({
+        label: String(item.month || "").slice(5).replace("-", "/"),
+        income: Number(item.income || 0),
+        expense: Number(item.expense || 0)
+      }));
+
+  const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
+    const spent = Number(item.spent || 0);
+    const total = Math.max(spent, Math.round(spent * 1.3), 1);
+    const pct = Math.round((spent / total) * 100);
+    return {
+      label: item.category,
+      percent: Math.max(1, Math.min(100, pct)),
+      spent,
+      total,
+      color: colorFor(item.category, userEmail)
+    };
+  });
 
   return (
-    <>
-      <section className="panel dashboard-actions">
-        <div className="panel-header">
-          <h3>Điều khiển nhanh</h3>
-          <div className="range-selector">
-            {["today", "week", "month", "year"].map((preset) => (
-              <button
-                key={preset}
-                className={preset === rangePreset ? "active" : ""}
-                type="button"
-                onClick={() => onSelectPreset(preset)}
-              >
-                {preset}
-              </button>
-            ))}
+    <div className="dashboard-container">
+      {/* 1. Full-width Balance Card */}
+      <section className="dashboard-balance-card">
+        <div className="dbc-content">
+          <div className="dbc-header">
+            <p>Số dư hiện tại</p>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </div>
+          <h2>{currency(summary?.balance || 0)}</h2>
+          <p className="dbc-update">Cập nhật lúc 16:54</p>
         </div>
-        <div className="quick-actions">
-          <button className="ghost" type="button" onClick={onGoAddTransaction}>
-            Thêm giao dịch
-          </button>
-          <button className="ghost" type="button" onClick={onGoOcr}>
-            Nhập hóa đơn OCR
-          </button>
-          <button className="ghost" type="button" onClick={onGoChat}>
-            Chat NLP
-          </button>
-          <button className="ghost" type="button" onClick={onGoReports}>
-            Xem báo cáo
-          </button>
+        <div className="dbc-graphic">
+          <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
+            <path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5" stroke="currentColor" strokeWidth="1" fill="none"/>
+            <path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z" stroke="currentColor" strokeWidth="1" fill="none"/>
+            <circle cx="16" cy="14" r="1" />
+          </svg>
         </div>
-      </section>
-
-      <section className="grid">
-        <div className="panel">
-          <h3>Dòng tiền 6 tháng</h3>
-          <div className="bars">
-            {monthlySeries.map((item) => (
-              <div key={item.month} className="bar">
-                <span
-                  style={{
-                    height: `${(Math.abs(item.value) / maxAbs) * 100}%`
-                  }}
-                  className={item.value >= 0 ? "positive" : "negative"}
-                />
-                <small>{item.month.slice(5)}</small>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="panel">
-          <h3>Chi tiêu theo danh mục</h3>
-          <div
-            className="donut"
-            style={{
-              background: buildDonutGradient(breakdown)
-            }}
-          >
-            <div>
-              <strong>{currency(summary.total_expense)}</strong>
-              <span>Tổng chi</span>
+        <div className="dbc-inline-metrics">
+          <div className="metric-card compact">
+            <div className="mc-icon green">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tổng thu nhập</p>
+              <h3>{currency(summary?.total_income || 0)}</h3>
             </div>
           </div>
-          <div className="legend">
-            {breakdown.map((item) => (
-              <div key={item.category}>
-                <span className="dot" style={{ background: colorFor(item.category) }} />
-                <div>
-                  <p>{item.category}</p>
-                  <small>{percent(item.share)}</small>
-                </div>
-              </div>
-            ))}
+          <div className="metric-card compact">
+            <div className="mc-icon red">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tổng chi tiêu</p>
+              <h3>{currency(summary?.total_expense || 0)}</h3>
+            </div>
+          </div>
+          <div className="metric-card compact">
+            <div className="mc-icon purple">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5"/><path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z"/><circle cx="16" cy="14" r="1"/></svg>
+            </div>
+            <div className="mc-info">
+              <p>Tiết kiệm ước tính</p>
+              <h3>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</h3>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="panel list">
-        <div className="panel-header">
-          <h3>Gợi ý AI</h3>
-          <span className="badge">summary mode</span>
+      {/* 3. Charts Row */}
+      <section className="dashboard-charts-row">
+        <div className="dashboard-panel chart-cashflow">
+          <div className="dp-header">
+            <h3>Dòng tiền trong tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+            <div className="dp-legend">
+              <span className="legend-dot green"></span> Thu nhập
+              <span className="legend-dot pink"></span> Chi tiêu
+            </div>
+          </div>
+          <div className="dp-body">
+            {trendChartData.length ? (
+              <div className="line-chart compact wave">
+                <ResponsiveContainer width="100%" height={210}>
+                  <AreaChart data={trendChartData}>
+                    <defs>
+                      <linearGradient id="dashIncome" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02}/>
+                      </linearGradient>
+                      <linearGradient id="dashExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.02}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                    <Area type="monotone" dataKey="expense" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : <p className="empty">Chưa có dữ liệu</p>}
+          </div>
+          <div className="dp-footer-metrics">
+            <div className="fm-item">
+              <div className="fm-icon green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+              <div>
+                <p>Tổng thu nhập</p>
+                <strong>{currency(summary?.total_income || 0)}</strong>
+              </div>
+            </div>
+            <div className="fm-item">
+              <div className="fm-icon red"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+              <div>
+                <p>Tổng chi tiêu</p>
+                <strong>{currency(summary?.total_expense || 0)}</strong>
+              </div>
+            </div>
+            <div className="fm-item">
+              <div className="fm-icon purple"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg></div>
+              <div>
+                <p>Dòng tiền ròng</p>
+                <strong>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</strong>
+              </div>
+            </div>
+          </div>
         </div>
-        {insights.map((insight) => (
-          <p key={insight} className="insight-item">
-            {insight}
-          </p>
-        ))}
+
+        <div className="dashboard-panel chart-structure">
+          <div className="dp-header">
+            <h3>Cơ cấu chi tiêu <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+          </div>
+          <div className="dp-body split-donut">
+             <div className="donut-chart-container">
+               <ResponsiveContainer width="100%" height={220}>
+                 <PieChart>
+                   <Pie
+                     data={donutItems.map((item) => ({ name: item.category, value: item.spent, share: item.share, isOther: item.isOther }))}
+                     dataKey="value"
+                     nameKey="name"
+                     innerRadius={58}
+                     outerRadius={88}
+                     paddingAngle={2}
+                   >
+                     {donutItems.map((item) => (
+                       <Cell key={item.category} fill={item.isOther ? "#cbd5e1" : colorFor(item.category, userEmail)} />
+                     ))}
+                   </Pie>
+                   <Tooltip formatter={(v) => currency(v)} />
+                 </PieChart>
+               </ResponsiveContainer>
+               <div className="donut-center-text">
+                  <strong>{(donutTotal/1000000).toFixed(2).replace('.', ',')}</strong>
+                  <span>triệu đ</span>
+               </div>
+             </div>
+             <div className="donut-legend-list">
+                {donutItems.map((item) => (
+                  <div key={item.category} className="dll-item">
+                    <span className="dll-dot" style={{background: item.isOther ? "#cbd5e1" : colorFor(item.category, userEmail)}}></span>
+                    <span className="dll-label">{item.category}</span>
+                    <span className="dll-value">{currency(item.spent)}</span>
+                    <span className="dll-pct">{percent(item.share)}</span>
+                  </div>
+                ))}
+             </div>
+          </div>
+          <div className="dp-footer-link">
+             <button onClick={onGoReports}>Xem chi tiết báo cáo <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          </div>
+        </div>
       </section>
 
-      <section className="panel list">
-        <div className="panel-header">
-          <h3>Giao dịch gần đây</h3>
-          <button className="ghost" onClick={onViewTransactions} type="button">
-            Xem tất cả
-          </button>
+      {/* 4. Bottom Row */}
+      <section className="dashboard-bottom-row">
+        <div className="dashboard-panel dp-budgets">
+          <div className="dp-header">
+            <h3>Tiến độ ngân sách tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+          </div>
+          <div className="dp-body">
+            {budgetRows.length ? budgetRows.map(b => (
+              <div key={b.label} className="budget-progress-item">
+                <div className="bpi-header">
+                  <div className="bpi-icon" style={{color: b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
+                  <span className="bpi-label">{b.label}</span>
+                  <span className="bpi-pct" style={{color: b.color}}>{b.percent}%</span>
+                </div>
+                <div className="bpi-bar-bg">
+                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.color}}></div>
+                </div>
+                <div className="bpi-amounts">
+                  <span className="bpi-spent">{currency(b.spent)}</span>
+                  <span className="bpi-total">/ {currency(b.total)}</span>
+                </div>
+              </div>
+            )) : <p className="empty">Chưa có dữ liệu ngân sách</p>}
+          </div>
+          <div className="dp-footer-link">
+             <button onClick={() => {}}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          </div>
         </div>
-        {slicedTransactions.length === 0 ? (
-          <p className="empty">Chưa có giao dịch nào.</p>
-        ) : (
-          slicedTransactions.map((item) => (
-            <TransactionRow key={item.id} item={item} categoryLabel={item.categoryLabel} />
-          ))
-        )}
+
+        <div className="dashboard-panel dp-transactions">
+          <div className="dp-header">
+            <h3>Giao dịch gần đây</h3>
+            <button className="ghost-link" onClick={onViewTransactions}>Xem tất cả</button>
+          </div>
+          <div className="dp-body tx-list">
+            {slicedTransactions.length ? slicedTransactions.map(item => (
+              <div key={item.id} className="tx-item">
+                <div className="txi-icon" style={{background: item.transaction_type === 'income' ? '#ecfdf5' : '#fef2f2', color: item.transaction_type === 'income' ? '#10b981' : '#ef4444'}}>
+                  {item.transaction_type === 'income' ? 
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg> : 
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                  }
+                </div>
+                <div className="txi-main">
+                  <div className="txi-info">
+                    <strong>{item.description || item.categoryLabel}</strong>
+                    <span>{item.categoryLabel}</span>
+                  </div>
+                  <div className="txi-meta">
+                    <span>{item.date?.split("-").reverse().join("/") || "—"}</span>
+                    <span>{(item.tagLabels || []).join(", ") || "Tiền mặt"}</span>
+                  </div>
+                </div>
+                <div className={`txi-amount ${item.transaction_type}`}>
+                  {item.transaction_type === 'income' ? '+' : '-'}{currency(item.amount)}
+                </div>
+              </div>
+            )) : <p className="empty">Không có giao dịch</p>}
+          </div>
+        </div>
+
+        <div className="dp-right-col">
+          <div className="dashboard-panel dp-ai-hints">
+            <div className="dp-header">
+              <h3>Gợi ý từ AI <span className="badge-new">Mới</span></h3>
+            </div>
+            <div className="dp-body">
+              {insights.map((message, index) => (
+                <div className="ai-hint-card" key={`${message}-${index}`}>
+                  <div className={`ai-icon ${index % 2 === 0 ? "purple" : "orange"}`}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div>
+                  <div className="ai-text">
+                    <p>{message}</p>
+                    <span>Dữ liệu được cập nhật theo giao dịch trong kỳ đã chọn.</span>
+                  </div>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#cbd5e1" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="dashboard-panel dp-goals">
+            <div className="dp-header">
+              <h3>Mục tiêu tiết kiệm</h3>
+              <button className="ghost-link" onClick={() => {}}>Xem tất cả</button>
+            </div>
+            <div className="dp-body dp-goals-body">
+              {savingsGoals.length ? savingsGoals.slice(0, 4).map((goal, idx) => {
+                const pct = Math.min(100, Math.round(
+                  ((goal.saved_amount || goal.current_amount || 0) / Math.max(1, goal.target_amount || 1)) * 100
+                ));
+                const saved = goal.saved_amount || goal.current_amount || 0;
+                const goalColors = [
+                  {grad: "linear-gradient(90deg,#8b5cf6,#c084fc)", light: "#f3e8ff", text: "#7c3aed"},
+                  {grad: "linear-gradient(90deg,#3b82f6,#60a5fa)", light: "#dbeafe", text: "#2563eb"},
+                  {grad: "linear-gradient(90deg,#10b981,#34d399)", light: "#d1fae5", text: "#059669"},
+                  {grad: "linear-gradient(90deg,#f59e0b,#fcd34d)", light: "#fef3c7", text: "#d97706"},
+                ];
+                const clr = goalColors[idx % goalColors.length];
+                return (
+                  <div key={goal.id} className="dp-goal-card">
+                    <div className="dp-goal-top">
+                      <div className="dp-goal-icon" style={{background: clr.light, color: clr.text}}>
+                        🎯
+                      </div>
+                      <div className="dp-goal-info">
+                        <span className="dp-goal-name">{goal.name}</span>
+                        <span className="dp-goal-pct" style={{color: clr.text}}>{pct}%</span>
+                      </div>
+                    </div>
+                    <div className="dp-goal-bar-bg">
+                      <div className="dp-goal-bar-fill" style={{width: `${pct}%`, background: clr.grad}} />
+                    </div>
+                    <div className="dp-goal-amounts">
+                      <span style={{color: clr.text, fontWeight: 600}}>{currency(saved)}</span>
+                      <span style={{color: "#94a3b8"}}>/ {currency(goal.target_amount)}</span>
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="dp-goals-empty">
+                  <div style={{fontSize: "2rem", marginBottom: "8px"}}>🎯</div>
+                  <p>Chưa có mục tiêu tiết kiệm nào.</p>
+                  <p style={{fontSize: "12px", color: "#94a3b8"}}>Thiết lập mục tiêu để theo dõi tiến độ tiết kiệm của bạn.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
-    </>
+    </div>
   );
 }

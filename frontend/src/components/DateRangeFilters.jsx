@@ -1,8 +1,10 @@
+import { t } from "../utils/i18n.js";
+
 export default function DateRangeFilters({ start, end, onChange }) {
   return (
-    <section className="filters">
+    <section className="filters date-range-filters">
       <div className="field">
-        <label>Từ ngày</label>
+        <label>{t("filters.from", null, "Từ ngày")}</label>
         <input
           type="date"
           value={start}
@@ -10,7 +12,7 @@ export default function DateRangeFilters({ start, end, onChange }) {
         />
       </div>
       <div className="field">
-        <label>Đến ngày</label>
+        <label>{t("filters.to", null, "Đến ngày")}</label>
         <input
           type="date"
           value={end}
