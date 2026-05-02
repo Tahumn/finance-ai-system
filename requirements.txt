@@ -20,3 +20,4 @@ httpx
 redis
 rq
 aiokafka
+alembic

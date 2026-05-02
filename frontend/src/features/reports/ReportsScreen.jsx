@@ -1,38 +1,26 @@
-import { useRef, useState } from "react";
-import { getAnomalies, getForecast, getSavingsTips } from "../../api/ai.js";
+import React, { useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as ReTooltip,
+  XAxis as ReXAxis,
+  YAxis as ReYAxis,
+  CartesianGrid as ReCartesianGrid
+} from "recharts";
 import { colorFor } from "../../utils/colors.js";
 import { currency, formatDateFull, percent } from "../../utils/format.js";
-import { t } from "../../utils/i18n.js";
-
-const buildDonutItems = (breakdown, limit, otherLabel) => {
-  if (!breakdown.length) return [];
-  const sorted = [...breakdown].sort((a, b) => b.spent - a.spent);
-  const primary = sorted.slice(0, limit);
-  const rest = sorted.slice(limit);
-  const restSpent = rest.reduce((sum, item) => sum + item.spent, 0);
-  const total = sorted.reduce((sum, item) => sum + item.spent, 0) || 1;
-  const items = primary.map((item) => ({
-    category: item.category,
-    spent: item.spent,
-    share: item.spent / total
-  }));
-  if (restSpent > 0) {
-    items.push({
-      category: otherLabel,
-      spent: restSpent,
-      share: restSpent / total,
-      isOther: true
-    });
-  }
-  return items;
-};
+import "./reports.css";
 
 const buildSmoothPath = (points) => {
-  if (points.length <= 1) {
-    return points.length ? `M ${points[0].x} ${points[0].y}` : "";
-  }
+  if (points.length <= 1) return points.length ? `M ${points[0].x} ${points[0].y}` : "";
   let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i += 1) {
+  for (let i = 1; i < points.length; i++) {
     const prev = points[i - 1];
     const current = points[i];
     const midX = (prev.x + current.x) / 2;
@@ -45,93 +33,8 @@ const buildSmoothPath = (points) => {
 };
 
 const buildAreaPath = (points, baseline) => {
-  if (!Array.isArray(points) || !points.length) return "";
+  if (!points?.length) return "";
   return `${buildSmoothPath(points)} L ${points[points.length - 1].x} ${baseline} L ${points[0].x} ${baseline} Z`;
-};
-
-const buildHeatmapData = (transactions, weeks = 6) => {
-  const safeTransactions = Array.isArray(transactions) ? transactions : [];
-  const totalDays = weeks * 7;
-  const dates = safeTransactions.map((item) => item.date).filter(Boolean).sort();
-  const end = dates.length ? new Date(dates[dates.length - 1]) : new Date();
-  end.setHours(0, 0, 0, 0);
-  const start = new Date(end);
-  start.setDate(end.getDate() - (totalDays - 1));
-  const dayOffset = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - dayOffset);
-  const cells = [];
-  const valuesMap = {};
-  safeTransactions
-    .filter((item) => item.transaction_type === "expense")
-    .forEach((item) => {
-      if (!item.date) return;
-      const key = item.date;
-      valuesMap[key] = (valuesMap[key] || 0) + Number(item.amount || 0);
-    });
-  let max = 0;
-  for (let i = 0; i < totalDays; i += 1) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + i);
-    const key = date.toISOString().slice(0, 10);
-    const value = valuesMap[key] || 0;
-    max = Math.max(max, value);
-    cells.push({ date, value, key });
-  }
-  return { cells, max, weeks, start };
-};
-
-const buildTrendSource = (transactions, fallback) => {
-  const safeTransactions = Array.isArray(transactions) ? transactions : [];
-  if (!safeTransactions.length) {
-    return { series: fallback, mode: "month" };
-  }
-  const dates = safeTransactions.map((item) => item.date).filter(Boolean).sort();
-  if (!dates.length) {
-    return { series: fallback, mode: "month" };
-  }
-  const start = new Date(dates[0]);
-  const end = new Date(dates[dates.length - 1]);
-  const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-  const useDaily = diffDays <= 45;
-  const buckets = {};
-  safeTransactions.forEach((item) => {
-    if (!item.date) return;
-    const key = useDaily ? item.date : item.date.slice(0, 7);
-    if (!buckets[key]) buckets[key] = { income: 0, expense: 0 };
-    if (item.transaction_type === "income") buckets[key].income += Number(item.amount || 0);
-    if (item.transaction_type === "expense") buckets[key].expense += Number(item.amount || 0);
-  });
-  const series = Object.entries(buckets)
-    .map(([key, values]) => ({
-      month: key,
-      income: values.income,
-      expense: values.expense,
-      net: values.income - values.expense,
-      value: values.income - values.expense
-    }))
-    .sort((a, b) => a.month.localeCompare(b.month));
-  return { series: series.length ? series : fallback, mode: useDaily ? "day" : "month" };
-};
-
-const formatCompactMoney = (value) => {
-  const amount = Math.abs(Number(value) || 0);
-  if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
-  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K`;
-  return `${Math.round(amount)}`;
-};
-
-const formatSeriesLabel = (value, mode = "month") => {
-  const raw = String(value || "");
-  if (mode === "day" && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [, month, day] = raw.split("-");
-    return `${day}/${month}`;
-  }
-  if (/^\d{4}-\d{2}$/.test(raw)) {
-    const [, month] = raw.split("-");
-    return `T${Number(month)}`;
-  }
-  return raw.slice(-5) || raw;
 };
 
 const calcDelta = (current, previous) => {
@@ -140,788 +43,447 @@ const calcDelta = (current, previous) => {
   return (Number(current || 0) - prev) / prev;
 };
 
-const buildLineSeries = (items) => {
-  const safe = Array.isArray(items) ? items : [];
-  if (!safe.length) {
-    return {
-      width: 100,
-      height: 62,
-      paddingX: 6,
-      paddingY: 8,
-      baseline: 54,
-      gridLines: [],
-      incomePoints: [],
-      expensePoints: [],
-      incomePath: "",
-      expensePath: "",
-      incomeAreaPath: "",
-      expenseAreaPath: "",
-      labels: [],
-      maxValue: 1,
-      items: []
-    };
-  }
+const CalendarIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
 
-  const width = 100;
-  const height = 62;
-  const paddingLeft = 8;
-  const paddingRight = 3;
-  const paddingTop = 7;
-  const paddingBottom = 8;
-  const baseline = height - paddingBottom;
-  const innerWidth = width - paddingLeft - paddingRight;
-  const innerHeight = height - paddingTop - paddingBottom;
-  const maxValue = Math.max(1, ...safe.flatMap((item) => [Number(item.income || 0), Number(item.expense || 0)]));
-  const stepX = safe.length > 1 ? innerWidth / (safe.length - 1) : 0;
-  const toY = (value) => paddingTop + (1 - Number(value || 0) / maxValue) * innerHeight;
-  const incomePoints = safe.map((item, index) => ({
-    x: paddingLeft + index * stepX,
-    y: toY(item.income)
-  }));
-  const expensePoints = safe.map((item, index) => ({
-    x: paddingLeft + index * stepX,
-    y: toY(item.expense)
-  }));
-  const gridLines = Array.from({ length: 5 }, (_, index) => {
-    const ratio = index / 4;
-    return {
-      y: paddingTop + (1 - ratio) * innerHeight,
-      value: ratio * maxValue
-    };
-  });
+const TrendUpIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+    <polyline points="17 6 23 6 23 12"/>
+  </svg>
+);
 
-  return {
-    width,
-    height,
-    paddingX: paddingLeft,
-    paddingY: paddingTop,
-    baseline,
-    gridLines,
-    incomePoints,
-    expensePoints,
-    incomePath: buildSmoothPath(incomePoints),
-    expensePath: buildSmoothPath(expensePoints),
-    incomeAreaPath: buildAreaPath(incomePoints, baseline),
-    expenseAreaPath: buildAreaPath(expensePoints, baseline),
-    labels: safe.map((item) => item.label),
-    maxValue,
-    items: safe
-  };
-};
+const TrendDownIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+    <polyline points="17 18 23 18 23 12"/>
+  </svg>
+);
+
+const WalletIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/>
+    <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/>
+    <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/>
+  </svg>
+);
+
+const PercentIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="5" x2="5" y2="19"/>
+    <circle cx="6.5" cy="6.5" r="2.5"/>
+    <circle cx="17.5" cy="17.5" r="2.5"/>
+  </svg>
+);
 
 export default function ReportsScreen({
   summary,
   monthlySeries,
   breakdown = [],
   transactions = [],
+  reportsOverview,
   userEmail,
-  onBack
+  onBack,
+  savingsGoals = [],
 }) {
+  const [activeTab, setActiveTab] = useState("30 ngày");
+  const [showAllSources, setShowAllSources] = useState(false);
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
-  const safeBreakdown = Array.isArray(breakdown) ? breakdown : [];
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
-  const safeSummary = {
-    total_income: Number(summary?.total_income || 0),
-    total_expense: Number(summary?.total_expense || 0),
-    balance: Number(summary?.balance || 0)
-  };
-  const [showForecast, setShowForecast] = useState(false);
-  const [showSavingTips, setShowSavingTips] = useState(false);
-  const [showAnomaly, setShowAnomaly] = useState(false);
-  const [trendRange, setTrendRange] = useState("month");
-  const [forecastLoading, setForecastLoading] = useState(false);
-  const [savingsLoading, setSavingsLoading] = useState(false);
-  const [anomalyLoading, setAnomalyLoading] = useState(false);
-  const [forecastError, setForecastError] = useState("");
-  const [savingsError, setSavingsError] = useState("");
-  const [anomalyError, setAnomalyError] = useState("");
-  const [forecastData, setForecastData] = useState(null);
-  const [savingsData, setSavingsData] = useState(null);
-  const [anomalyData, setAnomalyData] = useState(null);
-  const [donutTooltip, setDonutTooltip] = useState(null);
-  const [trendHoverIndex, setTrendHoverIndex] = useState(null);
-  const donutRef = useRef(null);
-  const prevMonthly = safeMonthly[safeMonthly.length - 2] || safeMonthly[safeMonthly.length - 1] || {};
+  const overview = reportsOverview || {};
+
+  const dailySeries = Array.isArray(overview.daily_series) ? overview.daily_series : [];
+  const monthlyOverviewSeries = Array.isArray(overview.monthly_series) ? overview.monthly_series : [];
+  const categorySpending = Array.isArray(overview.category_spending) ? overview.category_spending : [];
+  const paymentBreakdown = Array.isArray(overview.payment_breakdown) ? overview.payment_breakdown : [];
+  const weekdayHeatmap = Array.isArray(overview.weekday_heatmap) ? overview.weekday_heatmap : [];
+  const topExpenses = Array.isArray(overview.top_expenses) ? overview.top_expenses : [];
+  const goalProgress = Array.isArray(overview.goals) ? overview.goals : [];
+
   const currentMonthly = safeMonthly[safeMonthly.length - 1] || {};
-  const currentNet = Number(currentMonthly.income || safeSummary.balance || 0) - Number(currentMonthly.expense || 0);
-  const prevNet = Number(prevMonthly.income || safeSummary.balance || 0) - Number(prevMonthly.expense || 0);
-  const currentSavingsRate =
-    Number(currentMonthly.income || safeSummary.total_income || 0) > 0
-      ? currentNet / Number(currentMonthly.income || safeSummary.total_income || 1)
-      : 0;
-  const prevSavingsRate =
-    Number(prevMonthly.income || safeSummary.total_income || 0) > 0
-      ? prevNet / Number(prevMonthly.income || safeSummary.total_income || 1)
-      : 0;
+  const prevMonthly = safeMonthly[safeMonthly.length - 2] || safeMonthly[safeMonthly.length - 1] || {};
 
-  const kpiCards = [
-    {
-      label: t("reports.total_income"),
-      value: currency(safeSummary.total_income),
-      delta: calcDelta(currentMonthly.income || safeSummary.total_income || 0, prevMonthly.income || 0),
-      icon: "\u2197",
-      tone: "income"
-    },
-    {
-      label: t("reports.total_expense"),
-      value: currency(safeSummary.total_expense),
-      delta: calcDelta(currentMonthly.expense || safeSummary.total_expense || 0, prevMonthly.expense || 0),
-      icon: "\u2198",
-      tone: "expense"
-    },
-    {
-      label: t("reports.balance"),
-      value: currency(safeSummary.balance),
-      delta: calcDelta(currentNet, prevNet),
-      icon: "\u25C9",
-      tone: "balance"
-    },
-    {
-      label: t("reports.savings_rate"),
-      value: `${(currentSavingsRate * 100).toFixed(2)}%`,
-      delta: currentSavingsRate - prevSavingsRate,
-      icon: "%",
-      tone: "rate",
-      progress: Math.max(0, Math.min(1, currentSavingsRate))
-    }
-  ];
-  const donutItems = buildDonutItems(safeBreakdown, 5, t("reports.other"));
-  const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
-  const topCategories = [...safeBreakdown].sort((a, b) => b.spent - a.spent).slice(0, 6);
-  const budgetRows = topCategories.slice(0, 5).map((item, index) => {
-    const targetFactor = [1.3, 1.24, 1.18, 1.1, 1.04][index] || 1.2;
-    const target = Math.max(1, Math.round(item.spent * targetFactor));
-    const ratio = target ? item.spent / target : 0;
-    return { ...item, target, ratio };
-  });
+  const currentNet = Number(currentMonthly.income || summary?.balance || 0) - Number(currentMonthly.expense || 0);
+  const prevNet = Number(prevMonthly.income || summary?.balance || 0) - Number(prevMonthly.expense || 0);
 
-  const { series: trendSource, mode: trendMode } = buildTrendSource(safeTransactions, safeMonthly);
-  const trendLimit = trendRange === "week" ? 7 : trendRange === "month" ? 8 : 12;
-  const trendItems = trendSource.slice(-trendLimit).map((item) => ({
-    ...item,
-    label: formatSeriesLabel(item.month, trendMode)
-  }));
-  const trendLine = buildLineSeries(trendItems);
-  const trendLabelStep = trendLine.labels.length > 8 ? Math.ceil(trendLine.labels.length / 6) : 1;
+  const currentSavingsRate = savingsGoals.length > 0 
+    ? savingsGoals.reduce((s, g) => s + (g.current_amount || 0), 0) / savingsGoals.reduce((s, g) => s + (g.target_amount || 1), 0)
+    : 0;
 
-  const heatmap = buildHeatmapData(safeTransactions);
-  const heatmapMonthLabels = Array.from({ length: heatmap.weeks }).map((_, column) => {
-    const cell = heatmap.cells[column * 7];
-    return cell ? `T${cell.date.getMonth() + 1}` : "";
-  });
+  const prevSavingsRate = Number(prevMonthly.income || summary?.total_income || 0) > 0
+    ? Math.max(0, prevNet) / Number(prevMonthly.income || summary?.total_income || 1)
+    : 0;
 
-  const monthlyBars = safeMonthly.slice(-6).map((item) => ({
-    label: formatSeriesLabel(item.month, "month"),
+  const getKPI = () => {
+    const dInc = calcDelta(currentMonthly.income || summary?.total_income || 0, prevMonthly.income || 0);
+    const dExp = calcDelta(currentMonthly.expense || summary?.total_expense || 0, prevMonthly.expense || 0);
+    const dNet = calcDelta(currentNet, prevNet);
+    const dSav = currentSavingsRate - prevSavingsRate;
+    return { dInc, dExp, dNet, dSav };
+  };
+  const { dInc, dExp, dNet, dSav } = getKPI();
+
+  const donutItems = useMemo(() => {
+    const total = categorySpending.reduce((sum, item) => sum + Number(item.amount || 0), 0) || 1;
+    return categorySpending.map((item) => ({
+      ...item,
+      share: Number(item.share || 0) || Number(item.amount || 0) / total,
+    }));
+  }, [categorySpending]);
+  const donutTotal = donutItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const donutChartData = donutItems.map((i) => ({ name: i.category, value: i.amount, share: i.share }));
+  const donutLabel = ({ percent: p }) => `${Math.round((p || 0) * 100)}%`;
+
+  const trendSeries = dailySeries.slice(-30).map((item) => ({
+    label: item.label || "",
     income: Number(item.income || 0),
-    expense: Number(item.expense || 0)
+    expense: Number(item.expense || 0),
   }));
-  const maxMonthlyBar = Math.max(1, ...monthlyBars.flatMap((item) => [item.income, item.expense]));
+  const areaMax = Math.max(1, ...trendSeries.flatMap((x) => [x.income, x.expense]));
 
-  const largestTransactions = [...safeTransactions]
-    .filter((item) => item.transaction_type === "expense")
-    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
-    .slice(0, 5);
+  const fallbackMonthly = (Array.isArray(monthlySeries) ? monthlySeries : []).map((m) => ({
+    label: String(m.month || "").slice(-5).replace("-", "/") || "N/A",
+    income: Number(m.income || 0),
+    expense: Number(m.expense || 0),
+  }));
+  const monthlyBarsRaw = monthlyOverviewSeries.slice(-6).map((m) => ({
+    label: String(m.label || "").slice(-5).replace("-", "/") || "N/A",
+    income: Number(m.income || 0),
+    expense: Number(m.expense || 0),
+  }));
+  const monthlyBars = monthlyBarsRaw.length >= 3 ? monthlyBarsRaw : fallbackMonthly.slice(-6);
+  const barMax = Math.max(1, ...monthlyBars.flatMap((b) => [b.income, b.expense]));
 
-  const weekLabels = [
-    t("reports.weekday.mon", null, "T2"),
-    t("reports.weekday.tue", null, "T3"),
-    t("reports.weekday.wed", null, "T4"),
-    t("reports.weekday.thu", null, "T5"),
-    t("reports.weekday.fri", null, "T6"),
-    t("reports.weekday.sat", null, "T7"),
-    t("reports.weekday.sun", null, "CN")
-  ];
-  const handleDonutMove = (event, item) => {
-    if (!donutRef.current) return;
-    const rect = donutRef.current.getBoundingClientRect();
-    setDonutTooltip({
-      item,
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    });
-  };
+  const heatmapMax = Math.max(1, ...weekdayHeatmap.map((cell) => Number(cell.total || 0)));
+  const heatmapValue = (weekIndex, weekDay) =>
+    Number(weekdayHeatmap.find((cell) => cell.week_index === weekIndex && cell.week_day === weekDay)?.total || 0);
 
-  const handleTrendMove = (event) => {
-    if (!trendLine.items.length) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = (event.clientX - rect.left) / rect.width;
-    const index = Math.min(
-      trendLine.items.length - 1,
-      Math.max(0, Math.round(ratio * (trendLine.items.length - 1)))
-    );
-    setTrendHoverIndex(index);
-  };
+  const topTransactions = topExpenses.length
+    ? topExpenses
+    : [...safeTransactions]
+        .filter((t) => t.transaction_type === "expense")
+        .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))
+        .slice(0, 5);
 
-  const loadForecast = async () => {
-    if (forecastLoading) return;
-    setForecastError("");
-    setForecastLoading(true);
-    try {
-      const data = await getForecast();
-      setForecastData(data || null);
-    } catch (err) {
-      setForecastError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
-    } finally {
-      setForecastLoading(false);
-    }
-  };
-
-  const loadSavingsTips = async () => {
-    if (savingsLoading) return;
-    setSavingsError("");
-    setSavingsLoading(true);
-    try {
-      const data = await getSavingsTips();
-      setSavingsData(data || null);
-    } catch (err) {
-      setSavingsError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
-    } finally {
-      setSavingsLoading(false);
-    }
-  };
-
-  const loadAnomalies = async () => {
-    if (anomalyLoading) return;
-    setAnomalyError("");
-    setAnomalyLoading(true);
-    try {
-      const data = await getAnomalies();
-      const items = Array.isArray(data) ? data : data?.alerts || data?.items || data || [];
-      setAnomalyData(Array.isArray(items) ? items : []);
-    } catch (err) {
-      setAnomalyError(err?.message || t("reports.ai_error", null, "Không thể tải AI Insights. Vui lòng thử lại."));
-    } finally {
-      setAnomalyLoading(false);
-    }
-  };
-
-  const riskLabel = (risk) => {
-    if (risk === "high") return t("reports.risk.high", null, "Cao");
-    if (risk === "medium") return t("reports.risk.medium", null, "Trung bình");
-    return t("reports.risk.low", null, "Thấp");
-  };
+  const topCategory = donutItems[0];
+  const aiTipText = topCategory
+    ? `Danh mục ${topCategory.category} đang chiếm ${percent(topCategory.share)} tổng chi trong kỳ. Bạn có thể giảm 10-15% nhóm này để cải thiện tiết kiệm ròng.`
+    : "Chưa đủ dữ liệu để tạo gợi ý AI. Hãy thêm giao dịch để nhận khuyến nghị chính xác hơn.";
 
   return (
-    <section className="panel report-page reports-premium">
-      <header className="transactions-header" style={{ marginBottom: 14 }}>
-        <div>
-          <p className="eyebrow">Finance Workspace</p>
-          <h2>{t("reports.title")}</h2>
+    <div className="rpt-container">
+      <div className="rpt-header-top">
+        <div className="rpt-title-block">
+          <h1 className="rpt-title">Báo cáo & Phân tích</h1>
+          <p className="rpt-subtitle">Nhìn lại hành trình tài chính của bạn</p>
         </div>
-
-        <div className="transactions-actions">
-          <button className="ghost" onClick={onBack} type="button">
-            {t("common.back")}
+        <div className="rpt-header-actions">
+          <div className="rpt-date-dropdown">
+            {activeTab} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <button className="rpt-btn-export">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Xuất báo cáo
           </button>
         </div>
-      </header>
-      <div className="report-kpi-grid">
-        {kpiCards.map((card) => {
-          const up = card.delta >= 0;
-          return (
-            <article key={card.label} className={`report-kpi-card ${card.tone}`}>
-              <span className="report-kpi-icon" aria-hidden="true">
-                {card.icon}
-              </span>
-              <div>
-                <p>{card.label}</p>
-                <strong>{card.value}</strong>
-                <small className={up ? "up" : "down"}>
-                  {up ? "+" : ""}
-                  {(Math.abs(card.delta) * 100).toFixed(1)}% {t("reports.vs_previous")}
-                </small>
-                {typeof card.progress === "number" ? (
-                  <span className="report-kpi-progress">
-                    <span style={{ width: `${Math.round(card.progress * 100)}%` }} />
-                  </span>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
       </div>
 
-      <div className="report-premium-row report-premium-main">
-        <article className="report-surface report-trend-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.net_trend")}</h3>
-            <div className="report-range-tabs">
-              {[
-                { key: "week", label: "Week" },
-                { key: "month", label: "Month" },
-                { key: "year", label: "Year" }
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={trendRange === item.key ? "active" : ""}
-                  onClick={() => {
-                    setTrendRange(item.key);
-                    setTrendHoverIndex(null);
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+      <div className="rpt-kpi-row">
+        <div className="rpt-kpi-card">
+          <div className="rpt-kpi-icon income"><TrendUpIcon/></div>
+          <div className="rpt-kpi-text">
+             <label>Tổng thu nhập</label>
+             <h3 className="income">{currency(summary?.total_income || 0)}</h3>
+             <div className={`rpt-kpi-delta ${dInc >= 0 ? "up" : "down"}`}>
+               {dInc >= 0 ? '↑' : '↓'} {(Math.abs(dInc * 100)).toFixed(1)}% <span className="muted">với tháng trước</span>
+             </div>
           </div>
+        </div>
 
-          <div className="report-legend-inline">
-            <span className="legend-swatch income" />
-            <span>{t("reports.income")}</span>
-            <span className="legend-swatch expense" />
-            <span>{t("reports.expense")}</span>
+        <div className="rpt-kpi-card">
+          <div className="rpt-kpi-icon expense"><TrendDownIcon/></div>
+          <div className="rpt-kpi-text">
+             <label>Tổng chi tiêu</label>
+             <h3 className="expense">{currency(summary?.total_expense || 0)}</h3>
+             <div className={`rpt-kpi-delta ${dExp > 0 ? "down" : "up"}`}>
+               {dExp > 0 ? '↓' : '↑'} {(Math.abs(dExp * 100)).toFixed(1)}% <span className="muted">với tháng trước</span>
+             </div>
           </div>
+        </div>
 
-          {trendLine.items.length ? (
-            <div
-              className="premium-line-chart"
-              onMouseMove={handleTrendMove}
-              onMouseLeave={() => setTrendHoverIndex(null)}
-            >
-              <svg viewBox={`0 0 ${trendLine.width} ${trendLine.height}`} aria-hidden="true">
-                {trendLine.gridLines.map((tick, index) => (
-                  <g key={`line-grid-${index}`}>
-                    <line
-                      className="premium-line-grid"
-                      x1={trendLine.paddingX}
-                      x2={trendLine.width - 2}
-                      y1={tick.y}
-                      y2={tick.y}
-                    />
-                    <text className="premium-line-y-label" x="0.6" y={tick.y + 1.8}>
-                      {formatCompactMoney(tick.value)}
-                    </text>
-                  </g>
-                ))}
-                <path className="premium-line-area income" d={trendLine.incomeAreaPath} />
-                <path className="premium-line-area expense" d={trendLine.expenseAreaPath} />
-                <path className="premium-line income" d={trendLine.incomePath} />
-                <path className="premium-line expense" d={trendLine.expensePath} />
-                {trendLine.incomePoints.map((point, index) => (
-                  <circle key={`income-point-${index}`} className="premium-line-dot income" cx={point.x} cy={point.y} r="1.2" />
-                ))}
-                {trendLine.expensePoints.map((point, index) => (
-                  <circle
-                    key={`expense-point-${index}`}
-                    className="premium-line-dot expense"
-                    cx={point.x}
-                    cy={point.y}
-                    r="1.2"
-                  />
-                ))}
-                {trendHoverIndex !== null && trendLine.items[trendHoverIndex] ? (
-                  <line
-                    className="premium-line-cursor"
-                    x1={trendLine.incomePoints[trendHoverIndex].x}
-                    x2={trendLine.incomePoints[trendHoverIndex].x}
-                    y1={trendLine.paddingY - 1}
-                    y2={trendLine.height - 7}
-                  />
-                ) : null}
-              </svg>
-              {trendHoverIndex !== null && trendLine.items[trendHoverIndex] ? (
-                <div
-                  className="premium-line-tooltip"
-                  style={{
-                    left: `${(trendLine.incomePoints[trendHoverIndex].x / trendLine.width) * 100}%`,
-                    top: `${(Math.min(
-                      trendLine.incomePoints[trendHoverIndex].y,
-                      trendLine.expensePoints[trendHoverIndex].y
-                    ) / trendLine.height) * 100}%`
-                  }}
-                >
-                  <strong>{trendLine.items[trendHoverIndex].label}</strong>
-                  <span className="income">Thu: {currency(trendLine.items[trendHoverIndex].income)}</span>
-                  <span className="expense">Chi: {currency(trendLine.items[trendHoverIndex].expense)}</span>
-                </div>
-              ) : null}
-              <div className="premium-line-labels">
-                {trendLine.labels.map((label, index) => (
-                  <span key={`${label}-${index}`}>{index % trendLabelStep === 0 ? label : ""}</span>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="empty">{t("reports.empty")}</p>
-          )}
-        </article>
+        <div className="rpt-kpi-card">
+          <div className="rpt-kpi-icon savings"><WalletIcon/></div>
+          <div className="rpt-kpi-text">
+             <label>Tiết kiệm</label>
+             <h3 className="savings">{currency(currentNet || 0)}</h3>
+             <div className={`rpt-kpi-delta ${dSav >= 0 ? "up" : "down"}`}>
+               {dSav >= 0 ? '↑' : '↓'} {(Math.abs(dSav * 100)).toFixed(1)}% <span className="muted">với tháng trước</span>
+             </div>
+          </div>
+        </div>
 
-        <article className="report-surface report-monthly-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.monthly_flow")}</h3>
-            <span className="badge">{t("reports.badge.monthly")}</span>
+        <div className="rpt-kpi-card">
+          <div className="rpt-kpi-icon savings"><PercentIcon/></div>
+          <div className="rpt-kpi-text">
+             <label>Tỷ lệ tiết kiệm</label>
+             <h3 className="savings">{(currentSavingsRate * 100).toFixed(1)}%</h3>
+             <div className={`rpt-kpi-delta ${dSav >= 0 ? "up" : "down"}`}>
+               {dSav >= 0 ? "↑" : "↓"} {(Math.abs(dSav * 100)).toFixed(1)}% <span className="muted">với tháng trước</span>
+             </div>
           </div>
-          <div className="report-legend-inline">
-            <span className="legend-swatch income" />
-            <span>{t("reports.income")}</span>
-            <span className="legend-swatch expense" />
-            <span>{t("reports.expense")}</span>
-          </div>
-          <div className="premium-column-chart">
-            {monthlyBars.map((item) => (
-              <div key={item.label} className="premium-column-group">
-                <div className="premium-column-stack">
-                  <span className="bar-income" style={{ height: `${(item.income / maxMonthlyBar) * 100}%` }} />
-                  <span className="bar-expense" style={{ height: `${(item.expense / maxMonthlyBar) * 100}%` }} />
-                </div>
-                <small>{item.label}</small>
-              </div>
-            ))}
-          </div>
-        </article>
+        </div>
 
-        <article className="report-surface report-donut-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.category_split")}</h3>
-            <span className="badge">{t("reports.badge.monthly")}</span>
+        <div className="rpt-kpi-card">
+          <div className="rpt-kpi-icon income"><CalendarIcon/></div>
+          <div className="rpt-kpi-text">
+             <label>Ngân sách đã dùng</label>
+             <h3 className="expense">
+               {summary?.total_income ? `${Math.min(999, ((summary?.total_expense || 0) / (summary?.total_income || 1) * 100)).toFixed(1)}%` : "0%"}
+             </h3>
+             <div className="rpt-kpi-delta up">
+               Theo kỳ lọc hiện tại
+             </div>
           </div>
-          {donutItems.length ? (
-            <>
-              <div className="donut-chart" ref={donutRef} onMouseLeave={() => setDonutTooltip(null)}>
-                <svg viewBox="0 0 120 120" aria-hidden="true">
-                  <circle className="donut-bg" cx="60" cy="60" r="46" />
-                  {(() => {
-                    let offset = 0;
-                    return donutItems.map((item) => {
-                      const length = item.share * 2 * Math.PI * 46;
-                      const dash = `${length} ${2 * Math.PI * 46 - length}`;
-                      const segment = (
-                        <circle
-                          key={item.category}
-                          className="donut-segment"
-                          cx="60"
-                          cy="60"
-                          r="46"
-                          stroke={item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail)}
-                          strokeDasharray={dash}
-                          strokeDashoffset={-offset}
-                          onMouseMove={(event) => handleDonutMove(event, item)}
-                        />
-                      );
-                      offset += length;
-                      return segment;
-                    });
-                  })()}
-                </svg>
-                <div className="donut-center">
-                  <span>{t("reports.total_expense")}</span>
-                  <strong>{currency(safeSummary.total_expense || donutTotal)}</strong>
-                </div>
-                {donutTooltip ? (
-                  <div className="donut-tooltip" style={{ left: donutTooltip.x, top: donutTooltip.y }}>
-                    <strong>{donutTooltip.item.category}</strong>
-                    <span>{currency(donutTooltip.item.spent)}</span>
-                    <small>{percent(donutTooltip.item.share)}</small>
-                  </div>
-                ) : null}
-              </div>
-              <div className="donut-legend">
-                {donutItems.map((item) => (
-                  <div key={item.category} className="donut-legend-item">
-                    <div className="donut-legend-label">
-                      <span
-                        className="dot"
-                        style={{ background: item.isOther ? "#9aa1b2" : colorFor(item.category, userEmail) }}
-                      />
-                      <span>{item.category}</span>
-                    </div>
-                    <div className="donut-legend-meta">
-                      <span>{percent(item.share)}</span>
-                      <strong>{currency(item.spent)}</strong>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="empty">{t("reports.empty_breakdown")}</p>
-          )}
-        </article>
+        </div>
       </div>
 
-      <div className="report-premium-row report-premium-mid">
-        <article className="report-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.budget_by_category")}</h3>
-            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || t("reports.this_month")}</span>
-          </div>
-          {budgetRows.length ? (
-            <div className="premium-budget-list">
-              {budgetRows.map((item) => (
-                <div key={item.category} className="premium-budget-item">
-                  <div className="premium-budget-row">
-                    <div className="premium-budget-label">
-                      <span className="dot" style={{ background: colorFor(item.category, userEmail) }} />
-                      <span>{item.category}</span>
-                    </div>
-                    <strong>
-                      {currency(item.spent)} / {currency(item.target)}
-                    </strong>
+      <div className="rpt-body-cols">
+         <div className="rpt-col-left">
+            <div className="rpt-card">
+               <div className="rpt-card-header">
+                  <h3>Biến động thu chi</h3>
+                  <div className="rpt-legend">
+                     <div className="rpt-legend-item"><span className="dot income"/> Thu nhập</div>
+                     <div className="rpt-legend-item"><span className="dot expense"/> Chi tiêu</div>
                   </div>
-                  <div className="premium-budget-track">
-                    <span
-                      className="premium-budget-fill"
-                      style={{
-                        width: `${Math.min(item.ratio * 100, 125)}%`,
-                        background: colorFor(item.category, userEmail)
-                      }}
-                    />
-                  </div>
-                  <small className={item.ratio > 1 ? "expense" : "muted"}>{(item.ratio * 100).toFixed(0)}%</small>
-                </div>
-              ))}
+               </div>
+               
+               <div className="trend-area-chart">
+                 <ResponsiveContainer width="100%" height={250}>
+                   <AreaChart data={trendSeries}>
+                     <defs>
+                       <linearGradient id="repInc" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
+                         <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                       </linearGradient>
+                       <linearGradient id="repExp" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.26} />
+                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                       </linearGradient>
+                     </defs>
+                     <ReCartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                     <ReXAxis dataKey="label" />
+                     <ReYAxis />
+                     <ReTooltip formatter={(value) => currency(value)} />
+                     <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#repInc)" strokeWidth={2.5} />
+                     <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#repExp)" strokeWidth={2.5} />
+                   </AreaChart>
+                 </ResponsiveContainer>
+               </div>
             </div>
-          ) : (
-            <p className="empty">{t("reports.empty_breakdown")}</p>
-          )}
-        </article>
 
-        <article className="report-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.heatmap_spend")}</h3>
-            <span className="badge">{t("reports.badge.monthly")}</span>
-          </div>
-          <div className="premium-heatmap-top">
-            <span />
-            {heatmapMonthLabels.map((label, index) => (
-              <span key={`month-${index}`}>{label}</span>
-            ))}
-          </div>
-          <div className="heatmap">
-            <div className="heatmap-labels">
-              {weekLabels.map((label) => (
-                <span key={label}>{label}</span>
-              ))}
-            </div>
-            <div className="heatmap-grid">
-              {Array.from({ length: heatmap.weeks }).map((_, column) => (
-                <div key={`week-${column}`} className="heatmap-column">
-                  {Array.from({ length: 7 }).map((__, row) => {
-                    const index = column * 7 + row;
-                    const cell = heatmap.cells[index];
-                    if (!cell) return <span key={`cell-${column}-${row}`} className="heatmap-cell empty" />;
-                    const intensity = heatmap.max ? cell.value / heatmap.max : 0;
-                    const alpha = 0.12 + intensity * 0.7;
+            <div className="rpt-analytics-grid">
+              <div className="rpt-card">
+               <div className="rpt-card-header">
+                  <h3>Chi tiêu theo danh mục</h3>
+               </div>
+               <div className="donut-container">
+                  <div className="donut-svg-wrapper">
+                     <ResponsiveContainer width="100%" height={220}>
+                       <PieChart>
+                         <Pie
+                           data={donutChartData}
+                           dataKey="value"
+                           nameKey="name"
+                           innerRadius={52}
+                           outerRadius={86}
+                           paddingAngle={2}
+                           label={donutLabel}
+                           labelLine={false}
+                         >
+                           {donutItems.map((item) => <Cell key={item.category} fill={colorFor(item.category, userEmail)} />)}
+                         </Pie>
+                         <ReTooltip
+                           formatter={(v) => currency(v)}
+                           labelFormatter={(label) => `Danh mục: ${label}`}
+                         />
+                       </PieChart>
+                     </ResponsiveContainer>
+                     <div className="donut-center-text">
+                        <span>Tổng chi:
+                          <br/>
+                          {currency(donutTotal)}
+                        </span>
+                     </div>
+                  </div>
+               </div>
+              </div>
+
+              <div className="rpt-card">
+                <div className="rpt-card-header">
+                  <h3>Phân bổ nguồn tiền</h3>
+                  {paymentBreakdown.length > 3 && (
+                    <button className="rpt-toggle-btn" onClick={() => setShowAllSources(!showAllSources)}>
+                      {showAllSources ? "∧ Thu gọn" : "∨ Xem thêm"}
+                    </button>
+                  )}
+                </div>
+                <div className="rpt-source-bars">
+                  {(showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).length ? (showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).map((item) => (
+                    <div className="rpt-source-item" key={item.source}>
+                      <div className="rpt-source-head">
+                        <span>{item.source}</span>
+                        <strong>{currency(item.amount)}</strong>
+                      </div>
+                      <div className="rpt-source-track">
+                        <div className="rpt-source-fill" style={{ width: `${Math.max(4, (item.share || 0) * 100)}%` }} />
+                      </div>
+                    </div>
+                  )) : <p className="muted">Chưa có dữ liệu nguồn tiền.</p>}
+                </div>
+              </div>
+
+              <div className="rpt-card">
+                <div className="rpt-card-header">
+                  <h3>Tỷ lệ tiết kiệm theo tháng</h3>
+                </div>
+                <div className="rpt-month-bars">
+                  {monthlyBars.map((item) => {
+                    const rate = item.income > 0 ? (item.income - item.expense) / item.income : 0;
                     return (
-                      <span
-                        key={cell.key}
-                        className="heatmap-cell"
-                        style={{ background: `rgba(240, 113, 103, ${alpha})` }}
-                        title={`${cell.key} • ${currency(cell.value)}`}
-                      />
+                      <div className="rpt-month-bar-item" key={item.label}>
+                        <span>{item.label}</span>
+                        <div className="rpt-month-bar-track">
+                          <div className={`rpt-month-bar-fill ${rate >= 0 ? "up" : "down"}`} style={{ width: `${Math.min(100, Math.abs(rate) * 100)}%` }} />
+                        </div>
+                        <strong>{(rate * 100).toFixed(1)}%</strong>
+                      </div>
                     );
                   })}
                 </div>
-              ))}
-            </div>
-            <div className="heatmap-legend">
-              <span>{t("reports.heatmap_low")}</span>
-              <div className="heatmap-scale">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <span
-                    key={`scale-${index}`}
-                    style={{ background: `rgba(240, 113, 103, ${0.12 + (index / 5) * 0.72})` }}
-                  />
-                ))}
               </div>
-              <span>{t("reports.heatmap_high")}</span>
             </div>
-          </div>
-        </article>
 
-        <article className="report-surface">
-          <div className="report-surface-head">
-            <h3>{t("reports.top_transactions")}</h3>
-            <span className="badge">{formatSeriesLabel(currentMonthly.month || "", "month") || t("reports.this_month")}</span>
-          </div>
-          {largestTransactions.length ? (
-            <div className="premium-top-list">
-              {largestTransactions.map((item) => (
-                <div key={item.id || `${item.date}-${item.amount}-${item.description}`} className="premium-top-item">
-                  <span
-                    className="premium-top-icon"
-                    style={{
-                      background: `${colorFor(item.categoryLabel || item.description || t("reports.other"), userEmail)}22`,
-                      color: colorFor(item.categoryLabel || item.description || t("reports.other"), userEmail)
-                    }}
-                  >
-                    {(item.categoryLabel || item.description || "G").slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="premium-top-meta">
-                    <strong>{item.description || item.categoryLabel || t("reports.transaction")}</strong>
-                    <small>{formatDateFull(item.date)}</small>
-                  </div>
-                  <strong className="premium-top-amount">-{currency(Math.abs(Number(item.amount || 0)))}</strong>
+            <div className="rpt-analytics-grid">
+              <div className="rpt-card">
+                <div className="rpt-card-header">
+                  <h3>Giao dịch theo ngày trong tuần</h3>
                 </div>
-              ))}
+                <div className="rpt-heatmap">
+                  {[0, 1, 2, 3, 4].map((w) => (
+                    <div key={`week-${w}`} className="rpt-heatmap-col">
+                      {[0, 1, 2, 3, 4, 5, 6].map((d) => {
+                        const val = heatmapValue(w, d);
+                        const opacity = val > 0 ? Math.max(0.15, val / heatmapMax) : 0.05;
+                        return <span key={`cell-${w}-${d}`} style={{ opacity }} title={currency(val)} />;
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rpt-card">
+                <div className="rpt-card-header">
+                  <h3>Top danh mục chi tiêu</h3>
+                </div>
+                <div className="rpt-top-category-list">
+                  {categorySpending.slice(0, 6).map((item) => (
+                    <div key={item.category} className="rpt-top-category-item">
+                      <span>{item.category}</span>
+                      <div className="rpt-top-category-track">
+                        <div className="rpt-top-category-fill" style={{ width: `${Math.max(5, (item.share || 0) * 100)}%` }} />
+                      </div>
+                      <strong>{currency(item.amount)}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rpt-card">
+                <div className="rpt-card-header">
+                  <h3>Tiến độ mục tiêu tiết kiệm</h3>
+                </div>
+                <div className="rpt-goal-list">
+                  {goalProgress.length ? goalProgress.map((goal) => (
+                    <div key={goal.name} className="rpt-goal-item">
+                      <div className="rpt-goal-head">
+                        <span>{goal.name}</span>
+                        <strong>{Math.round((goal.progress || 0) * 100)}%</strong>
+                      </div>
+                      <div className="rpt-goal-track">
+                        <div className="rpt-goal-fill" style={{ width: `${Math.max(2, (goal.progress || 0) * 100)}%` }} />
+                      </div>
+                      <p>{currency(goal.saved_amount)} / {currency(goal.target_amount)}</p>
+                    </div>
+                  )) : <p className="muted">Chưa có mục tiêu tiết kiệm.</p>}
+                </div>
+              </div>
             </div>
-          ) : (
-            <p className="empty">{t("reports.empty")}</p>
-          )}
-        </article>
+         </div>
+
+         <div className="rpt-col-right">
+            <div className="rpt-ai-card">
+               <div className="rpt-ai-header">
+                  <div className="ai-icon">✨</div>
+                  <h3>Gợi ý AI <span className="ai-badge">Mới</span></h3>
+               </div>
+               <p className="ai-desc">{aiTipText}</p>
+               <button className="ai-btn-view">Xem chi tiết</button>
+            </div>
+
+            <div className="rpt-card">
+               <div className="rpt-card-header">
+                  <h3>Các khoản chi lớn nhất</h3>
+                  <a href="#" className="rpt-view-all">Xem tất cả</a>
+               </div>
+               <div className="rpt-tx-list">
+                  {topTransactions.length > 0 ? topTransactions.map((tx, idx) => {
+                     const txCategory = tx.category || tx.categoryLabel || "Khác";
+                     const catBg = colorFor(txCategory, userEmail);
+                     return (
+                        <div key={idx} className="rpt-tx-item">
+                           <div className="rpt-tx-icon" style={{background: `${catBg}22`, color: catBg}}>
+                              {txCategory.slice(0,1)}
+                           </div>
+                           <div className="rpt-tx-info">
+                              <span className="rpt-tx-title">{tx.description || txCategory}</span>
+                              <span className="rpt-tx-date">{formatDateFull(tx.date)}</span>
+                           </div>
+                           <div className="rpt-tx-amount">
+                              -{currency(Math.abs(tx.amount))}
+                           </div>
+                        </div>
+                     );
+                  }) : <p className="muted" style={{fontSize: 13}}>Không có giao dịch lớn nào.</p>}
+               </div>
+            </div>
+
+            <div className="rpt-card">
+              <div className="rpt-card-header">
+                <h3>Xu hướng ngân sách</h3>
+              </div>
+              <div className="trend-area-chart">
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={monthlyBars}>
+                    <ReCartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <ReXAxis dataKey="label" />
+                    <ReYAxis />
+                    <ReTooltip formatter={(value) => currency(value)} />
+                    <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2.4} />
+                    <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2.4} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+         </div>
       </div>
-      <div className="panel">
-        <h3>{t("reports.ai_title")}</h3>
-        <div className="row-actions" style={{ justifyContent: "flex-start", flexWrap: "wrap" }}>
-          <button
-            className="ghost"
-            type="button"
-            onClick={() => {
-              setShowForecast((v) => {
-                const next = !v;
-                if (next && !forecastData) loadForecast();
-                return next;
-              });
-            }}
-          >
-            {t("reports.ai_forecast")}
-          </button>
-          <button
-            className="ghost"
-            type="button"
-            onClick={() => {
-              setShowSavingTips((v) => {
-                const next = !v;
-                if (next && !savingsData) loadSavingsTips();
-                return next;
-              });
-            }}
-          >
-            {t("reports.ai_saving")}
-          </button>
-          <button
-            className="ghost"
-            type="button"
-            onClick={() => {
-              setShowAnomaly((v) => {
-                const next = !v;
-                if (next && !anomalyData) loadAnomalies();
-                return next;
-              });
-            }}
-          >
-            {t("reports.ai_anomaly")}
-          </button>
-        </div>
 
-        {showForecast && (
-          <div className="insight-card">
-            <h4>{t("reports.forecast_title")}</h4>
-            {forecastLoading && <p className="muted">{t("common.loading")}</p>}
-            {!forecastLoading && forecastError && <p className="status error">{forecastError}</p>}
-            {!forecastLoading && !forecastError && forecastData && (
-              <>
-                {forecastData.summary && <p className="muted">{forecastData.summary}</p>}
-                {Array.isArray(forecastData.points) && forecastData.points.length > 0 && (
-                  <ul>
-                    {forecastData.points.map((point) => (
-                      <li key={point.month || `${point.predicted_expense}`}>
-                        <strong>{point.month}</strong>: {currency(point.predicted_expense || 0)}
-                        {point.note ? ` - ${point.note}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {Array.isArray(forecastData.top_growing_categories) &&
-                  forecastData.top_growing_categories.length > 0 && (
-                    <p className="hint">
-                      {t("reports.top_growing")}:{" "}
-                      {forecastData.top_growing_categories.join(", ")}
-                    </p>
-                  )}
-                {forecastData.risk_level && (
-                  <p className="hint">
-                    {t("reports.risk")}: {riskLabel(forecastData.risk_level)}
-                  </p>
-                )}
-                {Array.isArray(forecastData.tips) && forecastData.tips.length > 0 && (
-                  <>
-                    <p className="hint">{t("reports.recommend")}</p>
-                    <ul>
-                      {forecastData.tips.map((tip, index) => (
-                        <li key={`forecast-tip-${index}`}>{tip}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {showSavingTips && (
-          <div className="insight-card">
-            <h4>{t("reports.saving_title")}</h4>
-            {savingsLoading && <p className="muted">{t("common.loading")}</p>}
-            {!savingsLoading && savingsError && <p className="status error">{savingsError}</p>}
-            {!savingsLoading && !savingsError && savingsData && (
-              <>
-                {savingsData.summary && <p className="muted">{savingsData.summary}</p>}
-                {Array.isArray(savingsData.tips) && savingsData.tips.length > 0 ? (
-                  <ul>
-                    {savingsData.tips.map((tip) => (
-                      <li key={`${tip.category}-${tip.suggested_limit}`}>
-                        <strong>{tip.category}</strong>: {currency(tip.current_spend || 0)} {"->"}{" "}
-                        {currency(tip.suggested_limit || 0)}
-                        {typeof tip.potential_saving === "number"
-                          ? ` (${t("reports.potential_save")}: ${currency(
-                              tip.potential_saving
-                            )})`
-                          : ""}
-                        {tip.tip ? ` - ${tip.tip}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="empty">{t("reports.empty")}</p>
-                )}
-                {typeof savingsData.total_potential_saving === "number" && (
-                  <p className="hint">
-                    {t("reports.total_potential")}:{" "}
-                    {currency(savingsData.total_potential_saving)}
-                  </p>
-                )}
-                {Array.isArray(savingsData.general_advice) && savingsData.general_advice.length > 0 && (
-                  <>
-                    <p className="hint">{t("reports.general_advice")}</p>
-                    <ul>
-                      {savingsData.general_advice.map((item, index) => (
-                        <li key={`advice-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {showAnomaly && (
-          <div className="insight-card">
-            <h4>{t("reports.anomaly_title")}</h4>
-            {anomalyLoading && <p className="muted">{t("common.loading")}</p>}
-            {!anomalyLoading && anomalyError && <p className="status error">{anomalyError}</p>}
-            {!anomalyLoading && !anomalyError && Array.isArray(anomalyData) && (
-              <>
-                {anomalyData.length ? (
-                  <ul>
-                    {anomalyData.slice(0, 10).map((item) => (
-                      <li key={item.id || `${item.date}-${item.amount}`}>
-                        {item.description || t("reports.anomaly_item")}
-                        {item.reason ? ` - ${item.reason}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="empty">{t("reports.anomaly_none")}</p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+    </div>
   );
 }
-

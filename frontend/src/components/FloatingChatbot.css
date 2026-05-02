@@ -7,6 +7,35 @@
   font-family: inherit;
 }
 
+@media (max-width: 768px) {
+  .chatbot-container {
+    bottom: 92px;
+    right: 12px;
+  }
+
+  /* Keep the launcher compact on mobile so it doesn't cover list content */
+  .chatbot-launcher {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    padding: 0;
+    justify-content: center;
+    box-shadow: 0 10px 24px rgba(236, 72, 153, 0.35);
+    background: linear-gradient(135deg, #ec4899, #7c3aed);
+  }
+
+  .chatbot-launcher .launcher-label {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .chatbot-container {
+    bottom: 96px;
+    right: 12px;
+  }
+}
+
 .chatbot-launcher {
   display: flex;
   align-items: center;
@@ -21,6 +50,16 @@
   cursor: pointer;
 }
 
+.chatbot-launcher.mini {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  padding: 0;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(236, 72, 153, 0.35);
+  background: linear-gradient(135deg, #ec4899, #7c3aed);
+}
+
 .chatbot-launcher:hover {
   transform: translateY(-4px) scale(1.02);
   box-shadow: 0 12px 28px rgba(21, 101, 192, 0.45);
@@ -28,6 +67,8 @@
 
 .launcher-icon {
   font-size: 20px;
+  display: grid;
+  place-items: center;
 }
 
 .launcher-label {
@@ -113,6 +154,7 @@
   cursor: pointer;
   padding: 4px;
   line-height: 1;
+  border-radius: 8px;
 }
 
 .chatbot-messages {

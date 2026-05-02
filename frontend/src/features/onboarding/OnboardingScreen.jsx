@@ -318,13 +318,24 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
     }
   };
 
+  const stepTitleMap = {
+    1: tLocal("onboarding.step1.title"),
+    2: tLocal("onboarding.step2.title"),
+    3: tLocal("onboarding.step3.title"),
+    4: tLocal("onboarding.step4.title"),
+    5: tLocal("onboarding.step5.title")
+  };
+
+  const currentPrimary = primaryColor === "custom" ? customPrimary : primaryColor;
+
   return (
     <main className="onboarding-shell">
       <section className="onboarding-card">
         <header className="onboarding-header">
-          <div>
+          <div className="onboarding-heading">
             <p className="eyebrow">{tLocal("onboarding.title")}</p>
             <h1>{tLocal("onboarding.step", { current: step, total: totalSteps })}</h1>
+            <p className="onboarding-subtitle">{stepTitleMap[step]}</p>
           </div>
           <div className="onboarding-progress">
             <div className="progress-bar">
@@ -339,40 +350,53 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         {step === 1 && (
           <div className="onboarding-step">
             <h2>{tLocal("onboarding.step1.title")}</h2>
-            <div className="grid two">
-              <div className="field">
+            <p className="muted">{tLocal("onboarding.step1.note")}</p>
+            <div className="grid three onboarding-form-grid">
+              <div className="field onboarding-field">
                 <label>{tLocal("onboarding.step1.balance")}</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={balance}
-                  onChange={(event) => setBalance(formatNumberInput(event.target.value))}
-                  placeholder="0"
-                  required
-                />
+                <div className="input-with-icon">
+                  <span className="input-prefix">💳</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={balance}
+                    onChange={(event) => setBalance(formatNumberInput(event.target.value))}
+                    placeholder="0"
+                    required
+                  />
+                </div>
               </div>
-              <div className="field">
+              <div className="field onboarding-field">
                 <label>{tLocal("onboarding.step1.currency")}</label>
-                <select value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)}>
-                  {CURRENCY_OPTIONS.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                <div className="input-with-icon">
+                  <span className="input-prefix">💱</span>
+                  <select value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)}>
+                    {CURRENCY_OPTIONS.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="field">
+              <div className="field onboarding-field">
                 <label>{tLocal("onboarding.step1.timezone")}</label>
-                <select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
-                  {timezoneOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
+                <div className="input-with-icon">
+                  <span className="input-prefix">🕒</span>
+                  <select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
+                    {timezoneOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-            <p className="muted">{tLocal("onboarding.step1.note")}</p>
+            <div className="onboarding-note">
+              <span>ℹ️</span>
+              <p>{tLocal("onboarding.step1.note")}</p>
+            </div>
           </div>
         )}
 
@@ -401,11 +425,13 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                   </div>
                   <div className="field">
                     <label>{tLocal("onboarding.step2.icon")}</label>
-                    <input
-                      type="text"
-                      value={item.icon}
-                      onChange={(event) => handleCategoryChange(item.id, "icon", event.target.value)}
-                    />
+                    <div className="icon-input-wrap">
+                      <input
+                        type="text"
+                        value={item.icon}
+                        onChange={(event) => handleCategoryChange(item.id, "icon", event.target.value)}
+                      />
+                    </div>
                   </div>
                   <div className="field">
                     <label>{tLocal("onboarding.step2.color")}</label>
@@ -427,7 +453,8 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         {step === 3 && (
           <div className="onboarding-step">
             <h2>{tLocal("onboarding.step3.title")}</h2>
-            <div className="grid two">
+            <p className="muted">Tùy chỉnh trải nghiệm sử dụng theo sở thích của bạn.</p>
+            <div className="grid two onboarding-form-grid">
               <div className="field">
                 <label>{tLocal("onboarding.step3.language")}</label>
                 <div className="chip-group">
@@ -493,7 +520,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                     className={primaryColor === "custom" ? "chip active" : "chip"}
                     onClick={() => setPrimaryColor("custom")}
                   >
-                    Custom
+                    🎨 Custom
                   </button>
                 </div>
                 {primaryColor === "custom" && (
@@ -572,6 +599,11 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
               <h3>{tLocal("dashboard.overview")}</h3>
               <p className="muted">{tLocal("dashboard.balance")}</p>
               <strong>{formatLocalCurrency(2500000)}</strong>
+              <div className="preview-metrics">
+                <div>💰 {formatLocalCurrency(4200000)}</div>
+                <div>💸 {formatLocalCurrency(1700000)}</div>
+                <div>🏦 {formatLocalCurrency(2500000)}</div>
+              </div>
             </div>
           </div>
         )}
@@ -579,15 +611,27 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         {step === 4 && (
           <div className="onboarding-step">
             <h2>{tLocal("onboarding.step4.title")}</h2>
-            <div className="row">
-              <input
-                type="file"
-                accept=".csv"
-                onChange={(event) => handleCsvUpload(event.target.files?.[0])}
-              />
-              <button className="ghost" type="button" onClick={() => setImportSkipped(true)}>
-                {tLocal("onboarding.step4.skip")}
-              </button>
+            <p className="muted">Bạn có thể nhập dữ liệu giao dịch từ file CSV để bắt đầu nhanh hơn.</p>
+            <div className="import-layout">
+              <label className="upload-dropzone">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(event) => handleCsvUpload(event.target.files?.[0])}
+                />
+                <div className="upload-dropzone-content">
+                  <div className="upload-icon">☁️</div>
+                  <h4>Kéo & thả file vào đây</h4>
+                  <p>hoặc chọn tệp CSV từ máy tính</p>
+                </div>
+              </label>
+              <div className="import-side-note">
+                <h4>Bỏ qua bước nhập dữ liệu</h4>
+                <p>Bạn có thể thêm giao dịch thủ công sau khi hoàn tất thiết lập.</p>
+                <button className="ghost" type="button" onClick={() => setImportSkipped(true)}>
+                  {tLocal("onboarding.step4.skip")}
+                </button>
+              </div>
             </div>
             {!importSkipped && !!csvPreview.length && (
               <div className="preview-table">
@@ -622,6 +666,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         {step === 5 && (
           <div className="onboarding-step">
             <h2>{tLocal("onboarding.step5.title")}</h2>
+            <p className="muted">Vui lòng kiểm tra lại các thiết lập của bạn trước khi bắt đầu sử dụng ứng dụng.</p>
             <div className="summary-grid">
               <div className="summary-item">
                 <p>{tLocal("onboarding.step5.balance")}</p>
@@ -655,6 +700,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                 <strong>{importSkipped ? 0 : importRows.length}</strong>
               </div>
             </div>
+            <p className="setup-security-note">🔒 Dữ liệu của bạn luôn được bảo mật và chỉ bạn có quyền truy cập.</p>
           </div>
         )}
 
@@ -670,11 +716,18 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
               type="button"
               onClick={handleNext}
               disabled={!stepValid[step - 1] || saving}
+              style={{ background: currentPrimary, borderColor: currentPrimary }}
             >
               {tLocal("common.next")}
             </button>
           ) : (
-            <button className="primary" type="button" onClick={handleFinish} disabled={saving}>
+            <button
+              className="primary"
+              type="button"
+              onClick={handleFinish}
+              disabled={saving}
+              style={{ background: currentPrimary, borderColor: currentPrimary }}
+            >
               {saving ? tLocal("common.loading") : tLocal("common.finish")}
             </button>
           )}

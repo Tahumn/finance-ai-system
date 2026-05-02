@@ -1,7 +1,7 @@
 from fastapi import FastAPI
-from app.database import Base, engine, ensure_schema
-from app.recurring import models as recurring_models
+from app.database import ensure_schema
 from app.recurring.router import router as recurring_router
+from app.migrations import run_migrations
 
 app = FastAPI(title="Recurring Service")
 
@@ -12,13 +12,6 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(
-        bind=engine,
-        tables=[
-            recurring_models.Subscription.__table__,
-            recurring_models.Debt.__table__,
-            recurring_models.Reminder.__table__,
-        ],
-    )
+    run_migrations("recurring")
 
 app.include_router(recurring_router, prefix="/api/v1")

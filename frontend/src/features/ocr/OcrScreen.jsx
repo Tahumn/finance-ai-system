@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { extractOcr } from "../../api/ai.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
 import { colorFor, onColor } from "../../utils/colors.js";
-import { getCategoryPrefs } from "../../utils/userPrefs.js";
 import { t } from "../../utils/i18n.js";
+import { CAT_ICONS, getCatMeta } from "../../utils/categoryIcons.jsx";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
@@ -36,16 +36,46 @@ const toFormattedNumber = (value, fallback = "") => {
 };
 
 const normalizeTag = (value) => String(value || "").trim().replace(/^#/, "");
+const hexWithAlpha = (hex, alpha) => {
+  const value = String(hex || "").trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(value)) return value || "#94a3b8";
+  return `${value}${alpha}`;
+};
+
+const getOcrCategoryTheme = (name, fallbackColor) => {
+  if (CAT_ICONS[name]) {
+    const meta = getCatMeta(name);
+    return { meta, bg: meta.light, fg: meta.bg, dot: meta.bg };
+  }
+  const color = fallbackColor || "#94a3b8";
+  const meta = { ...getCatMeta(name), bg: color, light: hexWithAlpha(color, "1A") };
+  return { meta, bg: meta.light, fg: meta.bg, dot: meta.bg };
+};
 
 export default function OcrScreen({
   categories,
   tags = [],
   userEmail,
+  onCreateCategory,
   onCreateTag,
   onCreateTransaction,
   loading,
-  embedded = false
+  embedded = false,
+  onClose
 }) {
+  const paymentTagCandidates = useMemo(
+    () =>
+      tags.filter((tag) => {
+        const value = String(tag.name || "").toLowerCase();
+        return (
+          value.includes("tiền mặt") ||
+          value.includes("ngân hàng") ||
+          value.includes("ví") ||
+          value.includes("momo")
+        );
+      }),
+    [tags]
+  );
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsed, setParsed] = useState(baseParsedState);
@@ -56,8 +86,13 @@ export default function OcrScreen({
   const [warnings, setWarnings] = useState([]);
   const [selectedTagIds, setSelectedTagIds] = useState([]);
   const [tagInput, setTagInput] = useState("");
-
-  const categoryPrefs = useMemo(() => getCategoryPrefs(userEmail), [userEmail]);
+  const [txType, setTxType] = useState("expense");
+  const [fundingSourceId, setFundingSourceId] = useState("");
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [referenceCode, setReferenceCode] = useState("");
+  const [autoCreate, setAutoCreate] = useState(true);
 
   const tagMap = useMemo(() => {
     const map = {};
@@ -93,6 +128,12 @@ export default function OcrScreen({
     () => parseNumberInput(parsed.total) > 0 && Boolean(parsed.date),
     [parsed.total, parsed.date]
   );
+  const computedSubTotal = useMemo(() => {
+    const total = parseNumberInput(parsed.total);
+    const vat = parseNumberInput(parsed.vat);
+    const discount = parseNumberInput(parsed.estimated);
+    return Math.max(0, total + vat - discount);
+  }, [parsed.total, parsed.vat, parsed.estimated]);
 
   const handleExtract = async () => {
     if (!file) {
@@ -141,18 +182,27 @@ export default function OcrScreen({
     setError("");
     setNotice("");
 
-    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), parsed.note]
+    const descriptionParts = [
+      parsed.merchant || t("ocr.default_desc"),
+      referenceCode ? `Ref:${referenceCode}` : "",
+      parsed.note
+    ]
       .filter(Boolean)
       .join(" - ");
 
     try {
+      let ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
+      if (!ocrTagId && onCreateTag) {
+        const createdOcrTag = await onCreateTag({ name: "Hóa đơn OCR", color: "#ec4899" });
+        ocrTagId = createdOcrTag?.id;
+      }
       await onCreateTransaction({
         description: descriptionParts,
         amount: parseNumberInput(parsed.total),
-        transaction_type: "expense",
+        transaction_type: txType,
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
         date: parsed.date,
-        tag_ids: selectedTagIds
+        tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])]
       });
       setNotice(t("ocr.notice.created", null, "Transaction created from OCR."));
       setParsed(baseParsedState());
@@ -161,7 +211,11 @@ export default function OcrScreen({
       setOcrState("idle");
       setWarnings([]);
       setSelectedTagIds([]);
+      setFundingSourceId("");
+      setTxType("expense");
       setTagInput("");
+      setReferenceCode("");
+      setAutoCreate(true);
     } catch {
       setError(t("ocr.error.create_failed", null, "Failed to create transaction from OCR."));
     }
@@ -195,6 +249,18 @@ export default function OcrScreen({
   };
 
   const removeTag = (tagId) => setSelectedTagIds((current) => current.filter((id) => id !== tagId));
+  const filteredCategories = useMemo(() => {
+    const q = String(categoryQuery || "").trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((c) => String(c.name || "").toLowerCase().includes(q));
+  }, [categories, categoryQuery]);
+  const handleQuickCreateCategory = async () => {
+    const value = String(newCategoryName || "").trim();
+    if (!value || !onCreateCategory) return;
+    await onCreateCategory(value);
+    setShowAddCategory(false);
+    setNewCategoryName("");
+  };
 
   const Shell = embedded ? "div" : "section";
 
@@ -203,39 +269,60 @@ export default function OcrScreen({
       {!embedded && (
         <div className="panel-header">
           <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
+          {onClose && (
+            <button type="button" className="ocr-close-btn" onClick={onClose} aria-label="Đóng">
+              ×
+            </button>
+          )}
         </div>
       )}
 
-      <div className="receipt-grid">
-        <div className="receipt-uploader">
-          <label className="field">
-            <span>{t("ocr.form.image", null, "Receipt image")}</span>
+      <div className="receipt-grid ocr-layout">
+        <div className="receipt-uploader ocr-left-col">
+          <div className="ocr-upload-switch">
+            <button type="button" className="active">Tải ảnh lên</button>
+            <button type="button">Camera</button>
+          </div>
+          <label className="field ocr-dropzone">
             <input
               type="file"
               accept="image/*"
               onChange={(event) => setFile(event.target.files?.[0] || null)}
             />
+            <div>
+              <p>Kéo & thả ảnh hóa đơn hoặc chọn tệp</p>
+              <span>Ảnh JPG/PNG, rõ nét để OCR chính xác hơn</span>
+            </div>
           </label>
 
-          <button className="ghost" type="button" onClick={handleExtract}>
-            {ocrState === "running"
-              ? t("ocr.action.running", null, "Processing...")
-              : t("ocr.action.extract", null, "Run OCR")}
+          <button className="ghost ocr-extract-btn" type="button" onClick={handleExtract}>
+            {ocrState === "running" ? "Đang trích xuất OCR..." : "Trích xuất lại OCR"}
           </button>
 
           <div className="receipt-preview">
-            {previewUrl ? (
-              <img src={previewUrl} alt="Receipt preview" />
-            ) : (
-              <p className="empty">{t("ocr.empty", null, "No image selected.")}</p>
-            )}
+            {previewUrl ? <img src={previewUrl} alt="Receipt preview" /> : <p className="empty">Xem trước hóa đơn</p>}
+          </div>
+
+          <div className="ocr-result-card">
+            <h4>Kết quả OCR</h4>
+            <div className="ocr-result-grid">
+              <span>Merchant</span>
+              <strong>{parsed.merchant || "--"}</strong>
+              <span>Ngày giao dịch</span>
+              <strong>{parsed.date || "--"}</strong>
+              <span>Tổng tiền</span>
+              <strong>{parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}</strong>
+              <span>Độ tin cậy</span>
+              <strong>{Math.round(confidence.total * 100)}%</strong>
+            </div>
           </div>
         </div>
 
-        <form className="form" onSubmit={handleCreate}>
+        <form className="form ocr-form-panel ocr-form-modern" onSubmit={handleCreate}>
+          <h4>1. Thông tin giao dịch</h4>
           <div className="row">
             <label className="field">
-              <span>{t("ocr.form.date", null, "Date")}</span>
+              <span>Ngày giao dịch *</span>
               <input
                 type="date"
                 value={parsed.date}
@@ -244,34 +331,50 @@ export default function OcrScreen({
                 }
                 required
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.date * 100) }, `Confidence: ${
-                  Math.round(confidence.date * 100)
-                }%`)}
-              </small>
             </label>
 
             <label className="field">
-              <span>{t("ocr.form.merchant", null, "Merchant")}</span>
+              <span>Merchant *</span>
               <input
                 type="text"
                 value={parsed.merchant}
                 onChange={(event) =>
                   setParsed((current) => ({ ...current, merchant: event.target.value }))
                 }
-                placeholder={t("ocr.form.merchant_placeholder", null, "Example: Circle K")}
+                placeholder="Ví dụ: Circle K"
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.merchant * 100) }, `Confidence: ${
-                  Math.round(confidence.merchant * 100)
-                }%`)}
-              </small>
             </label>
           </div>
 
+          <div className="ocr-pill-row">
+            <span>Loại giao dịch</span>
+            <div className="ocr-inline-pills">
+              <button type="button" className={txType === "expense" ? "active" : ""} onClick={() => setTxType("expense")}>Chi tiêu</button>
+              <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
+            </div>
+          </div>
+
+          {!!paymentTagCandidates.length && (
+            <div className="ocr-pill-row">
+              <span>Nguồn tiền *</span>
+              <div className="ocr-inline-pills wrap">
+                {paymentTagCandidates.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className={fundingSourceId === tag.id ? "active" : ""}
+                    onClick={() => setFundingSourceId(tag.id)}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="row">
             <label className="field">
-              <span>{t("ocr.form.total", null, "Total")}</span>
+              <span>Tổng tiền *</span>
               <input
                 type="text"
                 inputMode="numeric"
@@ -285,11 +388,6 @@ export default function OcrScreen({
                 placeholder="0"
                 required
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.total * 100) }, `Confidence: ${
-                  Math.round(confidence.total * 100)
-                }%`)}
-              </small>
             </label>
 
             <label className="field">
@@ -306,16 +404,60 @@ export default function OcrScreen({
                 }
                 placeholder="0"
               />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.vat * 100) }, `Confidence: ${
-                  Math.round(confidence.vat * 100)
-                }%`)}
-              </small>
+            </label>
+            <label className="field">
+              <span>Giảm giá</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={parsed.estimated}
+                onChange={(event) =>
+                  setParsed((current) => ({
+                    ...current,
+                    estimated: formatNumberInput(event.target.value)
+                  }))
+                }
+                placeholder="0"
+              />
             </label>
           </div>
 
           <label className="field">
-            <span>{t("ocr.form.category", null, "Category")}</span>
+            <span>Tạm tính</span>
+            <input type="text" value={currency(computedSubTotal)} readOnly />
+          </label>
+
+          <h4 className="ocr-section-title ocr-section-inline">
+            <span>2. Danh mục</span>
+            <button
+              type="button"
+              className="ghost ocr-add-category-btn"
+              onClick={() => setShowAddCategory((s) => !s)}
+            >
+              + Thêm danh mục
+            </button>
+          </h4>
+          {showAddCategory && (
+            <div className="ocr-inline-create">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Nhập tên danh mục mới..."
+              />
+              <button type="button" className="primary" onClick={handleQuickCreateCategory}>
+                Lưu
+              </button>
+            </div>
+          )}
+          <label className="field">
+            <span>Chọn danh mục</span>
+            <input
+              type="text"
+              value={categoryQuery}
+              onChange={(e) => setCategoryQuery(e.target.value)}
+              placeholder="Tìm danh mục..."
+            />
             <div className="category-picker">
               <button
                 type="button"
@@ -325,20 +467,21 @@ export default function OcrScreen({
               >
                 {t("transactions.none", null, "Không")}
               </button>
-              {categories.map((category) => {
+              {filteredCategories.map((category) => {
                 const bg = colorFor(category.name, userEmail);
                 const selected = String(parsed.categoryId) === String(category.id);
+                const theme = getOcrCategoryTheme(category.name, bg);
                 return (
                   <button
                     key={category.id}
                     type="button"
-                    className={`category-pill color-pill ${selected ? "selected" : ""}`}
+                    className={`category-pill ocr-category-pill ${selected ? "selected" : ""}`}
                     onClick={() => setParsed((current) => ({ ...current, categoryId: String(category.id) }))}
                     aria-pressed={selected}
-                    style={{ "--pill-bg": bg, "--pill-fg": onColor(bg) }}
+                    style={{ "--pill-bg": theme.bg, "--pill-fg": theme.fg, "--pill-dot": theme.dot }}
                   >
                     <span className="pill-icon" aria-hidden="true">
-                      {categoryPrefs[category.name]?.icon || "🏷️"}
+                      <theme.meta.SvgIcon size={14} />
                     </span>
                     <span className="pill-text">{category.name}</span>
                   </button>
@@ -347,35 +490,35 @@ export default function OcrScreen({
             </div>
           </label>
 
-          <div className="row">
-            <label className="field">
-              <span>{t("ocr.form.preview_total", null, "Preview total")}</span>
-              <input
-                type="text"
-                value={parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
-                readOnly
-              />
-              <small className="hint">
-                {t("ocr.confidence", { value: Math.round(confidence.estimated * 100) }, `Confidence: ${
-                  Math.round(confidence.estimated * 100)
-                }%`)}
-              </small>
-            </label>
-          </div>
-
+          <h4 className="ocr-section-title">3. Chi tiết bổ sung</h4>
           <label className="field">
-            <span>{t("ocr.form.note", null, "Notes")}</span>
+            <span>Ghi chú</span>
             <textarea
               rows="3"
               value={parsed.note}
               onChange={(event) =>
                 setParsed((current) => ({ ...current, note: event.target.value }))
               }
-              placeholder={t("ocr.form.note_placeholder", null, "OCR text summary or custom note")}
+              placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu."
             />
           </label>
+          <div className="row">
+            <label className="field">
+              <span>Số hóa đơn / Mã tham chiếu</span>
+              <input
+                type="text"
+                value={referenceCode}
+                onChange={(event) => setReferenceCode(event.target.value)}
+                placeholder="Ví dụ: CK260426-00123"
+              />
+            </label>
+            <label className="field">
+              <span>Đính kèm khác</span>
+              <button type="button" className="ghost ocr-attach-btn">+ Đính kèm tệp</button>
+            </label>
+          </div>
 
-          <div className="tag-section">
+          <div className="tag-section ocr-tag-section">
             <label className="field">
               <span>{t("transactions.field.tags")}</span>
               <div className="tag-input-row">
@@ -444,6 +587,18 @@ export default function OcrScreen({
           {notice && <p className="form-note">{notice}</p>}
           {error && <p className="form-error">{error}</p>}
 
+          <label className="ocr-auto-create">
+            <input
+              type="checkbox"
+              checked={autoCreate}
+              onChange={(event) => setAutoCreate(event.target.checked)}
+            />
+            <div>
+              <strong>Tạo giao dịch từ hóa đơn</strong>
+              <span>Dữ liệu trích xuất có thể chỉnh sửa trước khi lưu giao dịch.</span>
+            </div>
+          </label>
+
           <div className="row-actions">
             <button
               className="ghost"
@@ -456,13 +611,17 @@ export default function OcrScreen({
                 setError("");
                 setWarnings([]);
                 setSelectedTagIds([]);
+                setFundingSourceId("");
+                setTxType("expense");
                 setTagInput("");
+                setReferenceCode("");
+                setAutoCreate(true);
               }}
             >
-              {t("ocr.action.reset", null, "Reset")}
+              Làm mới
             </button>
-            <button className="primary" type="submit" disabled={!canCreate || loading}>
-              {t("ocr.action.create", null, "Create transaction")}
+            <button className="primary" type="submit" disabled={!canCreate || loading || !autoCreate}>
+              Tạo giao dịch từ hóa đơn
             </button>
           </div>
         </form>

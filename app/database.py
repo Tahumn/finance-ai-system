@@ -127,6 +127,26 @@ def ensure_schema() -> None:
                 if "category_id" in bg_existing:
                     conn.execute(text(f"UPDATE {bg} SET category_ids = CAST(category_id AS VARCHAR) WHERE category_ids IS NULL AND category_id IS NOT NULL"))
 
+    if "accounts" in tables:
+        account_cols = {col["name"] for col in inspector.get_columns("accounts", schema=DB_SCHEMA)}
+        statements = []
+        accounts = _table_name("accounts")
+        if "type" not in account_cols:
+            statements.append(f"ALTER TABLE {accounts} ADD COLUMN IF NOT EXISTS type VARCHAR NOT NULL DEFAULT 'bank'")
+        if "provider" not in account_cols:
+            statements.append(f"ALTER TABLE {accounts} ADD COLUMN IF NOT EXISTS provider VARCHAR")
+        if "last4" not in account_cols:
+            statements.append(f"ALTER TABLE {accounts} ADD COLUMN IF NOT EXISTS last4 VARCHAR")
+        if "note" not in account_cols:
+            statements.append(f"ALTER TABLE {accounts} ADD COLUMN IF NOT EXISTS note VARCHAR")
+        if "color" not in account_cols:
+            statements.append(f"ALTER TABLE {accounts} ADD COLUMN IF NOT EXISTS color VARCHAR NOT NULL DEFAULT '#ec4899'")
+
+        if statements:
+            with engine.begin() as conn:
+                for stmt in statements:
+                    conn.execute(text(stmt))
+
 
 def get_db():
     db = SessionLocal()
@@ -134,4 +154,3 @@ def get_db():
         yield db
     finally:
         db.close()
-

@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from app.database import Base, engine, ensure_schema
-from app.planning import models as planning_models
+from app.database import ensure_schema
 from app.planning.router import router as planning_router
 from app.core.kafka import KafkaConsumerManager
+from app.migrations import run_migrations
 from app.planning.worker import handle_finance_event
 
 app = FastAPI(title="Planning Service")
@@ -15,13 +15,7 @@ def healthcheck():
 @app.on_event("startup")
 async def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(
-        bind=engine,
-        tables=[
-            planning_models.Budget.__table__,
-            planning_models.Goal.__table__,
-        ],
-    )
+    run_migrations("planning")
     await consumer_manager.start()
 
 @app.on_event("shutdown")

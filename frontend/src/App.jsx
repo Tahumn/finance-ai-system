@@ -14,21 +14,37 @@ import {
 } from "./api/auth.js";
 import {
   createCategory,
+  createAccount,
   createTag,
   createTransaction,
+  deleteAccount,
   deleteTag,
   deleteTransaction,
   getCategoryBreakdown,
   getSummary,
+  listAccounts,
   listCategories,
   listTags,
   listTransactions,
+  listBudgets,
+  bootstrapFinance,
+  createBudget,
+  createSavingsGoal,
+  updateAccount,
+  updateBudget,
+  updateSavingsGoal,
+  deleteBudget,
+  deleteSavingsGoal,
   updateTag,
   updateTransaction,
-  getChartData
+  getChartData,
+  getReportsOverview,
+  listSavingsGoals,
+  listBills
 } from "./api/finance.js";
-import { createTransactionFromText, parseTransaction, getAnomalies } from "./api/ai.js";
+import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
+import TopBar from "./components/TopBar.jsx";
 import DateRangeFilters from "./components/DateRangeFilters.jsx";
 import StatusBanner from "./components/StatusBanner.jsx";
 import AuthScreen from "./features/auth/AuthScreen.jsx";
@@ -40,12 +56,15 @@ import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
 import OcrScreen from "./features/ocr/OcrScreen.jsx";
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
+import GoalsScreen from "./features/goals/GoalsScreen.jsx";
+import RecurringScreen from "./features/recurring/RecurringScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
 import AccountsScreen from "./features/accounts/AccountsScreen.jsx";
 import SettingsScreen from "./features/settings/SettingsScreen.jsx";
 import NotificationsScreen from "./features/notifications/NotificationsScreen.jsx";
+import BillsScreen from "./features/bills/BillsScreen.jsx";
 import FloatingChatbot from "./components/FloatingChatbot.jsx";
-import RecurringScreen from "./features/recurring/RecurringScreen.jsx";
+import BottomNav from "./components/BottomNav.jsx";
 import { currency, toInputDate } from "./utils/format.js";
 import { applyUiPrefs, getUiPrefs } from "./utils/uiPrefs.js";
 import {
@@ -124,7 +143,7 @@ const getSocketBase = () => {
     return import.meta.env.VITE_API_BASE.replace(/\/api\/v1$/, "");
   }
   const { protocol, hostname } = window.location;
-  return `${protocol}//${hostname}:8005`;
+  return `${protocol}//${hostname}:8000`;
 };
 
 export default function App() {
@@ -149,7 +168,21 @@ export default function App() {
   const [breakdown, setBreakdown] = useState([]);
   const [incomeBreakdown, setIncomeBreakdown] = useState([]);
   const [monthlySeries, setMonthlySeries] = useState([]);
+  const [budgets, setBudgets] = useState([]);
+  const [savingsGoals, setSavingsGoals] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [bills, setBills] = useState([]);
+  const [reportsOverview, setReportsOverview] = useState({
+    daily_series: [],
+    monthly_series: [],
+    category_spending: [],
+    payment_breakdown: [],
+    weekday_heatmap: [],
+    top_expenses: [],
+    goals: []
+  });
   const [anomalies, setAnomalies] = useState([]);
+  const [savingsTips, setSavingsTips] = useState([]);
   const [filters, setFilters] = useState(defaultFilters());
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -162,6 +195,7 @@ export default function App() {
   const authUserIdRef = useRef(null);
   const needsOnboardingRef = useRef(needsOnboarding);
   const refreshTimerRef = useRef(null);
+  const bootstrapTriedRef = useRef(false);
 
   useEffect(() => {
     const prefs = getUiPrefs(authState.user?.email);
@@ -311,18 +345,19 @@ export default function App() {
   };
 
   const handleChangeView = (nextView) => {
+    const mappedView = nextView === "reminders" ? "notifications" : nextView;
     if (view === "onboarding") return;
-    if (!isAuthed && !["dashboard", "settings"].includes(nextView)) {
+    if (!isAuthed && !["dashboard", "settings"].includes(mappedView)) {
       setAuthMode("login");
       setView("auth");
       return;
     }
-    if (!isAuthed && nextView === "settings") {
+    if (!isAuthed && mappedView === "settings") {
       setAuthMode("login");
       setView("auth");
       return;
     }
-    setView(nextView);
+    setView(mappedView);
   };
 
   const handleAuthSubmit = async ({
@@ -481,7 +516,13 @@ export default function App() {
         expenseBreakdown,
         incomeBreakdownData,
         chartData,
-        anomalyData
+        budgetsData,
+        accountsData,
+        billsData,
+        goalsData,
+        anomalyData,
+        tipsData,
+        overviewData
       ] = await Promise.all([
         listCategories(),
         listTags(),
@@ -490,7 +531,13 @@ export default function App() {
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "expense" }),
         getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "income" }),
         getChartData({ limit_months: 6 }),
-        getAnomalies()
+        listBudgets({ start_date: filters.start, end_date: filters.end }),
+        listAccounts(),
+        listBills(),
+        listSavingsGoals(),
+        getAnomalies(),
+        getSavingsTips(),
+        getReportsOverview({ start_date: filters.start, end_date: filters.end })
       ]);
       setCategories(cats);
       setTags(tagsList);
@@ -499,7 +546,26 @@ export default function App() {
       setBreakdown(expenseBreakdown);
       setIncomeBreakdown(incomeBreakdownData);
       setMonthlySeries(chartData?.series || []);
+      setBudgets(Array.isArray(budgetsData) ? budgetsData : []);
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
+      setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
+      setReportsOverview(overviewData || {
+        daily_series: [],
+        monthly_series: [],
+        category_spending: [],
+        payment_breakdown: [],
+        weekday_heatmap: [],
+        top_expenses: [],
+        goals: []
+      });
+      if ((!cats || cats.length === 0) && !bootstrapTriedRef.current) {
+        bootstrapTriedRef.current = true;
+        await bootstrapFinance();
+        await loadFinanceData();
+        return;
+      }
       const email = authState.user?.email || "guest";
       await mergeNotifications(
         email,
@@ -516,6 +582,31 @@ export default function App() {
       } else {
         setError(err.message || t("finance.error.load"));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadMoreTransactions = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const currentCount = transactions.items.length;
+      const params = {
+        start_date: filters.start,
+        end_date: filters.end,
+        category_id: filters.categoryId || undefined,
+        transaction_type: filters.type || undefined,
+        limit: 20,
+        offset: currentCount
+      };
+      const moreTxs = await listTransactions(params);
+      setTransactions((prev) => ({
+        items: [...prev.items, ...moreTxs.items],
+        total: moreTxs.total
+      }));
+    } catch (err) {
+      console.error("Failed to load more transactions:", err);
     } finally {
       setLoading(false);
     }
@@ -714,6 +805,132 @@ export default function App() {
     }
   };
 
+  const handleCreateBudget = async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await createBudget(payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateBudget = async (budgetId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateBudget(budgetId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBudget = async (budgetId) => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteBudget(budgetId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateSavingsGoal = async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await createSavingsGoal(payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSavingsGoal = async (goalId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateSavingsGoal(goalId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSavingsGoal = async (goalId) => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteSavingsGoal(goalId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await createAccount(payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAccount = async (accountId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateAccount(accountId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async (accountId) => {
+    setLoading(true);
+    setError("");
+    try {
+      await deleteAccount(accountId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || t("common.error"));
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const selectRangePreset = (preset) => {
     setRangePreset(preset);
     const nextRange = getRangeFromPreset(preset);
@@ -762,7 +979,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app-layout">
       <SideMenu
         active={view}
         onChange={handleChangeView}
@@ -771,38 +988,30 @@ export default function App() {
         notificationsCount={notificationCounts.unread}
       />
 
-      <main className={`app-shell app-shell-topnav${view === "reports" ? " app-shell-reports" : ""}`}>
-        {view === "dashboard" && (
-          <>
-            <header className="app-header">
-              <div>
-                {isAuthed && <p className="eyebrow">{t("dashboard.greeting")}</p>}
-                <h1>
-                  {isAuthed
-                    ? authState.user?.username || authState.user?.email || t("user.default")
-                    : t("nav.overview")}
-                </h1>
-              </div>
-            </header>
+      <div className="main-wrapper">
+        <TopBar
+           user={authState.user}
+           notificationsCount={notificationCounts.unread}
+           onChange={handleChangeView}
+        />
 
-            <section className={`balance-card ${summary.total_balance < 0 ? "negative" : ""}`}>
-              <div>
-                <p className="label">{t("dashboard.balance")}</p>
-                <h2>{currency(summary.balance)}</h2>
-              </div>
-              <div className="balance-meta">
+        <main className={`app-content${view === "reports" ? " app-content-reports" : ""}`}>
+          {view === "dashboard" && (
+            <>
+              <header className="page-header">
                 <div>
-                  <p>{t("dashboard.income")}</p>
-                  <strong>{currency(summary.total_income)}</strong>
+                  {isAuthed && <p className="eyebrow">{t("dashboard.greeting")}</p>}
+                  <h1>
+                    {isAuthed
+                      ? authState.user?.username || authState.user?.email || t("user.default")
+                      : t("nav.overview")}
+                  </h1>
                 </div>
-                <div>
-                  <p>{t("dashboard.expense")}</p>
-                  <strong>{currency(summary.total_expense)}</strong>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
+              </header>
+
+
+            </>
+          )}
 
         {showDateFilters && (
           <DateRangeFilters
@@ -824,11 +1033,13 @@ export default function App() {
             incomeBreakdown={incomeBreakdownWithShare}
             transactions={transactionsWithLabels}
             monthlySeries={monthlySeries}
+            anomalies={anomalies}
+            savingsGoals={savingsGoals}
             onViewTransactions={() => handleChangeView("transactions")}
             onGoOcr={() => handleChangeView("ocr")}
             onGoChat={() => handleChangeView("chat")}
-            onGoAddTransaction={() => handleChangeView("transactions")}
             onGoReports={() => handleChangeView("reports")}
+            onGoAddTransaction={() => {}}
             rangePreset={rangePreset}
             onSelectPreset={selectRangePreset}
             userEmail={authState.user?.email}
@@ -839,9 +1050,13 @@ export default function App() {
           <TransactionsScreen
             transactions={transactionsWithLabels}
             totalCount={transactions.total}
+            hasMore={transactions.items.length < transactions.total}
+            onLoadMore={handleLoadMoreTransactions}
             categories={categories}
+            accounts={accounts}
             tags={tags}
             filters={filters}
+            anomalies={anomalies}
             onFiltersChange={setFilters}
             onCreate={handleCreateTransaction}
             onCreateFromText={handleCreateFromText}
@@ -885,6 +1100,7 @@ export default function App() {
             monthlySeries={monthlySeries}
             breakdown={breakdownWithShare}
             transactions={transactionsWithLabels}
+            reportsOverview={reportsOverview}
             userEmail={authState.user?.email}
             onBack={() => handleChangeView("dashboard")}
           />
@@ -894,17 +1110,24 @@ export default function App() {
           <BudgetsScreen
             categories={categories}
             transactions={transactionsWithLabels}
+            budgets={budgets}
+            filters={filters}
+            onCreateBudget={handleCreateBudget}
+            onUpdateBudget={handleUpdateBudget}
+            onDeleteBudget={handleDeleteBudget}
+            onFiltersChange={setFilters}
+            loading={loading}
             userEmail={authState.user?.email}
           />
         )}
 
-        {view === "ocr" && (
-          <OcrScreen
-            categories={categories}
-            tags={tags}
-            userEmail={authState.user?.email}
-            onCreateTag={handleCreateTag}
-            onCreateTransaction={handleCreateTransaction}
+        {view === "goals" && (
+          <GoalsScreen
+            goals={savingsGoals}
+            aiSuggestions={savingsTips}
+            onCreateGoal={handleCreateSavingsGoal}
+            onUpdateGoal={handleUpdateSavingsGoal}
+            onDeleteGoal={handleDeleteSavingsGoal}
             loading={loading}
           />
         )}
@@ -913,7 +1136,28 @@ export default function App() {
           <RecurringScreen userEmail={authState.user?.email} />
         )}
 
-        {view === "accounts" && <AccountsScreen userEmail={authState.user?.email} />}
+        {view === "ocr" && (
+          <OcrScreen
+            categories={categories}
+            tags={tags}
+            userEmail={authState.user?.email}
+            onCreateCategory={handleCreateCategory}
+            onCreateTag={handleCreateTag}
+            onCreateTransaction={handleCreateTransaction}
+            loading={loading}
+            onClose={() => handleChangeView("dashboard")}
+          />
+        )}
+
+        {view === "accounts" && (
+          <AccountsScreen
+            accounts={accounts}
+            onCreateAccount={handleCreateAccount}
+            onUpdateAccount={handleUpdateAccount}
+            onDeleteAccount={handleDeleteAccount}
+            loading={loading}
+          />
+        )}
 
         {view === "settings" && <SettingsScreen user={authState.user} />}
 
@@ -929,11 +1173,24 @@ export default function App() {
           />
         )}
 
+        {view === "bills" && (
+          <BillsScreen
+            bills={bills}
+            loading={loading}
+            onGoOcr={() => handleChangeView("ocr")}
+          />
+        )}
       </main>
+      </div>
       <FloatingChatbot
         isAuthed={authState.status === "authed"}
         userEmail={authState.user?.email}
       />
+      {view !== "auth" && view !== "onboarding" && (
+        <div className="mobile-nav-wrapper">
+          <BottomNav active={view} onChange={handleChangeView} />
+        </div>
+      )}
     </div>
   );
 }

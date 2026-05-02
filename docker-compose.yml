@@ -346,7 +346,7 @@ services:
     - .env
     environment:
     - DB_URL=${AI_DB_URL:-postgresql://finance_user:finance_pass@ai-postgres:5432/ai_db}
-    - DB_SCHEMA=${AI_DB_SCHEMA:-finance_service}
+    - DB_SCHEMA=${AI_DB_SCHEMA:-ai_service}
     command:
     - uvicorn
     - app.services.ai_main:app

@@ -34,6 +34,7 @@ const normalizeMessages = (messages) => {
 
 export default function FloatingChatbot({ isAuthed, userEmail }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState([
     { role: "assistant", content: "Xin chào! Tôi là trợ lý tài chính AI. Tôi có thể giúp bạn ghi chép chi tiêu, kiểm tra ngân sách hoặc tìm kiếm giao dịch. Bạn cần giúp gì nào?" }
   ]);
@@ -303,7 +304,16 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
                 <span className="online-status">Đang trực tuyến</span>
               </div>
             </div>
-            <button className="close-btn" onClick={() => setIsOpen(false)}>×</button>
+            <button
+              className="close-btn"
+              onClick={() => {
+                setIsOpen(false);
+                setIsMinimized(true);
+              }}
+              title="Thu nhỏ trợ lý"
+            >
+              −
+            </button>
           </header>
           
           <div className="chatbot-messages" ref={scrollRef}>
@@ -368,9 +378,22 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
           </div>
         </div>
       ) : (
-        <button className="chatbot-launcher" onClick={() => setIsOpen(true)}>
-          <div className="launcher-icon">💬</div>
-          <div className="launcher-label">Hỏi AI</div>
+        <button
+          className={`chatbot-launcher ${isMinimized ? "mini" : ""}`}
+          onClick={() => {
+            setIsOpen(true);
+            setIsMinimized(false);
+          }}
+        >
+          <div className="launcher-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="9" cy="11" r="1.2" fill="currentColor" />
+              <circle cx="15" cy="11" r="1.2" fill="currentColor" />
+              <path d="M8 15c1.1 1 2.3 1.5 4 1.5S14.9 16 16 15" />
+            </svg>
+          </div>
+          {!isMinimized ? <div className="launcher-label">Hỏi AI</div> : null}
         </button>
       )}
     </div>

@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 
-from app.database import Base, engine, ensure_schema
-from app.finance import models as finance_models
+from app.database import ensure_schema
 from app.finance.router import router as finance_router
 from app.core.kafka import producer_manager
+from app.migrations import run_migrations
 
 app = FastAPI(title="Finance Service")
 
@@ -16,17 +16,7 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(
-        bind=engine,
-        tables=[
-            finance_models.Category.__table__,
-            finance_models.Tag.__table__,
-            finance_models.Account.__table__,
-            finance_models.Transaction.__table__,
-            finance_models.Transfer.__table__,
-            finance_models.transaction_tags,
-        ],
-    )
+    run_migrations("finance")
 
 @app.on_event("startup")
 async def startup_event():

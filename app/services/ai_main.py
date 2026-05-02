@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
-from app.ai_agent import models as ai_models
 from app.ai_agent.router import router as ai_router
-from app.database import Base, engine, ensure_schema
+from app.database import ensure_schema
+from app.migrations import run_migrations
 
 app = FastAPI(title="AI Service")
 
@@ -15,12 +15,7 @@ def healthcheck():
 @app.on_event("startup")
 def on_startup() -> None:
     ensure_schema()
-    Base.metadata.create_all(
-        bind=engine,
-        tables=[
-            ai_models.ChatMessage.__table__,
-        ],
-    )
+    run_migrations("ai")
 
 
 app.include_router(ai_router, prefix="/api/v1")

@@ -10,6 +10,12 @@ const FILTERS = [
   { id: "insight", labelKey: "notif.filter_insight" }
 ];
 
+const TYPE_ICON = {
+  warning: "⚠",
+  insight: "✨",
+  info: "🔔"
+};
+
 const formatTimestamp = (value, locale) => {
   try {
     return new Date(value).toLocaleString(locale, {
@@ -71,7 +77,7 @@ export default function NotificationsScreen({
         ))}
       </div>
 
-      <div className="notification-list">
+      <div className="notification-list modern">
         {!filteredNotifications.length ? (
           <p className="empty">{t("notif.empty", null, "Chưa có thông báo.")}</p>
         ) : (
@@ -90,16 +96,24 @@ export default function NotificationsScreen({
                   if (event.key === "Enter" || event.key === " ") onMarkRead(item.id);
                 }}
               >
-                <div className="notification-head">
-                  <span className={`notification-badge ${item.type}`}>
-                    {getNotificationTypeLabel(item.type)}
-                  </span>
+                <div className="notification-leading">
+                  <div className={`notification-icon ${item.type || "info"}`}>{TYPE_ICON[item.type] || "🔔"}</div>
+                  <div className="notification-main">
+                    <div className="notification-head">
+                      <span className={`notification-badge ${item.type}`}>
+                        {getNotificationTypeLabel(item.type)}
+                      </span>
+                      <h4>{title}</h4>
+                    </div>
+                    <p>{body}</p>
+                  </div>
+                </div>
+                <div className="notification-meta">
                   <span className="notification-time">
                     {formatTimestamp(item.createdAt, locale)}
                   </span>
+                  {!item.read ? <span className="notification-dot" /> : null}
                 </div>
-                <h4>{title}</h4>
-                <p>{body}</p>
               </article>
             );
           })
