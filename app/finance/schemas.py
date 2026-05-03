@@ -31,6 +31,7 @@ class TransactionCreate(BaseModel):
     account_id: int | None = None
     date: DateType | None = None
     tag_ids: list[int] = Field(default_factory=list)
+    ocr_confidence: float | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -41,6 +42,7 @@ class TransactionUpdate(BaseModel):
     account_id: int | None = None
     date: DateType | None = None
     tag_ids: list[int] | None = None
+    ocr_confidence: float | None = None
 
 
 class TransactionRead(BaseModel):
@@ -52,6 +54,7 @@ class TransactionRead(BaseModel):
     category_id: int | None
     account_id: int | None
     date: DateType
+    ocr_confidence: float | None = None
     tags: list[TagRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
@@ -319,7 +322,7 @@ class BillRead(BaseModel):
     merchant: str | None
     date: DateType | None
     category_id: int | None
-    category: str | None = None
+    category_name: str | None = None
     account_id: int | None
     account_name: str | None = None
     total_amount: float

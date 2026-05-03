@@ -35,6 +35,7 @@ from app.finance.models import (
     Goal,
     Reminder,
     Subscription,
+    Tag,
     Transaction,
     Transfer,
 )
@@ -296,6 +297,59 @@ OCR_PRETAX_KEYWORDS = ("truoc thue", "pre tax", "before tax")
 OCR_NOTE_KEYWORDS = ("ghi chu", "note", "chu thich")
 OCR_MERCHANT_HINTS = ("don vi ban hang", "cua hang", "cong ty", "store", "shop", "market")
 OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
+
+MERCHANT_ALIASES = {
+    "dookki": "DOOKKI Korean Topokki Buffet",
+    "familymart": "FamilyMart",
+    "family mart": "FamilyMart",
+    "circle k": "Circle K",
+    "winmart": "WinMart",
+    "highlands": "Highlands Coffee",
+    "the coffee house": "The Coffee House",
+    "grab": "Grab",
+    "shopee": "Shopee",
+    "lazada": "Lazada",
+    "tiki": "Tiki",
+    "starbucks": "Starbucks",
+    "phuc long": "Phúc Long Coffee & Tea",
+}
+
+PAYMENT_SOURCE_MAPPING = {
+    "momo": "Ví điện tử",
+    "zalopay": "Ví điện tử",
+    "vnpay": "Ví điện tử",
+    "shopeepay": "Ví điện tử",
+    "grabpay": "Ví điện tử",
+    "e-wallet": "Ví điện tử",
+    "cash": "Tiền mặt",
+    "tien mat": "Tiền mặt",
+    "khach tra": "Tiền mặt",
+    "bank": "Ngân hàng",
+    "card": "Ngân hàng",
+    "visa": "Ngân hàng",
+    "mastercard": "Ngân hàng",
+    "pos": "Ngân hàng",
+    "atm": "Ngân hàng",
+    "chuyen khoan": "Ngân hàng",
+}
+
+CATEGORY_MAPPING = {
+    "an uong": "Ăn uống",
+    "food": "Ăn uống",
+    "restaurant": "Ăn uống",
+    "cafe": "Ăn uống",
+    "coffee": "Ăn uống",
+    "mua sam": "Mua sắm",
+    "shopping": "Mua sắm",
+    "sieu thi": "Mua sắm",
+    "market": "Mua sắm",
+    "di lai": "Di chuyển",
+    "transport": "Di chuyển",
+    "taxi": "Di chuyển",
+    "grab": "Di chuyển",
+    "bill": "Hóa đơn",
+    "hoa don": "Hóa đơn",
+}
 
 STOPWORDS = {
     "giao",
@@ -2537,18 +2591,38 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=(
-                "Bạn là chuyên gia OCR hóa đơn tài chính chuyên nghiệp tại Việt Nam. "
-                "Nhiệm vụ của bạn là trích xuất thông tin từ ảnh hóa đơn sang định dạng JSON chuẩn xác.\n\n"
-                "Quy tắc trích xuất:\n"
-                "- date: Ngày hóa đơn (YYYY-MM-DD). Nếu không thấy năm, giả định năm hiện tại 2026. Nếu không có ngày, trả về null.\n"
-                "- merchant: Tên cửa hàng/siêu thị/nhà cung cấp. Bỏ qua địa chỉ chi tiết, chỉ lấy tên thương hiệu (VD: 'WinMart', 'Highlands Coffee').\n"
-                "- total: Tổng số tiền cuối cùng khách phải trả (kiểu số nguyên). Lưu ý các hóa đơn Việt Nam thường dùng dấu chấm '.' làm phân cách hàng nghìn (VD: 100.000 -> 100000).\n"
-                "- vat: Tiền thuế GTGT nếu có (số nguyên).\n"
-                "- estimated: Giá trị hàng hóa trước thuế hoặc trước khi giảm giá (số nguyên).\n"
-                "- items: Danh sách các mặt hàng (nếu có thể đọc được), mỗi item có {name, price, qty}.\n"
-                "- note: Tóm tắt ngắn gọn nội dung hóa đơn (VD: 'Mua nhu yếu phẩm', 'Uống cafe').\n"
-                "- text: Các ký tự thô nhận diện được.\n\n"
-                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH, KHÔNG MARKDOWN."
+                "Bạn là chuyên gia AI trích xuất hóa đơn tài chính chuyên nghiệp. "
+                "Nhiệm vụ của bạn là đọc ảnh hóa đơn và trả về JSON chuẩn xác theo cấu trúc sau:\n\n"
+                "{\n"
+                "  \"data\": {\n"
+                "    \"merchant\": \"Tên thương hiệu nổi bật (VD: Highlands Coffee, Dookki)\",\n"
+                "    \"transaction_date\": \"YYYY-MM-DD\",\n"
+                "    \"transaction_type\": \"expense\",\n"
+                "    \"payment_source\": \"Loại thanh toán (MoMo, ZaloPay, Tiền mặt, Ngân hàng...)\",\n"
+                "    \"category\": \"Gợi ý danh mục (Ăn uống, Mua sắm, Di chuyển...)\",\n"
+                "    \"tags\": [\"Tag gợi ý dựa trên merchant hoặc dịch vụ\"],\n"
+                "    \"suggested_note\": \"Ghi chú ngắn gọn tiếng Việt (<160 ký tự)\",\n"
+                "    \"subtotal_before_tax\": số tiền trước VAT,\n"
+                "    \"vat_amount\": thuế GTGT,\n"
+                "    \"discount_amount\": số tiền giảm giá,\n"
+                "    \"final_total\": SỐ TIỀN CUỐI CÙNG THỰC TRẢ,\n"
+                "    \"currency\": \"VND\",\n"
+                "    \"line_items\": [{ \"name\": \"...\", \"quantity\": 1, \"unit_price\": 1000, \"total\": 1000 }],\n"
+                "    \"raw_ocr_text\": \"Toàn bộ text thô đọc được\"\n"
+                "  },\n"
+                "  \"confidence\": {\n"
+                "    \"merchant\": 0-100,\n"
+                "    \"transaction_date\": 0-100,\n"
+                "    \"final_total\": 0-100,\n"
+                "    \"... các trường khác\": 0-100\n"
+                "  }\n"
+                "}\n\n"
+                "Quy tắc quan trọng:\n"
+                "1. Merchant lấy từ brand nổi bật nhất, không lấy địa chỉ.\n"
+                "2. final_total là Payment Amount/Grand Total, không tự ý cộng thêm VAT nếu đã có dòng tổng.\n"
+                "3. suggested_note phải súc tích, ví dụ: 'Ăn trưa tại Dookki, thanh toán GrabPay'.\n"
+                "4. Đánh giá confidence (0-100) trung thực: 90-100 nếu khớp chính xác từng ký tự và rõ nét, 70-89 nếu mờ hoặc suy luận từ ngữ cảnh, <70 nếu không chắc chắn.\n"
+                "5. TRẢ VỀ DUY NHẤT JSON, KHÔNG MARKDOWN, KHÔNG GIẢI THÍCH."
             )
         )
         response = model.generate_content(
@@ -2784,7 +2858,68 @@ def _extract_merchant_from_lines(lines: list[str]) -> str | None:
     return None
 
 
-def extract_ocr(image_bytes: bytes) -> dict:
+def _normalize_merchant(name: str | None) -> str | None:
+    if not name:
+        return None
+    norm = _normalize_text(name)
+    for alias, formal in MERCHANT_ALIASES.items():
+        if alias in norm:
+            return formal
+    return name.strip()
+
+
+def _map_payment_source(text: str) -> str | None:
+    norm = _normalize_text(text)
+    for kw, source in PAYMENT_SOURCE_MAPPING.items():
+        if kw in norm:
+            return source
+    return None
+
+
+def _match_category(db: Session, user: User, name: str | None, text: str) -> str | None:
+    # 1. Try to match from mapping
+    norm_text = _normalize_text(text)
+    for kw, cat in CATEGORY_MAPPING.items():
+        if kw in norm_text:
+            # Check if this category exists for user
+            existing = db.query(Category).filter(Category.user_id == user.id, Category.name.ilike(cat)).first()
+            if existing:
+                return existing.name
+
+    # 2. Try to match from Gemini suggestion
+    if name:
+        existing = db.query(Category).filter(Category.user_id == user.id, Category.name.ilike(name)).first()
+        if existing:
+            return existing.name
+
+    return None
+
+
+def _match_tags(db: Session, user: User, merchant: str | None, text: str, suggested: list[str]) -> list[str]:
+    found_tags = []
+    user_tags = db.query(Tag).filter(Tag.user_id == user.id).all()
+    tag_map = {tag.name.lower(): tag.name for tag in user_tags}
+
+    # 1. Match from merchant
+    if merchant:
+        m_norm = merchant.lower()
+        if m_norm in tag_map:
+            found_tags.append(tag_map[m_norm])
+
+    # 2. Match from suggested
+    for s in suggested:
+        s_norm = s.lower()
+        if s_norm in tag_map:
+            found_tags.append(tag_map[s_norm])
+
+    # 3. Always add "Hóa đơn OCR" if exists
+    if "hóa đơn ocr" in tag_map:
+        found_tags.append(tag_map["hóa đơn ocr"])
+
+    return list(set(found_tags))
+
+
+def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
 
     gemini_result = None
@@ -2796,17 +2931,38 @@ def extract_ocr(image_bytes: bytes) -> dict:
     total = None
     date_value = None
     vat_amount = None
-    estimated = None
-    note = None
+    discount_amount = None
+    subtotal = None
+    suggested_note = None
+    category_name = None
+    suggested_tags = []
+    line_items = []
+    conf = {
+        "merchant": 0, "transaction_date": 0, "payment_source": 0,
+        "category": 0, "tags": 0, "suggested_note": 0,
+        "subtotal_before_tax": 0, "vat_amount": 0, "discount_amount": 0, "final_total": 0
+    }
 
     if gemini_result:
-        text = gemini_result.get("text") or ""
-        merchant = gemini_result.get("merchant")
-        total = _coerce_amount(gemini_result.get("total"))
-        date_value = _coerce_date_value(gemini_result.get("date"))
-        vat_amount = _coerce_amount(gemini_result.get("vat"))
-        estimated = _coerce_amount(gemini_result.get("estimated"))
-        note = gemini_result.get("note")
+        data = gemini_result.get("data", {})
+        text = data.get("raw_ocr_text") or gemini_result.get("text") or ""
+        merchant = data.get("merchant")
+        total = _coerce_amount(data.get("final_total"))
+        date_value = _coerce_date_value(data.get("transaction_date"))
+        vat_amount = _coerce_amount(data.get("vat_amount"))
+        discount_amount = _coerce_amount(data.get("discount_amount"))
+        subtotal = _coerce_amount(data.get("subtotal_before_tax"))
+        suggested_note = data.get("suggested_note")
+        category_name = data.get("category")
+        suggested_tags = data.get("tags") or []
+        line_items = data.get("line_items") or []
+        
+        g_conf = gemini_result.get("confidence", {})
+        for k in conf:
+            # Scale to 0.0-1.0
+            val = float(g_conf.get(k, 0))
+            if val > 1.0: val = val / 100.0
+            conf[k] = val
 
     if not text.strip():
         try:
@@ -2828,36 +2984,120 @@ def extract_ocr(image_bytes: bytes) -> dict:
             text = _ocr_to_text(image.convert("L"), psm=6)
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    
+    # Fallback/Enhancement
     if merchant is None:
         merchant = _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
+        conf["merchant"] = min(conf["merchant"], 0.40) if merchant else 0
+    
+    merchant = _normalize_merchant(merchant)
+    
     if total is None:
         total = _extract_total_from_lines(lines)
-        if total is None:
-            total = _parse_amount(_normalize_ocr_numeric_tokens(text))
+        conf["final_total"] = 0.50 if total else 0
+        
     if date_value is None:
         date_value = _extract_date_from_lines(lines) or _parse_date(text)
+        conf["transaction_date"] = 0.60 if date_value else 0
+        
     if vat_amount is None:
         vat_amount = _extract_amount_for_keywords(lines, OCR_VAT_KEYWORDS)
-    if estimated is None:
-        estimated = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
-    if note is None:
-        note = _extract_note_from_lines(lines)
+        conf["vat_amount"] = 0.50 if vat_amount else 0
+        
+    if subtotal is None:
+        subtotal = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
+        conf["subtotal_before_tax"] = 0.50 if subtotal else 0
 
-    computed_total, total_delta, is_total_consistent, warnings = _validate_ocr_totals(
-        total, estimated, vat_amount
-    )
+    payment_source = _map_payment_source(text)
+    if payment_source:
+        conf["payment_source"] = max(conf["payment_source"], 0.80)
+
+    matched_cat = _match_category(db, current_user, category_name, text)
+    if matched_cat:
+        category_name = matched_cat
+        conf["category"] = max(conf["category"], 0.85)
+
+    final_tags = _match_tags(db, current_user, merchant, text, suggested_tags)
+    if final_tags:
+        conf["tags"] = max(conf["tags"], 0.90)
+
+    # --- Smart Confidence Enhancement ---
+    
+    # 1. Validation Logic
+    s = subtotal or 0
+    v = vat_amount or 0
+    d = discount_amount or 0
+    f = total or 0
+    is_valid = abs((s + v - d) - f) < 1000 # Allow 1000 VND diff for rounding
+    delta = (s + v - d) - f
+
+    # 2. Heuristic Boosting
+    raw_text_norm = _normalize_text(text)
+    
+    # Boost monetary confidence if math is correct
+    if is_valid and f > 0:
+        conf["final_total"] = max(conf["final_total"], 0.98)
+        if s > 0: conf["subtotal_before_tax"] = max(conf["subtotal_before_tax"], 0.95)
+        if v > 0: conf["vat_amount"] = max(conf["vat_amount"], 0.95)
+        if d > 0: conf["discount_amount"] = max(conf["discount_amount"], 0.95)
+
+    # Boost merchant if in raw text
+    if merchant:
+        m_norm = _normalize_text(merchant)
+        if m_norm in raw_text_norm:
+            conf["merchant"] = max(conf["merchant"], 0.85)
+        
+        # Check history for merchant
+        existing_tx = db.query(Transaction).filter(
+            Transaction.user_id == current_user.id,
+            Transaction.description.ilike(f"%{merchant}%")
+        ).first()
+        if existing_tx:
+            conf["merchant"] = max(conf["merchant"], 0.95)
+
+    # Boost date if it looks like a real date from text
+    if date_value:
+        d_str = str(date_value)
+        if d_str in text or date_value.strftime("%d/%m") in text or date_value.strftime("%d-%m") in text:
+            conf["transaction_date"] = max(conf["transaction_date"], 0.90)
+        
+        # Sanity check: date shouldn't be too far in past or in future
+        today = DateType.today()
+        if date_value > today:
+            conf["transaction_date"] = min(conf["transaction_date"], 0.40)
+        elif (today - date_value).days < 7:
+            conf["transaction_date"] = max(conf["transaction_date"], 0.80)
+
+    # Penalty if total is zero
+    if not total or total <= 0:
+        conf["final_total"] = 0
+
     return {
-        "merchant": merchant,
-        "total": total,
-        "date": date_value,
-        "vat": vat_amount,
-        "estimated": estimated,
-        "note": note,
-        "computed_total": computed_total,
-        "total_delta": total_delta,
-        "is_total_consistent": is_total_consistent,
-        "warnings": warnings,
-        "text": text,
+        "data": {
+            "merchant": merchant,
+            "transaction_date": date_value,
+            "transaction_type": "expense",
+            "payment_source": payment_source,
+            "category": category_name,
+            "tags": final_tags,
+            "suggested_note": suggested_note,
+            "raw_ocr_text": text,
+            "subtotal_before_tax": subtotal,
+            "vat_amount": vat_amount,
+            "discount_amount": discount_amount,
+            "final_total": total,
+            "currency": "VND",
+            "line_items": line_items,
+        },
+        "confidence": conf,
+        "warnings": [] if is_valid else [f"Tiền hàng ({s}) + Thuế ({v}) - Giảm giá ({d}) != Tổng ({f})"],
+        "debug": {
+            "money_validation": {
+                "formula": "subtotal_before_tax + vat_amount - discount_amount = final_total",
+                "is_valid": is_valid,
+                "delta": delta
+            }
+        }
     }
 
 

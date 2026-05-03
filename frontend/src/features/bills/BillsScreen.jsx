@@ -19,19 +19,55 @@ const getStatusDetails = (status) => {
   return { label: "Thiếu thông tin", cls: "error" };
 };
 
-export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
+export default function BillsScreen({ 
+  bills = [], 
+  loading = false, 
+  onGoOcr,
+  onCreateTransaction,
+  onUpdateBill,
+  newlyCreatedId
+}) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
 
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return bills.filter((b) => (b.merchant || "").toLowerCase().includes(q) || (b.bill_number && String(b.bill_number).toLowerCase().includes(q)));
-  }, [bills, query]);
+    return bills
+      .filter((b) => {
+        const matchesQuery = (b.merchant || "").toLowerCase().includes(q) || (b.bill_number && String(b.bill_number).toLowerCase().includes(q));
+        const matchesStatus = statusFilter === "all" || b.status === statusFilter;
+        const matchesCat = categoryFilter === "all" || b.category_name === categoryFilter;
+        return matchesQuery && matchesStatus && matchesCat;
+      })
+      .sort((a, b) => b.id - a.id); // Newest ID first
+  }, [bills, query, statusFilter, categoryFilter]);
 
   const selected = filtered.find((x) => x.id === selectedId) || filtered[0] || null;
   const confirmed = bills.filter((b) => b.status === "confirmed").length;
   const pending = bills.filter((b) => b.status === "pending").length;
   const errors = bills.filter((b) => b.status === "error").length;
+ 
+  const handleConfirm = async () => {
+    if (!selected || !onCreateTransaction || !onUpdateBill) return;
+    
+    try {
+      await onCreateTransaction({
+        description: selected.merchant || "Hóa đơn OCR",
+        amount: selected.total_amount,
+        transaction_type: "expense",
+        category_id: selected.category_id || null,
+        date: selected.date,
+        tag_ids: [] // Could add OCR tag here
+      });
+      
+      await onUpdateBill(selected.id, { status: "confirmed" });
+    } catch (err) {
+      console.error("Failed to confirm bill:", err);
+    }
+  };
 
   return (
     <section className="bill-page">
@@ -93,20 +129,25 @@ export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>
-            <select className="bill-filter">
-              <option>Tất cả trạng thái</option>
-              <option>Đã xác nhận</option>
-              <option>Cần kiểm tra</option>
-              <option>Lỗi / Thiếu thông tin</option>
+            <select 
+              className="bill-filter" 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="confirmed">Đã xác nhận</option>
+              <option value="pending">Cần kiểm tra</option>
+              <option value="error">Lỗi / Thiếu thông tin</option>
             </select>
-            <select className="bill-filter">
-              <option>Tất cả danh mục</option>
-              <option>Ăn uống</option>
-              <option>Mua sắm</option>
-            </select>
-            <select className="bill-filter">
-              <option>Tuần này</option>
-              <option>Tháng này</option>
+            <select 
+              className="bill-filter"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              <option value="all">Tất cả danh mục</option>
+              {Array.from(new Set(bills.map(b => b.category_name).filter(Boolean))).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
@@ -138,7 +179,7 @@ export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
                     return (
                       <tr 
                         key={b.id} 
-                        className={selectedId === b.id ? "active" : ""}
+                        className={`${selectedId === b.id ? "active" : ""} ${newlyCreatedId === b.id ? "new-item-flash" : ""}`}
                         onClick={() => setSelectedId(b.id)}
                       >
                         <td className="bill-merchant">
@@ -148,7 +189,7 @@ export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
                           </div>
                         </td>
                         <td>{b.date}</td>
-                        <td>{b.category || "Khác"}</td>
+                        <td>{b.category_name || "Khác"}</td>
                         <td>{b.account_name || "Tài khoản thanh toán"}</td>
                         <td className="bill-money">{currency(b.total_amount)}</td>
                         <td className="bill-vat">{currency(b.vat_amount || 0)}</td>
@@ -197,7 +238,7 @@ export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
                   </div>
                   <div className="bill-info-row">
                     <span className="bill-info-label">Danh mục (OCR)</span>
-                    <span className="bill-info-value">{selected.category || "Khác"}</span>
+                    <span className="bill-info-value">{selected.category_name || "Khác"}</span>
                   </div>
                   <div className="bill-info-row">
                     <span className="bill-info-label">Nguồn tiền</span>
@@ -225,7 +266,14 @@ export default function BillsScreen({ bills = [], loading = false, onGoOcr }) {
           
           {selected && (
             <div className="bill-detail-actions">
-              <button type="button" className="primary">Xác nhận & Lưu</button>
+              <button 
+                type="button" 
+                className="primary" 
+                onClick={handleConfirm}
+                disabled={selected.status === "confirmed"}
+              >
+                {selected.status === "confirmed" ? "Đã xác nhận" : "Xác nhận & Lưu"}
+              </button>
               <button type="button" className="secondary">Chỉnh sửa hóa đơn</button>
             </div>
           )}

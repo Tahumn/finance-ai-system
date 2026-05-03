@@ -89,6 +89,9 @@ def ensure_schema() -> None:
                 conn.execute(
                     text("CREATE INDEX IF NOT EXISTS ix_transactions_account_id ON transactions (account_id)")
                 )
+        if "ocr_confidence" not in tx_existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS ocr_confidence FLOAT"))
 
     if "accounts" in tables:
         account_cols = {col["name"] for col in inspector.get_columns("accounts")}

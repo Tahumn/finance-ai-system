@@ -347,6 +347,7 @@ def create_transaction(db: Session, current_user: User, payload: schemas.Transac
         category_id=payload.category_id,
         account_id=payload.account_id,
         date=payload.date or date.today(),
+        ocr_confidence=payload.ocr_confidence,
     )
     if tags:
         db_tx.tags = tags
@@ -1165,14 +1166,24 @@ def list_bills(
         query = query.filter(Bill.date <= end_date)
     if status:
         query = query.filter(Bill.status == status)
-    
-    return query.order_by(Bill.date.desc().nulls_last(), Bill.id.desc()).all()
+
+    results = query.order_by(Bill.date.desc().nulls_last(), Bill.id.desc()).all()
+    for item in results:
+        if item.category:
+            item.category_name = item.category.name
+        if item.account:
+            item.account_name = item.account.name
+    return results
 
 
 def get_bill(db: Session, current_user: User, bill_id: int) -> Bill:
     item = db.query(Bill).filter(Bill.id == bill_id, Bill.user_id == current_user.id).first()
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found")
+    if item.category:
+        item.category_name = item.category.name
+    if item.account:
+        item.account_name = item.account.name
     return item
 
 

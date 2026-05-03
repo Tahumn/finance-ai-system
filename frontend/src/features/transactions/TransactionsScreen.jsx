@@ -154,6 +154,7 @@ export default function TransactionsScreen({
   onParseFromText,
   accounts = [],
   anomalies = [],
+  newlyCreatedId
 }) {
   /* modals */
   const [activeModal, setActiveModal] = useState(null); // "add" | "ocr" | "edit" | "detail" | "dateRange"
@@ -615,10 +616,17 @@ export default function TransactionsScreen({
                                       let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
                                       
                                       return (
-                                        <div key={tx.id || tx.description} className="txd-list-row" onClick={() => setSelectedTx(tx)}>
+                                        <div key={tx.id || tx.description} className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""}`} onClick={() => setSelectedTx(tx)}>
                                            <div className="lr-col main">
                                               <div className="lr-icon" style={{background: txMeta.bg, color: "#fff"}}><txMeta.SvgIcon size={14}/></div>
-                                              <span className="lr-title">{tx.description || "Giao dịch"}</span>
+                                              <span className="lr-title">
+                                                {tx.description || "Giao dịch"}
+                                                {tx.ocr_confidence > 0 && (
+                                                  <span className="tx-ocr-badge" title={`Độ tin cậy OCR: ${Math.round(tx.ocr_confidence * 100)}%`}>
+                                                    <IcOcr /> {Math.round(tx.ocr_confidence * 100)}%
+                                                  </span>
+                                                )}
+                                              </span>
                                            </div>
                                            <div className="lr-col notes">{tx.notes || "—"}</div>
                                            <div className="lr-col date">{tx.date?.split('-').reverse().join('/')}</div>
