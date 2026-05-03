@@ -339,13 +339,23 @@ def create_transaction(db: Session, current_user: User, payload: schemas.Transac
     _validate_account_ownership(db, current_user, payload.account_id)
     tags = _load_tags(db, current_user, payload.tag_ids)
 
+    account_id = payload.account_id
+    if account_id is None:
+        # Tự động gán vào tài khoản đầu tiên hoặc tạo tài khoản "Tiền mặt"
+        acc = db.query(Account).filter(Account.user_id == current_user.id).first()
+        if not acc:
+            acc = Account(user_id=current_user.id, name="Tiền mặt", opening_balance=0.0)
+            db.add(acc)
+            db.flush()
+        account_id = acc.id
+
     db_tx = Transaction(
         user_id=current_user.id,
         description=payload.description.strip(),
         amount=payload.amount,
         transaction_type=payload.transaction_type,
         category_id=payload.category_id,
-        account_id=payload.account_id,
+        account_id=account_id,
         date=payload.date or date.today(),
     )
     if tags:
@@ -472,17 +482,13 @@ def _base_query(db: Session, current_user: User, start_date: date | None, end_da
 
 
 def get_total_balance(db: Session, user_id: int) -> float:
-    income = (
-        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-        .filter(Transaction.user_id == user_id, Transaction.transaction_type == "income")
+    # Tổng số dư thực tế là tổng của tất cả balance trong các Account của user
+    result = (
+        db.query(func.coalesce(func.sum(Account.opening_balance), 0.0))
+        .filter(Account.user_id == user_id)
         .scalar()
     )
-    expense = (
-        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-        .filter(Transaction.user_id == user_id, Transaction.transaction_type == "expense")
-        .scalar()
-    )
-    return float((income or 0.0) - (expense or 0.0))
+    return float(result or 0.0)
 
 
 def get_summary(
