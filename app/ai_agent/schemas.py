@@ -87,6 +87,7 @@ class OcrData(BaseModel):
     final_total: float | None = None
     currency: str = "VND"
     line_items: list[OcrLineItem] = []
+    image_path: str | None = None
 
 
 class OcrMoneyValidation(BaseModel):

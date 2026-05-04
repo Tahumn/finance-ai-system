@@ -56,7 +56,7 @@ import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
-import OcrScreen from "./features/ocr/OcrScreen.jsx";
+import OcrScreen from "./features/ocr/OcrScreen.jsx"; // Main OCR component
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import GoalsScreen from "./features/goals/GoalsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
@@ -693,7 +693,7 @@ export default function App() {
     }
   }, [authState.status, filters, needsOnboarding]);
 
-  const handleCreateBill = async (payload) => {
+  const handleCreateBill = useCallback(async (payload) => {
     setLoading(true);
     setError("");
     try {
@@ -707,7 +707,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadFinanceData]);
 
   const handleUpdateBill = async (billId, payload) => {
     setLoading(true);

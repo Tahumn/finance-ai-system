@@ -8,7 +8,7 @@ db = SessionLocal()
 print("--- Recent Bills ---")
 bills = db.query(Bill).order_by(Bill.id.desc()).limit(5).all()
 for b in bills:
-    print(f"ID: {b.id}, Merchant: {b.merchant}, Total: {b.total_amount}, Conf: {b.ocr_confidence}, User: {b.user_id}")
+    print(f"ID: {b.id}, Merchant: {b.merchant}, Total: {b.total_amount}, Path: {getattr(b, 'image_path', 'N/A')}")
 
 print("\n--- Recent Transactions ---")
 txs = db.query(Transaction).order_by(Transaction.id.desc()).limit(5).all()

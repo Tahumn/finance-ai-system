@@ -354,6 +354,23 @@ def create_transaction(db: Session, current_user: User, payload: schemas.Transac
 
     db.add(db_tx)
     _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type)
+    
+    # NEW: If this is an OCR-confirmed transaction, automatically create a matching Bill record
+    if payload.ocr_confidence:
+        db_bill = Bill(
+            user_id=current_user.id,
+            merchant=payload.description.split(" - ")[0], # Extract merchant from description
+            date=db_tx.date,
+            category_id=db_tx.category_id,
+            account_id=db_tx.account_id,
+            total_amount=db_tx.amount,
+            ocr_confidence=db_tx.ocr_confidence,
+            status="confirmed",
+            image_path=payload.image_path if hasattr(payload, "image_path") else None,
+            notes=payload.notes if hasattr(payload, "notes") else None
+        )
+        db.add(db_bill)
+
     db.commit()
     db.refresh(db_tx)
     emit_finance_update("transactions", current_user.id, db_tx.id)
@@ -1141,11 +1158,32 @@ def create_bill(db: Session, current_user: User, payload: schemas.BillCreate) ->
         total_amount=payload.total_amount,
         vat_amount=payload.vat_amount,
         ocr_confidence=payload.ocr_confidence,
-        status=payload.status,
         bill_number=payload.bill_number,
+        image_path=payload.image_path,
+        notes=payload.notes,
+        status=payload.status or "pending",
         items=[i.model_dump() for i in payload.items] if payload.items else None
     )
     db.add(item)
+    
+    # NEW: If bill is confirmed, automatically create a matching Transaction record
+    if payload.status == "confirmed":
+        # Check if a transaction already exists for this to avoid duplicates (optional but safe)
+        db_tx = Transaction(
+            user_id=current_user.id,
+            description=payload.merchant or "Giao dịch từ hóa đơn",
+            amount=payload.total_amount,
+            transaction_type="expense", # Bills are typically expenses
+            category_id=payload.category_id,
+            account_id=payload.account_id,
+            date=payload.date or date.today(),
+            ocr_confidence=payload.ocr_confidence,
+            notes=payload.notes if hasattr(payload, "notes") else None
+        )
+        db.add(db_tx)
+        # Deduct from account balance
+        _adjust_account_balance(db, db_tx.account_id, db_tx.amount, db_tx.transaction_type)
+
     db.commit()
     db.refresh(item)
     emit_finance_update("bills", current_user.id, item.id)

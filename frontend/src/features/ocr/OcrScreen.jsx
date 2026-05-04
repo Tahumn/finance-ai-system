@@ -22,7 +22,8 @@ const baseParsedState = () => ({
   discount: "",
   categoryId: "",
   note: "",
-  paymentSource: ""
+  paymentSource: "",
+  imagePath: ""
 });
 
 const baseConfidence = {
@@ -167,7 +168,7 @@ export default function OcrScreen({
         
         setParsed((current) => ({
           ...current,
-          merchant: (data.merchant || "").replace(/[|_]/g, "").replace(/\s+/g, " ").trim() || current.merchant || sanitizeName(file.name),
+          merchant: (data.merchant || "").trim() || current.merchant || sanitizeName(file.name),
           total: toFormattedNumber(data.final_total, current.total),
           subtotal: toFormattedNumber(data.subtotal_before_tax, current.subtotal),
           vat: toFormattedNumber(data.vat_amount, current.vat),
@@ -175,7 +176,8 @@ export default function OcrScreen({
           note: data.suggested_note || current.note,
           date: data.transaction_date || current.date,
           categoryId: data.category ? (categories.find(c => c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
-          paymentSource: data.payment_source || current.paymentSource
+          paymentSource: data.payment_source || current.paymentSource,
+          imagePath: data.image_path || ""
         }));
 
         setConfidence({
@@ -245,14 +247,18 @@ export default function OcrScreen({
           amount: parseNumberInput(parsed.total),
           transaction_type: txType,
           category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+          account_id: parsed.accountId ? Number(parsed.accountId) : null,
           date: parsed.date,
           tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
-          ocr_confidence: confidence.total
+          ocr_confidence: confidence.total,
+          notes: parsed.note,
+          image_path: parsed.imagePath
         });
         setNotice(t("ocr.notice.created", null, "Đã tạo giao dịch thành công!"));
       } else {
-        if (!onCreateBill) {
-          setError("Chức năng lưu hóa đơn chưa sẵn sàng.");
+        console.log("DEBUG: onCreateBill prop is:", onCreateBill);
+        if (typeof onCreateBill !== "function") {
+          setError(`Lỗi: Chức năng lưu hóa đơn chưa được khởi tạo (Type: ${typeof onCreateBill}).`);
           return;
         }
         await onCreateBill({
@@ -261,9 +267,12 @@ export default function OcrScreen({
           vat_amount: parseNumberInput(parsed.vat),
           date: parsed.date,
           category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+          account_id: parsed.accountId ? Number(parsed.accountId) : null,
           bill_number: referenceCode,
           ocr_confidence: confidence.total,
-          status: "pending"
+          status: "pending",
+          notes: parsed.note,
+          image_path: parsed.imagePath
         });
         setNotice(t("ocr.notice.bill_created", null, "Đã lưu hóa đơn thành công!"));
         if (onNavigate) {
@@ -393,7 +402,12 @@ export default function OcrScreen({
           <h4>1. Thông tin giao dịch</h4>
           <div className="row">
             <label className="field-pro">
-              <span>Ngày giao dịch *</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Ngày giao dịch *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.date)})`, position: 'static' }}>
+                  {Math.round(confidence.date * 100)}% Tin cậy
+                </div>
+              </div>
               <div className="input-wrapper-pro">
                 <input
                   type="date"
@@ -404,14 +418,16 @@ export default function OcrScreen({
                   }
                   required
                 />
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.date)})` }}>
-                  {Math.round(confidence.date * 100)}%
-                </div>
               </div>
             </label>
 
             <label className="field-pro">
-              <span>Merchant *</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Merchant *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})`, position: 'static' }}>
+                  {Math.round(confidence.merchant * 100)}% Tin cậy
+                </div>
+              </div>
               <div className="input-wrapper-pro">
                 <input
                   type="text"
@@ -422,9 +438,6 @@ export default function OcrScreen({
                   }
                   placeholder="Ví dụ: Circle K"
                 />
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})` }}>
-                  {Math.round(confidence.merchant * 100)}%
-                </div>
               </div>
             </label>
           </div>
@@ -457,7 +470,12 @@ export default function OcrScreen({
 
           <div className="row">
             <label className="field-pro">
-              <span>Tổng tiền *</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Tổng tiền *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.total)})`, position: 'static' }}>
+                  {Math.round(confidence.total * 100)}% Tin cậy
+                </div>
+              </div>
               <div className="input-wrapper-pro">
                 <input
                   type="text"
@@ -473,9 +491,6 @@ export default function OcrScreen({
                   placeholder="0"
                   required
                 />
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.total)})` }}>
-                  {Math.round(confidence.total * 100)}%
-                </div>
               </div>
               <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block' }}>
                 {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
@@ -483,7 +498,12 @@ export default function OcrScreen({
             </label>
 
             <label className="field-pro">
-              <span>VAT</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>VAT</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.vat)})`, position: 'static' }}>
+                  {Math.round(confidence.vat * 100)}% Tin cậy
+                </div>
+              </div>
               <div className="input-wrapper-pro">
                 <input
                   type="text"
@@ -498,13 +518,15 @@ export default function OcrScreen({
                   }
                   placeholder="0"
                 />
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.vat)})` }}>
-                  {Math.round(confidence.vat * 100)}%
-                </div>
               </div>
             </label>
             <label className="field-pro">
-              <span>Giảm giá</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Giảm giá</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.discount)})`, position: 'static' }}>
+                  {Math.round(confidence.discount * 100)}% Tin cậy
+                </div>
+              </div>
               <div className="input-wrapper-pro">
                 <input
                   type="text"
@@ -519,9 +541,6 @@ export default function OcrScreen({
                   }
                   placeholder="0"
                 />
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.discount)})` }}>
-                  {Math.round(confidence.discount * 100)}%
-                </div>
               </div>
             </label>
           </div>
@@ -618,21 +637,7 @@ export default function OcrScreen({
               placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu."
             />
           </label>
-          <div className="row">
-            <label className="field">
-              <span>Số hóa đơn / Mã tham chiếu</span>
-              <input
-                type="text"
-                value={referenceCode}
-                onChange={(event) => setReferenceCode(event.target.value)}
-                placeholder="Ví dụ: CK260426-00123"
-              />
-            </label>
-            <label className="field">
-              <span>Đính kèm khác</span>
-              <button type="button" className="ghost ocr-attach-btn">+ Đính kèm tệp</button>
-            </label>
-          </div>
+          {/* Removed Invoice Number and Attachments as per user request */}
 
           <div className="tag-section ocr-tag-section">
             <label className="field">

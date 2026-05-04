@@ -32,6 +32,8 @@ class TransactionCreate(BaseModel):
     date: DateType | None = None
     tag_ids: list[int] = Field(default_factory=list)
     ocr_confidence: float | None = None
+    image_path: str | None = None
+    notes: str | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -43,6 +45,7 @@ class TransactionUpdate(BaseModel):
     date: DateType | None = None
     tag_ids: list[int] | None = None
     ocr_confidence: float | None = None
+    notes: str | None = None
 
 
 class TransactionRead(BaseModel):
@@ -302,6 +305,8 @@ class BillCreate(BaseModel):
     ocr_confidence: float | None = None
     status: str = "pending"
     bill_number: str | None = None
+    image_path: str | None = None
+    notes: str | None = None
     items: list[BillItem] | None = None
 
 class BillUpdate(BaseModel):
@@ -314,6 +319,8 @@ class BillUpdate(BaseModel):
     ocr_confidence: float | None = None
     status: str | None = None
     bill_number: str | None = None
+    image_path: str | None = None
+    notes: str | None = None
     items: list[BillItem] | None = None
 
 class BillRead(BaseModel):
@@ -330,6 +337,8 @@ class BillRead(BaseModel):
     ocr_confidence: float | None
     status: str
     bill_number: str | None
+    image_path: str | None = None
+    notes: str | None
     items: list[BillItem] | None
     created_at: DateTimeType
 

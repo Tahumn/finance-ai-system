@@ -32,6 +32,7 @@ export default function BillsScreen({
 
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -70,6 +71,7 @@ export default function BillsScreen({
   };
 
   return (
+    <>
     <section className="bill-page">
       <header className="bill-header">
         <div className="bill-header-text">
@@ -221,10 +223,24 @@ export default function BillsScreen({
               <p style={{color: "#6b7280", textAlign: "center"}}>Vui lòng chọn một hóa đơn để xem chi tiết.</p>
             ) : (
               <>
-                <div className="bill-receipt-img">
-                  <FileTextIcon />
-                  <p style={{marginTop: "12px", marginBottom: 0}}>Hình ảnh hóa đơn gốc</p>
-                  <span style={{fontSize: "12px"}}>(Chưa có file đính kèm)</span>
+                <div className="bill-receipt-img" onClick={() => selected.image_path && setIsModalOpen(true)}>
+                  {selected.image_path ? (
+                    <>
+                      <img 
+                        src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`} 
+                        alt="Hóa đơn" 
+                      />
+                      <div className="bill-img-overlay">
+                        <span>Nhấn để phóng to</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <FileTextIcon />
+                      <p style={{marginTop: "12px", marginBottom: 0}}>Hình ảnh hóa đơn gốc</p>
+                      <span style={{fontSize: "12px"}}>(Chưa có file đính kèm)</span>
+                    </>
+                  )}
                 </div>
 
                 <div className="bill-info-section">
@@ -280,5 +296,17 @@ export default function BillsScreen({
         </aside>
       </div>
     </section>
+      {isModalOpen && selected?.image_path && (
+        <div className="bill-modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="bill-modal-content" onClick={e => e.stopPropagation()}>
+            <button className="bill-modal-close" onClick={() => setIsModalOpen(false)}>&times;</button>
+            <img 
+              src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`} 
+              alt="Hóa đơn phóng lớn" 
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

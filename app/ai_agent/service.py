@@ -300,8 +300,11 @@ OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
 
 MERCHANT_ALIASES = {
     "dookki": "DOOKKI Korean Topokki Buffet",
+    "dooki": "DOOKKI Korean Topokki Buffet",
+    "đoo": "DOOKKI Korean Topokki Buffet",
+    "doo": "DOOKKI Korean Topokki Buffet",
+    "oo": "DOOKKI Korean Topokki Buffet",
     "familymart": "FamilyMart",
-    "family mart": "FamilyMart",
     "circle k": "Circle K",
     "winmart": "WinMart",
     "highlands": "Highlands Coffee",
@@ -2580,60 +2583,37 @@ def _ocr_to_text(image: Image.Image, psm: int = 6) -> str:
 def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
     if genai is None or not settings.gemini_api_key:
         return None
+    
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model_name = (
-            os.environ.get("GEMINI_MODEL_NAME")
-            or settings.gemini_model_name
-            or settings.gemini_model
-            or "gemini-1.5-flash"
+        
+        primary_model = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash-latest"
+        models_to_try = [primary_model]
+        if "pro" in primary_model.lower():
+            models_to_try.extend(["gemini-1.5-flash-latest", "gemini-flash-latest", "gemini-1.5-flash"])
+            
+        system_instruction = (
+            "You are an AI financial receipt extraction expert. "
+            "Extract information from the receipt image and return ONLY JSON. "
+            "SCHEMA: {\"data\": {\"merchant\": \"Brand Name from Logo\", \"transaction_date\": \"YYYY-MM-DD\", \"suggested_note\": \"Detailed smart note in Vietnamese\", \"final_total\": 100}, \"confidence\": {\"merchant\": 90, \"final_total\": 90}}"
         )
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=(
-                "Bạn là chuyên gia AI trích xuất hóa đơn tài chính chuyên nghiệp. "
-                "Nhiệm vụ của bạn là đọc ảnh hóa đơn và trả về JSON chuẩn xác theo cấu trúc sau:\n\n"
-                "{\n"
-                "  \"data\": {\n"
-                "    \"merchant\": \"Tên thương hiệu nổi bật (VD: Highlands Coffee, Dookki)\",\n"
-                "    \"transaction_date\": \"YYYY-MM-DD\",\n"
-                "    \"transaction_type\": \"expense\",\n"
-                "    \"payment_source\": \"Loại thanh toán (MoMo, ZaloPay, Tiền mặt, Ngân hàng...)\",\n"
-                "    \"category\": \"Gợi ý danh mục (Ăn uống, Mua sắm, Di chuyển...)\",\n"
-                "    \"tags\": [\"Tag gợi ý dựa trên merchant hoặc dịch vụ\"],\n"
-                "    \"suggested_note\": \"Ghi chú ngắn gọn tiếng Việt (<160 ký tự)\",\n"
-                "    \"subtotal_before_tax\": số tiền trước VAT,\n"
-                "    \"vat_amount\": thuế GTGT,\n"
-                "    \"discount_amount\": số tiền giảm giá,\n"
-                "    \"final_total\": SỐ TIỀN CUỐI CÙNG THỰC TRẢ,\n"
-                "    \"currency\": \"VND\",\n"
-                "    \"line_items\": [{ \"name\": \"...\", \"quantity\": 1, \"unit_price\": 1000, \"total\": 1000 }],\n"
-                "    \"raw_ocr_text\": \"Toàn bộ text thô đọc được\"\n"
-                "  },\n"
-                "  \"confidence\": {\n"
-                "    \"merchant\": 0-100,\n"
-                "    \"transaction_date\": 0-100,\n"
-                "    \"final_total\": 0-100,\n"
-                "    \"... các trường khác\": 0-100\n"
-                "  }\n"
-                "}\n\n"
-                "Quy tắc quan trọng:\n"
-                "1. Merchant lấy từ brand nổi bật nhất, không lấy địa chỉ.\n"
-                "2. final_total là Payment Amount/Grand Total, không tự ý cộng thêm VAT nếu đã có dòng tổng.\n"
-                "3. suggested_note phải súc tích, ví dụ: 'Ăn trưa tại Dookki, thanh toán GrabPay'.\n"
-                "4. Đánh giá confidence (0-100) trung thực: 90-100 nếu khớp chính xác từng ký tự và rõ nét, 70-89 nếu mờ hoặc suy luận từ ngữ cảnh, <70 nếu không chắc chắn.\n"
-                "5. TRẢ VỀ DUY NHẤT JSON, KHÔNG MARKDOWN, KHÔNG GIẢI THÍCH."
-            )
-        )
-        response = model.generate_content(
-            [{"mime_type": "image/jpeg", "data": image_bytes}]
-        )
-        text_val = getattr(response, "text", "")
-        if not text_val:
-            return None
-        return _extract_json(text_val) or {"text": text_val}
+
+        for model_name in models_to_try:
+            try:
+                print(f"DEBUG: Attempting Gemini OCR with model: {model_name}")
+                model = genai.GenerativeModel(model_name=model_name, system_instruction=system_instruction)
+                response = model.generate_content([{"mime_type": "image/jpeg", "data": image_bytes}])
+                text_val = getattr(response, "text", "")
+                if text_val:
+                    print(f"DEBUG: Gemini OCR Success with model: {model_name}")
+                    return _extract_json(text_val) or {"text": text_val}
+            except Exception as inner_e:
+                print(f"DEBUG: Gemini OCR with {model_name} failed: {inner_e}")
+                continue
+                
+        return None
     except Exception as e:
-        print(f"Gemini OCR Failed: {e}")
+        print(f"Gemini OCR Critical Error: {e}")
         return None
 
 
@@ -2861,11 +2841,23 @@ def _extract_merchant_from_lines(lines: list[str]) -> str | None:
 def _normalize_merchant(name: str | None) -> str | None:
     if not name:
         return None
-    norm = _normalize_text(name)
+    print(f"DEBUG: Normalizing merchant name: '{name}'")
+    # Aggressively remove anything not alphanumeric or space/hyphen
+    # Keeping hyphen for names like Circle-K if any
+    cleaned = re.sub(r'[^a-zA-Z0-9\sàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]', ' ', name)
+    # Collapse multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    norm = cleaned.lower()
     for alias, formal in MERCHANT_ALIASES.items():
         if alias in norm:
+            print(f"DEBUG: Matched alias '{alias}' -> '{formal}'")
             return formal
-    return name.strip()
+            
+    # If no alias match, return the cleaned version with proper capitalization
+    result = cleaned.title() if cleaned.isupper() or cleaned.islower() else cleaned
+    print(f"DEBUG: Normalized result: '{result}'")
+    return result
 
 
 def _map_payment_source(text: str) -> str | None:
@@ -2921,6 +2913,15 @@ def _match_tags(db: Session, user: User, merchant: str | None, text: str, sugges
 
 def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
+    
+    # Save image for later display
+    import uuid
+    import os
+    os.makedirs("uploads/bills", exist_ok=True)
+    filename = f"{current_user.id}_{uuid.uuid4()}.jpg"
+    image_save_path = os.path.join("uploads/bills", filename)
+    image.save(image_save_path)
+    final_image_path = f"/uploads/bills/{filename}"
 
     gemini_result = None
     if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
@@ -3021,6 +3022,11 @@ def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
     if final_tags:
         conf["tags"] = max(conf["tags"], 0.90)
 
+    # --- AI Note Fallback ---
+    if not suggested_note and merchant:
+        suggested_note = f"Giao dịch tại {merchant}"
+        conf["suggested_note"] = 0.50
+
     # --- Smart Confidence Enhancement ---
     
     # 1. Validation Logic
@@ -3088,6 +3094,7 @@ def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
             "final_total": total,
             "currency": "VND",
             "line_items": line_items,
+            "image_path": final_image_path,
         },
         "confidence": conf,
         "warnings": [] if is_valid else [f"Tiền hàng ({s}) + Thuế ({v}) - Giảm giá ({d}) != Tổng ({f})"],
