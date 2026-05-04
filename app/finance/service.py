@@ -348,6 +348,8 @@ def create_transaction(db: Session, current_user: User, payload: schemas.Transac
         account_id=payload.account_id,
         date=payload.date or date.today(),
         ocr_confidence=payload.ocr_confidence,
+        image_path=payload.image_path,
+        notes=payload.notes,
     )
     if tags:
         db_tx.tags = tags

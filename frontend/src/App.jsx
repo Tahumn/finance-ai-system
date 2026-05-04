@@ -1112,6 +1112,7 @@ export default function App() {
             onDeleteTag={handleDeleteTag}
             userEmail={authState.user?.email}
             onCreateTransaction={handleCreateTransaction}
+            onCreateBill={handleCreateBill}
             onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />

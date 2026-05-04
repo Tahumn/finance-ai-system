@@ -154,13 +154,15 @@ export default function TransactionsScreen({
   onParseFromText,
   accounts = [],
   anomalies = [],
-  newlyCreatedId
+  newlyCreatedId,
+  onCreateBill
 }) {
   /* modals */
   const [activeModal, setActiveModal] = useState(null); // "add" | "ocr" | "edit" | "detail" | "dateRange"
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState(null);
   const [editingTx, setEditingTx] = useState(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   /* desktop layout toggle */
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
@@ -300,8 +302,12 @@ export default function TransactionsScreen({
         const sign = i.transaction_type === "income" ? 1 : -1;
         return s + sign * i.amount;
       }, 0),
-    }));
-  }, [sorted]);
+    })).sort((a, b) => {
+      const dateA = a.items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      const dateB = b.items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      return sortOrder === "oldest" ? (dateA > dateB ? 1 : -1) : (dateB > dateA ? 1 : -1);
+    });
+  }, [sorted, sortOrder]);
 
   /* category breakdown for icons row */
   const categoryStats = useMemo(() => {
@@ -388,7 +394,11 @@ export default function TransactionsScreen({
       grouped[cat].count++;
       grouped[cat].total += tx.transaction_type === "income" ? Number(tx.amount) : -Number(tx.amount);
     });
-    const sortedGroups = Object.entries(grouped);
+    const sortedGroups = Object.entries(grouped).sort((a, b) => {
+      const dateA = a[1].items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      const dateB = b[1].items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      return sortOrder === "oldest" ? (dateA > dateB ? 1 : -1) : (dateB > dateA ? 1 : -1);
+    });
 
     return (
       <div className="txd-container">
@@ -1325,6 +1335,20 @@ export default function TransactionsScreen({
                       {isIncome ? "+" : "-"}{currency(selectedTx.amount)}
                     </p>
                   </div>
+                  
+                  {selectedTx.image_path && (
+                    <div className="tx-detail-receipt">
+                      <div className="tx-receipt-img" onClick={() => setIsImageModalOpen(true)}>
+                        <img 
+                          src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
+                          alt="Hóa đơn" 
+                        />
+                        <div className="tx-img-overlay">
+                          <span>Nhấn để phóng to</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="tx-detail-grid">
                     <div className="tx-detail-row">
@@ -1382,8 +1406,20 @@ export default function TransactionsScreen({
               onCreateCategory={onCreateCategory}
               onCreateTag={onCreateTag}
               onCreateTransaction={onCreateTransaction}
+              onCreateBill={onCreateBill}
               loading={loading}
               embedded
+            />
+          </div>
+        </div>
+      )}
+      {isImageModalOpen && selectedTx?.image_path && (
+        <div className="tx-modal-overlay" onClick={() => setIsImageModalOpen(false)}>
+          <div className="tx-modal-content" onClick={e => e.stopPropagation()}>
+            <button className="tx-modal-close" onClick={() => setIsImageModalOpen(false)}>&times;</button>
+            <img 
+              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
+              alt="Hóa đơn phóng lớn" 
             />
           </div>
         </div>

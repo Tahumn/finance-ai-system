@@ -233,55 +233,61 @@ export default function OcrScreen({
     ]
       .filter(Boolean)
       .join(" - ");
+    setOcrState("running");
 
     try {
-      let ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
-      if (!ocrTagId && onCreateTag) {
-        const createdOcrTag = await onCreateTag({ name: "Hóa đơn OCR", color: "#ec4899" });
-        ocrTagId = createdOcrTag?.id;
-      }
+      // 1. Always create the bill
+      const billPayload = {
+        merchant: parsed.merchant,
+        total_amount: parseNumberInput(parsed.total),
+        vat_amount: parseNumberInput(parsed.vat),
+        date: parsed.date,
+        category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+        account_id: parsed.accountId ? Number(parsed.accountId) : null,
+        bill_number: referenceCode,
+        ocr_confidence: confidence.total,
+        status: autoCreate ? "confirmed" : "pending",
+        notes: parsed.note,
+        image_path: parsed.imagePath
+      };
 
+      if (typeof onCreateBill !== "function") {
+        setError(`Lỗi: Chức năng lưu hóa đơn chưa được khởi tạo (Type: ${typeof onCreateBill}).`);
+        setOcrState("idle");
+        return;
+      }
+      
+      await onCreateBill(billPayload);
+
+      // 2. If checked, also create the transaction
       if (autoCreate) {
+        if (typeof onCreateTransaction !== "function") {
+          setError("Lỗi: Chức năng lưu giao dịch chưa được khởi tạo.");
+          setOcrState("idle");
+          return;
+        }
+
+        const ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
+
         await onCreateTransaction({
-          description: descriptionParts,
+          description: `${parsed.merchant || t("ocr.default_desc")}${parsed.note ? " - " + parsed.note : ""}`,
           amount: parseNumberInput(parsed.total),
           transaction_type: txType,
           category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
           account_id: parsed.accountId ? Number(parsed.accountId) : null,
           date: parsed.date,
           tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
-          ocr_confidence: confidence.total,
           notes: parsed.note,
           image_path: parsed.imagePath
         });
-        setNotice(t("ocr.notice.created", null, "Đã tạo giao dịch thành công!"));
+        
+        setNotice(t("ocr.notice.created_both", null, "Đã tạo cả hóa đơn và giao dịch thành công!"));
       } else {
-        console.log("DEBUG: onCreateBill prop is:", onCreateBill);
-        if (typeof onCreateBill !== "function") {
-          setError(`Lỗi: Chức năng lưu hóa đơn chưa được khởi tạo (Type: ${typeof onCreateBill}).`);
-          return;
-        }
-        await onCreateBill({
-          merchant: parsed.merchant,
-          total_amount: parseNumberInput(parsed.total),
-          vat_amount: parseNumberInput(parsed.vat),
-          date: parsed.date,
-          category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
-          account_id: parsed.accountId ? Number(parsed.accountId) : null,
-          bill_number: referenceCode,
-          ocr_confidence: confidence.total,
-          status: "pending",
-          notes: parsed.note,
-          image_path: parsed.imagePath
-        });
         setNotice(t("ocr.notice.bill_created", null, "Đã lưu hóa đơn thành công!"));
-        if (onNavigate) {
-          setTimeout(() => onNavigate("bills"), 500);
-        }
       }
 
-      if (autoCreate && onNavigate) {
-         setTimeout(() => onNavigate("transactions"), 500);
+      if (onNavigate) {
+        setTimeout(() => onNavigate("bills"), 1500);
       }
 
       setParsed(baseParsedState());
