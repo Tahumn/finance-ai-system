@@ -562,6 +562,7 @@ export default function App() {
       setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
       setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
+      setSavingsTips(tipsData || []);
       setReportsOverview(overviewData || {
         daily_series: [],
         monthly_series: [],
@@ -1113,6 +1114,8 @@ export default function App() {
             userEmail={authState.user?.email}
             onCreateTransaction={handleCreateTransaction}
             onCreateBill={handleCreateBill}
+            aiSuggestions={savingsTips}
+            monthlySeries={monthlySeries}
             onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />
