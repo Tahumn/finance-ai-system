@@ -263,7 +263,17 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
 
       setMessages((prev) => [...prev, newMsg]);
 
-      if (response?.intent === "create_transaction" || response?.intent === "create_transactions") {
+      const refreshIntents = [
+        "create_transaction", 
+        "create_transactions",
+        "create_expense",
+        "create_income",
+        "transfer",
+        "adjust_balance",
+        "update_transaction",
+        "delete_transaction"
+      ];
+      if (refreshIntents.includes(response?.intent)) {
         window.dispatchEvent(
           new CustomEvent("finance:refresh", {
             detail: {

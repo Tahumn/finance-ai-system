@@ -232,6 +232,8 @@ export default function DashboardScreen({
         expense: Number(item.expense || 0)
       }));
 
+  const [showBalance, setShowBalance] = useState(false);
+
   const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
     const spent = Number(item.spent || 0);
     const total = Math.max(spent, Math.round(spent * 1.3), 1);
@@ -250,12 +252,23 @@ export default function DashboardScreen({
       {/* 1. Full-width Balance Card */}
       <section className="dashboard-balance-card">
         <div className="dbc-content">
-          <div className="dbc-header">
+          <div className="dbc-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <p>Số dư hiện tại</p>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <button 
+              className="icon-btn" 
+              onClick={() => setShowBalance(!showBalance)} 
+              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 0, display: 'flex', opacity: 0.8 }}
+              title={showBalance ? "Ẩn số dư" : "Hiện số dư"}
+            >
+              {showBalance ? (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              )}
+            </button>
           </div>
-          <h2>{currency(summary?.balance || 0)}</h2>
-          <p className="dbc-update">Cập nhật lúc 16:54</p>
+          <h2>{showBalance ? currency(summary?.balance || 0) : '****** đ'}</h2>
+          <p className="dbc-update">Cập nhật lúc {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
         <div className="dbc-graphic">
           <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
