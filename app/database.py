@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -108,6 +110,42 @@ def ensure_schema() -> None:
             with engine.begin() as conn:
                 for stmt in statements:
                     conn.execute(text(stmt))
+
+    if "budgets" in tables:
+        budget_cols = {col["name"] for col in inspector.get_columns("budgets")}
+        first_day = date.today().replace(day=1)
+        next_month = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1)
+        last_day = next_month - timedelta(days=1)
+
+        with engine.begin() as conn:
+            if "period_start" not in budget_cols:
+                conn.execute(text("ALTER TABLE budgets ADD COLUMN period_start DATE"))
+            if "period_end" not in budget_cols:
+                conn.execute(text("ALTER TABLE budgets ADD COLUMN period_end DATE"))
+
+            conn.execute(
+                text("UPDATE budgets SET period_start = :period_start WHERE period_start IS NULL"),
+                {"period_start": first_day},
+            )
+            conn.execute(
+                text("UPDATE budgets SET period_end = :period_end WHERE period_end IS NULL"),
+                {"period_end": last_day},
+            )
+
+            # PostgreSQL path: enforce constraints and replace legacy uniqueness by per-period uniqueness.
+            if engine.dialect.name == "postgresql":
+                conn.execute(text("ALTER TABLE budgets ALTER COLUMN period_start SET NOT NULL"))
+                conn.execute(text("ALTER TABLE budgets ALTER COLUMN period_end SET NOT NULL"))
+                conn.execute(text("ALTER TABLE budgets DROP CONSTRAINT IF EXISTS uq_user_budget_category"))
+                conn.execute(text("DROP INDEX IF EXISTS uq_user_budget_category"))
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_budget_category_period_idx "
+                        "ON budgets (user_id, category_id, period_start, period_end)"
+                    )
+                )
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_budgets_period_start ON budgets (period_start)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_budgets_period_end ON budgets (period_end)"))
 
 
 def get_db():

@@ -297,7 +297,8 @@ export default function App() {
     () =>
       (transactions.items || []).map((item) => ({
         ...item,
-        categoryLabel: item.category_id ? categoryMap[item.category_id] || t("transactions.none") : t("transactions.none")
+        categoryLabel: item.category_id ? categoryMap[item.category_id] || t("transactions.none") : t("transactions.none"),
+        tagLabels: (item.tags || []).map(tag => tag.name)
       })),
     [transactions, categoryMap, languageVersion]
   );
@@ -1034,11 +1035,13 @@ export default function App() {
             monthlySeries={monthlySeries}
             anomalies={anomalies}
             savingsGoals={savingsGoals}
+            budgets={budgets}
             onViewTransactions={() => handleChangeView("transactions")}
             onGoOcr={() => handleChangeView("ocr")}
             onGoChat={() => handleChangeView("chat")}
             onGoReports={() => handleChangeView("reports")}
             onGoAddTransaction={() => {}}
+            onGoBudgets={() => handleChangeView("budgets")}
             rangePreset={rangePreset}
             onSelectPreset={selectRangePreset}
             userEmail={authState.user?.email}
@@ -1180,6 +1183,7 @@ export default function App() {
       <FloatingChatbot
         isAuthed={authState.status === "authed"}
         userEmail={authState.user?.email}
+        onCreateTransaction={handleCreateTransaction}
       />
       {view !== "auth" && view !== "onboarding" && (
         <div className="mobile-nav-wrapper">

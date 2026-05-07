@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { chatWithAi, getChatHistory } from "../api/ai.js";
+import { chatWithAi, getChatHistory, getForecast, getAnomalies, getSavingsTips } from "../api/ai.js";
 import { currency } from "../utils/format.js";
 import "./FloatingChatbot.css";
 
@@ -32,7 +32,7 @@ const normalizeMessages = (messages) => {
   return trimmed.length ? trimmed : null;
 };
 
-export default function FloatingChatbot({ isAuthed, userEmail }) {
+export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransaction }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState([
@@ -242,21 +242,15 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
 
       // Tự động nhận diện ý định để lấy dữ liệu phong phú (Rich Data)
       if (response.intent === "forecast") {
-        const forecast = await (await fetch("/api/v1/ai/forecast", {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
-        })).json();
+        const forecast = await getForecast();
         newMsg.insightType = "forecast";
         newMsg.insightData = forecast;
       } else if (response.intent === "anomalies") {
-        const anomalies = await (await fetch("/api/v1/ai/anomalies", {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
-        })).json();
+        const anomalyData = await getAnomalies();
         newMsg.insightType = "anomaly";
-        newMsg.insightData = anomalies;
+        newMsg.insightData = anomalyData;
       } else if (response.intent === "savings") {
-        const savings = await (await fetch("/api/v1/ai/savings-tips", {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('finance_token')}` }
-        })).json();
+        const savings = await getSavingsTips();
         newMsg.insightType = "savings";
         newMsg.insightData = savings;
       }
@@ -271,7 +265,8 @@ export default function FloatingChatbot({ isAuthed, userEmail }) {
         "transfer",
         "adjust_balance",
         "update_transaction",
-        "delete_transaction"
+        "delete_transaction",
+        "set_budget"
       ];
       if (refreshIntents.includes(response?.intent)) {
         window.dispatchEvent(

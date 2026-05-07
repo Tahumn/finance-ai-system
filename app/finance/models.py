@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import (
     Boolean,
@@ -16,6 +16,17 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+def _first_day_of_current_month() -> date:
+    today = date.today()
+    return date(today.year, today.month, 1)
+
+
+def _last_day_of_current_month() -> date:
+    first_day = _first_day_of_current_month()
+    next_month = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return next_month - timedelta(days=1)
 
 
 class Category(Base):
@@ -125,7 +136,17 @@ class Budget(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False, default=0.0)
-    __table_args__ = (UniqueConstraint("user_id", "category_id", name="uq_user_budget_category"),)
+    period_start = Column(Date, nullable=False, default=_first_day_of_current_month)
+    period_end = Column(Date, nullable=False, default=_last_day_of_current_month)
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "category_id",
+            "period_start",
+            "period_end",
+            name="uq_user_budget_category_period",
+        ),
+    )
 
 
 class Debt(Base):

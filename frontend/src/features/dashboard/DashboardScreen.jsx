@@ -207,10 +207,12 @@ export default function DashboardScreen({
   onGoChat,
   onGoAddTransaction,
   onGoReports,
+  onGoBudgets,
   rangePreset,
   onSelectPreset,
   userEmail,
   savingsGoals = [],
+  budgets = [],
 }) {
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
@@ -234,16 +236,18 @@ export default function DashboardScreen({
 
   const [showBalance, setShowBalance] = useState(false);
 
-  const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
+  // Chỉ hiển thị ngân sách thật từ API.
+  const budgetRows = (Array.isArray(budgets) ? budgets : []).slice(0, 4).map((item) => {
     const spent = Number(item.spent || 0);
-    const total = Math.max(spent, Math.round(spent * 1.3), 1);
-    const pct = Math.round((spent / total) * 100);
+    const total = Number(item.amount || 0) || Math.max(spent, 1);
+    const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
     return {
       label: item.category,
-      percent: Math.max(1, Math.min(100, pct)),
+      percent: Math.min(100, Math.max(0, pct)),
       spent,
       total,
-      color: colorFor(item.category, userEmail)
+      color: colorFor(item.category, userEmail),
+      status: item.status || (pct >= 100 ? 'exceeded' : pct >= 80 ? 'warning' : 'normal')
     };
   });
 
@@ -424,22 +428,28 @@ export default function DashboardScreen({
             {budgetRows.length ? budgetRows.map(b => (
               <div key={b.label} className="budget-progress-item">
                 <div className="bpi-header">
-                  <div className="bpi-icon" style={{color: b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
+                  <div className="bpi-icon" style={{color: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
                   <span className="bpi-label">{b.label}</span>
-                  <span className="bpi-pct" style={{color: b.color}}>{b.percent}%</span>
+                  <span className="bpi-pct" style={{color: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}>{b.percent}%</span>
                 </div>
                 <div className="bpi-bar-bg">
-                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.color}}></div>
+                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}></div>
                 </div>
                 <div className="bpi-amounts">
                   <span className="bpi-spent">{currency(b.spent)}</span>
                   <span className="bpi-total">/ {currency(b.total)}</span>
+                  {b.status === 'exceeded' && <span style={{color:'#ef4444', fontSize:'11px', marginLeft:'4px'}}>⚠ Vượt</span>}
                 </div>
               </div>
-            )) : <p className="empty">Chưa có dữ liệu ngân sách</p>}
+            )) : (
+              <div style={{textAlign:'center', padding:'20px 0'}}>
+                <p className="empty">Chưa có ngân sách nào.</p>
+                <p style={{fontSize:'12px', color:'#94a3b8', marginTop:'4px'}}>Thiết lập ngân sách để theo dõi chi tiêu.</p>
+              </div>
+            )}
           </div>
           <div className="dp-footer-link">
-             <button onClick={() => {}}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+             <button onClick={onGoBudgets}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
           </div>
         </div>
 

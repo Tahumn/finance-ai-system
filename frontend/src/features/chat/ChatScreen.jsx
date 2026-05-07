@@ -200,6 +200,27 @@ export default function ChatScreen({ userEmail }) {
       } else {
         const response = await chatWithAi(text);
         reply = response?.answer || "";
+        const refreshIntents = [
+          "create_transaction",
+          "create_transactions",
+          "create_expense",
+          "create_income",
+          "transfer",
+          "adjust_balance",
+          "update_transaction",
+          "delete_transaction",
+          "set_budget",
+        ];
+        if (refreshIntents.includes(response?.intent)) {
+          window.dispatchEvent(
+            new CustomEvent("finance:refresh", {
+              detail: {
+                startDate: response.start_date || null,
+                endDate: response.end_date || null,
+              },
+            })
+          );
+        }
       }
     } catch {
       reply = "";

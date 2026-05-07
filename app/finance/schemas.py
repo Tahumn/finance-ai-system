@@ -117,6 +117,8 @@ class AnomalyAlert(BaseModel):
 class BudgetCreate(BaseModel):
     category_id: int
     amount: float = Field(..., gt=0)
+    period_start: DateType | None = None
+    period_end: DateType | None = None
 
 
 class BudgetUpdate(BaseModel):
@@ -129,6 +131,8 @@ class BudgetRead(BaseModel):
     category_id: int
     category: str
     amount: float
+    period_start: DateType
+    period_end: DateType
     spent: float = 0.0
     remaining: float = 0.0
     progress: float = 0.0

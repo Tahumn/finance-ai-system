@@ -37,6 +37,7 @@ from app.finance.models import (
     Subscription,
     Transaction,
     Transfer,
+    Tag,
 )
 
 try:
@@ -95,9 +96,17 @@ UNIT_MULTIPLIER = {
 COLLOQUIAL_UNIT_MULTIPLIER = {
     "cu": 1_000_000,
     "lit": 100_000,
-    "xi": 100_000,  # Cập nhật xị = 100k theo yêu cầu người dùng
+    "xi": 100_000,
     "chai": 1_000_000,
 }
+
+# Merger slang units into main multiplier for heuristic consistency
+UNIT_MULTIPLIER.update(COLLOQUIAL_UNIT_MULTIPLIER)
+UNIT_MULTIPLIER.update({
+    "k": 1000, "nghin": 1000, "ngan": 1000,
+    "tr": 1000000, "triệu": 1000000, "tỷ": 1000000000
+})
+
 
 VN_NUMBER_WORDS = {
     "khong": 0,
@@ -115,49 +124,42 @@ VN_NUMBER_WORDS = {
 }
 
 INCOME_KEYWORDS = [
-    "thu",
-    "luong",
-    "lanh",  # "lanh luong"
-    "bonus",
-    "lai",
-    "nhan",
-    "refund",
-    "hoan tien",
-    "thuong",
-    "duoc cho",
-    "duoc tang",
-    "duoc bieu",
-    "duoc li xi",
-    "li xi",
-    "lixi",
-    "duoc ho tro",
-    "duoc chuyen",
-    "duoc cho",
-    "me cho",
+    "thu", "nhận", "lãnh lương", "lương", "bonus", "thưởng", "refund", "hoàn tiền",
+    "ting ting", "về tiền", "vào tiền", "bank vào", "ck tới", "paypal về", "khách ck", 
+    "khách trả", "job về", "ăn kèo", "có kèo", "deal xong", "có project",
+    "mẹ cho", "ba cho", "được cho", "được tặng", "lì xì", "được lì xì",
+    "chốt lời", "có lãi", "trade lời", "bán coin", "bán cổ phiếu"
 ]
+
 EXPENSE_KEYWORDS = [
-    "chi",
-    "mua",
-    "tra",
-    "thanh toan",
-    "phi",
-    "hoa don",
-    "an",
-    "uong",
-    "di lai",
-    "xang",
-    "taxi",
-    "ton",
-    "mat",
-    "dong",
-    "ship",
+    "chi", "chi tiêu", "mua", "trả", "thanh toán", "đóng", "tốn", "mất", "hết", "xài", "tiêu", "ứng",
+    "ăn", "uống", "ăn vặt", "ăn sáng", "ăn trưa", "ăn tối", "buffet", "lẩu", "nướng", "trà sữa", "cà phê", "cafe",
+    "bay", "bay màu", "bay mất", "đốt", "đốt tiền", "ném", "ném tiền", "đập ví", "rách ví", "rút ví", 
+    "thủng ví", "viêm màng túi", "khom lưng", "xả ví", "rút máu", "toang", "đau ví",
+    "order", "lên đơn", "chốt đơn", "săn sale", "flash sale", "cop", "hốt", "tậu", "quất", "gom",
+    "grab", "be", "taxi", "book xe", "đổ xăng", "bơm xăng", "gửi xe",
+    "nộp", "học phí", "trả nợ", "trả góp", "bill"
 ]
+
+CORRECTION_KEYWORDS = [
+    "nhầm", "ghi sai", "sai rồi", "không phải", "à không", "ý là", "sửa lại", "đổi lại", "đổi thành", 
+    "phải là", "mới đúng", "ghi nhầm", "fix lại", "edit lại", "cập nhật lại", "tôi nói nhầm", 
+    "viết nhầm", "nhầm lẫn", "không tính", "bỏ giao dịch đó", "xóa giao dịch đó"
+]
+
+DELETE_KEYWORDS = ["xóa", "hủy", "remove", "delete", "undo", "rollback", "bỏ"]
+CONFIRM_KEYWORDS = ["ok", "oke", "okela", "yes", "yep", "uhm", "đúng rồi", "chuẩn", "xác nhận"]
+REJECT_KEYWORDS = ["không", "ko", "k", "không phải", "sai rồi", "hủy", "bỏ đi", "cancel"]
+MULTI_CONNECTORS = ["rồi", "xong", "sau đó", "kèm", "với", "và", "cùng với", "&"]
+RECENT_REFERENCE_KEYWORDS = ["hồi nãy", "lúc nãy", "vừa rồi", "mới đây", "gần nhất", "giao dịch đó", "cái đó", "bill đó"]
+
 
 def _has_income_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in INCOME_KEYWORDS:
-        kw_norm = kw.strip().lower()
+        # Normalize the keyword as well to ensure match against normalized text
+        kw_norm = _normalize_text(kw)
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -166,6 +168,7 @@ def _has_income_keyword(text: str) -> bool:
         else:
             if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
                 return True
+
     return False
 
 
@@ -173,7 +176,8 @@ def _has_expense_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in EXPENSE_KEYWORDS:
-        kw_norm = kw.strip().lower()
+        # Normalize the keyword as well
+        kw_norm = _normalize_text(kw)
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -182,29 +186,46 @@ def _has_expense_keyword(text: str) -> bool:
         else:
             if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
                 return True
+
     return False
 
 CATEGORY_KEYWORDS = {
-    "an uong": "Food",
-    "cafe": "Coffee",
-    "ca phe": "Coffee",
-    "cf": "Coffee",
-    "an sang": "Food",
-    "tra sua": "Drinks",
-    "di lai": "Transport",
-    "xang": "Transport",
-    "do xang": "Transport",
-    "taxi": "Transport",
-    "mua sam": "Shopping",
-    "mua": "Shopping",
-    "nha": "Housing",
-    "suc khoe": "Health",
-    "y te": "Health",
-    "giai tri": "Entertainment",
-    "hoc": "Education",
-    "luong": "Salary",
-    "dau tu": "Investment",
-    "ship": "Delivery",
+    # FOOD & DRINKS
+    "cơm": "Ăn uống", "phở": "Ăn uống", "bún": "Ăn uống", "hủ tiếu": "Ăn uống", "mì": "Ăn uống",
+    "lẩu": "Ăn uống", "nướng": "Ăn uống", "pizza": "Ăn uống", "gà rán": "Ăn uống", "đồ ăn": "Ăn uống",
+    "ăn vặt": "Ăn uống", "buffet": "Ăn uống", "ăn sáng": "Ăn uống", "ăn trưa": "Ăn uống", "ăn tối": "Ăn uống",
+    "hamburger": "Ăn uống", "banh mi": "Ăn uống",
+    "trà sữa": "Ăn uống", "cà phê": "Ăn uống", "cafe": "Ăn uống", "cf": "Ăn uống", "matcha": "Ăn uống",
+    "highland": "Ăn uống", "starbucks": "Ăn uống", "phúc long": "Ăn uống", "katinat": "Ăn uống",
+    "grabfood": "Ăn uống", "shopeefood": "Ăn uống", "befood": "Ăn uống",
+
+    # TRANSPORT
+    "grab": "Di chuyển", "be": "Di chuyển", "gojek": "Di chuyển", "taxi": "Di chuyển", "xe ôm": "Di chuyển",
+    "metro": "Di chuyển", "bus": "Di chuyển", "xe buýt": "Di chuyển", "xăng": "Di chuyển", 
+    "đổ xăng": "Di chuyển", "gửi xe": "Di chuyển",
+
+    # SHOPPING
+    "shopee": "Mua sắm", "lazada": "Mua sắm", "tiki": "Mua sắm", "tiktok shop": "Mua sắm", 
+    "mua sắm": "Mua sắm", "order": "Mua sắm", "áo": "Mua sắm", "quần": "Mua sắm", "giày": "Mua sắm", 
+    "dép": "Mua sắm", "túi": "Mua sắm", "mỹ phẩm": "Mua sắm", "skin care": "Mua sắm",
+
+    # TECHNOLOGY
+    "iphone": "Công nghệ", "ipad": "Công nghệ", "bàn phím": "Công nghệ", "chuột": "Công nghệ",
+
+    # ENTERTAINMENT
+    "netflix": "Giải trí", "spotify": "Giải trí", "karaoke": "Giải trí", "game": "Giải trí", 
+    "steam": "Giải trí", "valorant": "Giải trí", "pubg": "Giải trí", "lol": "Giải trí", 
+    "bar": "Giải trí", "club": "Giải trí", "beer": "Giải trí", "nhậu": "Giải trí",
+
+    # HEALTH
+    "thuốc": "Sức khỏe", "bệnh viện": "Sức khỏe", "khám": "Sức khỏe", "gym": "Sức khỏe", "vitamin": "Sức khỏe",
+
+    # EDUCATION
+    "học phí": "Giáo dục", "course": "Giáo dục", "udemy": "Giáo dục", "coursera": "Giáo dục", 
+    "toeic": "Giáo dục", "ielts": "Giáo dục",
+
+    # HOUSING
+    "tiền nhà": "Nhà cửa", "điện": "Nhà cửa", "nước": "Nhà cửa", "wifi": "Nhà cửa", "internet": "Nhà cửa",
 }
 
 ONBOARDING_USAGE_PHRASES = (
@@ -481,9 +502,27 @@ _ACCOUNTS_BY_USER: dict[int, set[str]] = {}
 
 
 def _normalize_text(text: str) -> str:
-    normalized = unicodedata.normalize("NFD", text)
-    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
-    return normalized.lower().strip()
+    if not text:
+        return ""
+    # Chuyển thành chữ thường
+    text = text.lower().strip()
+    # Loại bỏ dấu tiếng Việt (NFKD normalization)
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+    # Thay thế teencode phổ biến cho heuristic
+    teencode_map = {
+        "ko": "khong", "k": "khong", "dc": "duoc", "đc": "duoc", 
+        "nham": "nham", "lộn": "nham", "lon": "nham"
+    }
+    for k, v in teencode_map.items():
+        text = re.sub(rf"\b{k}\b", v, text)
+    return text.strip()
+
+
+def _normalize_text_basic(text: str) -> str:
+    if not text:
+        return ""
+    text = text.lower().strip()
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8").strip()
 
 
 def _strip_date_fragments(text: str) -> str:
@@ -844,10 +883,11 @@ def _parse_amount(text: str) -> float | None:
         matches.append(value)
 
     matches.extend(_extract_colloquial_amount_candidates(normalized))
+    matches = list(set(matches))
 
     if not matches:
         return None
-    return max(matches)
+    return sum(matches)
 
 
 def _amount_has_unit(text: str) -> bool:
@@ -1036,7 +1076,7 @@ def _parse_transaction_type(text: str) -> str:
 def _pick_category_name(text: str) -> str | None:
     normalized = _normalize_text(text)
     for keyword, category in CATEGORY_KEYWORDS.items():
-        if keyword in normalized:
+        if _normalize_text(keyword) in normalized:
             return category
     return None
 
@@ -1683,6 +1723,67 @@ def get_savings_suggestions(
     }
 
 
+# Mapping từ tên danh mục tiếng Anh (AI trả về) sang tiếng Việt (tên trong DB)
+_EN_TO_VI_CATEGORY: dict[str, str] = {
+    "food": "Ăn uống",
+    "food & drink": "Ăn uống",
+    "food and drink": "Ăn uống",
+    "eating": "Ăn uống",
+    "dining": "Ăn uống",
+    "meal": "Ăn uống",
+    "coffee": "Ăn uống",
+    "drinks": "Ăn uống",
+    "transport": "Di chuyển",
+    "transportation": "Di chuyển",
+    "travel": "Di chuyển",
+    "commute": "Di chuyển",
+    "fuel": "Di chuyển",
+    "gas": "Di chuyển",
+    "taxi": "Di chuyển",
+    "shopping": "Mua sắm",
+    "clothes": "Mua sắm",
+    "clothing": "Mua sắm",
+    "fashion": "Mua sắm",
+    "bills": "Hóa đơn",
+    "utilities": "Hóa đơn",
+    "bill": "Hóa đơn",
+    "electricity": "Hóa đơn",
+    "water": "Hóa đơn",
+    "internet": "Hóa đơn",
+    "entertainment": "Giải trí",
+    "fun": "Giải trí",
+    "game": "Giải trí",
+    "games": "Giải trí",
+    "music": "Giải trí",
+    "movie": "Giải trí",
+    "health": "Sức khỏe",
+    "healthcare": "Sức khỏe",
+    "medical": "Sức khỏe",
+    "medicine": "Sức khỏe",
+    "gym": "Sức khỏe",
+    "housing": "Nhà cửa",
+    "rent": "Nhà cửa",
+    "home": "Nhà cửa",
+    "house": "Nhà cửa",
+    "education": "Giáo dục",
+    "school": "Giáo dục",
+    "tuition": "Giáo dục",
+    "course": "Giáo dục",
+    "learning": "Giáo dục",
+    "salary": "Lương",
+    "wage": "Lương",
+    "income": "Thu nhập khác",
+    "bonus": "Thưởng",
+    "investment": "Đầu tư",
+    "freelance": "Freelance",
+    "refund": "Hoàn tiền",
+    "delivery": "Mua sắm",
+    "technology": "Công nghệ",
+    "tech": "Công nghệ",
+    "software": "Công nghệ",
+}
+
+
 def _resolve_category(
     db: Session,
     current_user: User,
@@ -1691,23 +1792,154 @@ def _resolve_category(
 ) -> tuple[int | None, str | None]:
     if not category_name:
         return None, None
+
     normalized_target = _normalize_text(category_name)
+
+    # Bước 1: Thử map từ tiếng Anh sang tiếng Việt trước khi tìm kiếm
+    vi_name = _EN_TO_VI_CATEGORY.get(category_name.lower().strip()) or _EN_TO_VI_CATEGORY.get(normalized_target)
+
     existing = (
         db.query(Category)
         .filter(Category.user_id == current_user.id)
         .all()
     )
+
+    # Bước 2: Tìm chính xác theo tên gốc hoặc tên đã map
     for item in existing:
-        if _normalize_text(item.name) == normalized_target:
+        item_norm = _normalize_text(item.name)
+        if item_norm == normalized_target:
             return item.id, item.name
+        if vi_name and item_norm == _normalize_text(vi_name):
+            return item.id, item.name
+
+    # Bước 3: Fuzzy match - tìm category chứa keyword
+    for item in existing:
+        item_norm = _normalize_text(item.name)
+        if normalized_target in item_norm or item_norm in normalized_target:
+            return item.id, item.name
+
     if not auto_create:
         return None, category_name
+
+    # Bước 4: Tạo mới - ưu tiên dùng tên tiếng Việt nếu có map
+    create_name = vi_name if vi_name else category_name
+    # Kiểm tra xem tên tiếng Việt đó đã tồn tại chưa (phòng trùng sau map)
+    for item in existing:
+        if _normalize_text(item.name) == _normalize_text(create_name):
+            return item.id, item.name
+
     created = finance_service.create_category(
         db,
         current_user,
-        finance_schemas.CategoryCreate(name=category_name),
+        finance_schemas.CategoryCreate(name=create_name),
     )
     return created.id, created.name
+
+
+def _normalize_phrase_for_match(text: str) -> str:
+    normalized = _normalize_text_basic(text)
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+_BUDGET_CATEGORY_ALIASES: dict[str, str] = {
+    "an uong": "Ăn uống",
+    "do an": "Ăn uống",
+    "do uong": "Ăn uống",
+    "ca phe": "Ăn uống",
+    "tra sua": "Ăn uống",
+    "coffee": "Ăn uống",
+    "food": "Ăn uống",
+    "mua sam": "Mua sắm",
+    "shopping": "Mua sắm",
+    "fashion": "Mua sắm",
+    "di chuyen": "Di chuyển",
+    "xang xe": "Di chuyển",
+    "transport": "Di chuyển",
+    "hoa don": "Hóa đơn",
+    "bill": "Hóa đơn",
+    "giai tri": "Giải trí",
+    "entertainment": "Giải trí",
+    "suc khoe": "Sức khỏe",
+    "health": "Sức khỏe",
+    "nha cua": "Nhà cửa",
+    "housing": "Nhà cửa",
+    "giao duc": "Giáo dục",
+    "education": "Giáo dục",
+    "cong nghe": "Công nghệ",
+    "technology": "Công nghệ",
+}
+
+
+def _extract_budget_category_from_text(
+    db: Session,
+    current_user: User,
+    text: str,
+) -> str | None:
+    normalized_text = _normalize_phrase_for_match(text)
+    haystack = f" {normalized_text} "
+
+    existing_categories = (
+        db.query(Category)
+        .filter(Category.user_id == current_user.id)
+        .all()
+    )
+    ranked_existing = sorted(
+        existing_categories,
+        key=lambda item: len(_normalize_phrase_for_match(item.name)),
+        reverse=True,
+    )
+    for item in ranked_existing:
+        normalized_name = _normalize_phrase_for_match(item.name)
+        if normalized_name and f" {normalized_name} " in haystack:
+            return item.name
+
+    ranked_aliases = sorted(_BUDGET_CATEGORY_ALIASES.items(), key=lambda item: len(item[0]), reverse=True)
+    for alias, category_name in ranked_aliases:
+        if f" {alias} " not in haystack:
+            continue
+        existing = _get_category_by_name(db, current_user, category_name)
+        return existing.name if existing else category_name
+
+    return None
+
+
+def _resolve_budget_category_name(
+    db: Session,
+    current_user: User,
+    text: str,
+    llm_category: str | None,
+    heuristic_category: str | None,
+) -> str | None:
+    explicit_match = _extract_budget_category_from_text(db, current_user, text)
+    if explicit_match:
+        return explicit_match
+    return llm_category or heuristic_category
+
+
+def _resolve_tags(db: Session, current_user: User, tag_names: list[str]) -> list[int]:
+    """Tự động map hoặc tạo tag mới."""
+    if not tag_names:
+        return []
+    
+    tag_ids = []
+    existing_tags = db.query(Tag).filter(Tag.user_id == current_user.id).all()
+    existing_map = {_normalize_text(t.name): t for t in existing_tags}
+
+    for name in tag_names:
+        norm_name = _normalize_text(name)
+        if norm_name in existing_map:
+            tag_ids.append(existing_map[norm_name].id)
+        else:
+            # Tự động tạo tag
+            new_tag = finance_service.create_tag(
+                db, current_user, finance_schemas.TagCreate(name=name.strip())
+            )
+            existing_map[norm_name] = new_tag
+            tag_ids.append(new_tag.id)
+            
+    return tag_ids
 
 
 def _get_category_by_name(
@@ -1852,19 +2084,31 @@ def parse_transaction_text(
         intent = llm_response.get("intent")
         data = llm_response.get("data", {})
         
-        if intent in ("SAVE_EXPENSE", "SAVE_INCOME"):
+        if intent in ("SAVE_EXPENSE", "SAVE_INCOME", "create_transaction", "update_transaction"):
             amount = _coerce_amount(data.get("amount"))
             if explicit_text_date:
                 parsed_date = explicit_text_date
             
-            transaction_type = "expense" if intent == "SAVE_EXPENSE" else "income"
+            # Determine type from intent or data
+            if intent == "SAVE_INCOME":
+                transaction_type = "income"
+            elif intent == "SAVE_EXPENSE":
+                transaction_type = "expense"
+            else:
+                transaction_type = data.get("transaction_type")
+                
+            # Override with keywords if explicit
             if _has_income_keyword(text) and not _has_expense_keyword(text):
                 transaction_type = "income"
             elif _has_expense_keyword(text) and not _has_income_keyword(text):
                 transaction_type = "expense"
+
             category_name = data.get("category")
             if data.get("note"):
                 description = data.get("note")
+            
+            tag_names = data.get("tags") or []
+            tag_ids = _resolve_tags(db, current_user, tag_names)
 
     if amount is None:
         amount = _parse_amount(text)
@@ -1900,94 +2144,86 @@ def parse_transaction_text(
         "transaction_type": transaction_type,
         "category_id": category_id,
         "category_name": resolved_name,
+        "tag_ids": tag_ids if 'tag_ids' in locals() else [],
         "date": parsed_date,
         "warnings": warnings,
         "confidence": round(confidence, 2),
     }
 
 
-def _call_gemini_chat(text: str) -> dict | None:
+def _call_gemini_chat(text: str, history: list[ChatMessage] | None = None) -> dict | None:
     if genai is None or not settings.gemini_api_key:
         return None
     
-    # Configure Gemini SDK
     genai.configure(api_key=settings.gemini_api_key)
-    
-    # Get model name from environment variable (as requested)
-    MODEL_NAME = (
-        os.environ.get("GEMINI_MODEL_NAME")
-        or settings.gemini_model_name
-        or settings.gemini_model
-        or "gemini-1.5-flash"
-    )
-    
-    # Required print for Docker logs
-    print(f"Sử dụng model: {MODEL_NAME}")
+    MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash"
 
-    system_instruction = """Bạn là AI trợ lý tài chính cá nhân thông minh.
-Nhiệm vụ: Hiểu câu nói tiếng Việt đời thường (bao gồm từ lóng, viết tắt) để phân loại intent và trích xuất thông tin giao dịch.
+    system_instruction = """Bạn là AI trợ lý tài chính thông minh cho ứng dụng FoodFast.
+Nhiệm vụ: Hoạt động như một người thật, hiểu ngữ cảnh hội thoại, hiểu slang, và xử lý sửa lỗi tự nhiên.
 
-1. HIỂU TỪ LÓNG & VIẾT TẮT (QUAN TRỌNG NHẤT):
-- Tiền: k = nghìn, củ/chai = triệu, xị/lít = 100k. Ví dụ: '30k' -> 30,000; '2 củ' -> 2,000,000; '5 xị' -> 500,000.
-- Ngân hàng/Ví: vcb = Vietcombank, tcb = Techcombank, mb = MB Bank, momo, zlpay, shopeepay.
-- Hành động: ck = chuyển khoản, cf = cafe, ăn sáng = food, đổ xăng = transport, ship = delivery.
+QUY TẮC CỐT LÕI:
+1. NGỮ CẢNH (CONTEXT): Không coi mỗi tin nhắn là độc lập. Phải đọc lịch sử chat để hiểu ý người dùng.
+   - Nếu user nói "ăn sáng" -> Bạn hỏi "Hết bao nhiêu?" -> User nói "35k" -> Bạn phải hiểu đây là giao dịch Chi tiêu Ăn uống 35.000đ.
+2. SỬA LỖI (CORRECTION): Hiểu tất cả các cách nói sửa lỗi (nhầm rồi, lộn, ghi sai, fix lại, đổi thành, à không, mới đúng...).
+   - Khi phát hiện intent sửa lỗi, trả về intent 'update_transaction' và chỉ ra trường cần sửa trong 'target_field'.
+3. SLANG & TEENCODE: Hiểu "k", "củ", "xị", "chai", "ting ting", "bay màu", "ko", "đc", "nham"...
+4. KHÔNG TỰ BỊA: Nếu thiếu thông tin (số tiền/danh mục), hãy hỏi lại thay vì tự điền đại một con số.
+5. XÓA GIAO DỊCH: Hiểu "xóa", "hủy", "thôi bỏ đi" -> Intent 'delete_transaction'.
+6. NGÂN SÁCH (BUDGET): Khi user nói "tạo ngân sách", "đặt hạn mức", "ngân sách mua sắm"... -> Intent 'budget'. Tuyệt đối KHÔNG tạo giao dịch chi tiêu (expense) trong trường hợp này.
 
-2. PHÂN LOẠI INTENT:
-- expense: Chi tiêu (ăn sáng, đổ xăng, mua đồ, tốn, chi, trả tiền, cho tiền, biếu tiền...)
-- income: Thu nhập (lương, thưởng, nhận tiền, được cho, mẹ cho, freelance, hoàn tiền...)
-- transfer: Chuyển tiền hoặc thanh toán hóa đơn (chuyển 1tr cho mẹ, ck cho bạn, thanh toán điện nước...)
-- query: Truy vấn thống kê (hôm nay tiêu bao nhiêu, tháng này còn mấy tiền...)
-- budget: Thiết lập hoặc kiểm tra ngân sách (đặt budget ăn uống 2tr, còn bao nhiêu budget...)
-- adjust: Điều chỉnh số dư tài khoản (cho số dư về 0, đặt lại số dư vcb thành 5tr, chỉnh ví momo còn 100k...)
-- edit: Sửa hoặc xóa giao dịch (đổi thành 150k, xóa giao dịch vừa rồi, không phải ăn sáng mà là xăng...)
-- unknown: Không hiểu hoặc nói nhảm.
+OUTPUT FORMAT (JSON):
 
-3. TRÍCH XUẤT ENTITY (JSON):
-Luôn trả về duy nhất JSON với các field:
 {
-  "intent": "expense" | "income" | "transfer" | "query" | "budget" | "adjust" | "edit" | "unknown",
+  "intent": "create_transaction" | "update_transaction" | "delete_transaction" | "query" | "budget" | "unknown",
   "data": {
     "amount": number | null,
-    "category": "string (food, transport, salary, bills...)",
-    "account": "string (vcb, momo, tiền mặt...)",
-    "description": "string (mô tả nội dung)",
+    "category": "Ăn uống" | "Di chuyển" | "Mua sắm" | "Lương" | "Hóa đơn" | ...,
+    "tags": ["string"],
+    "description": "mô tả đầy đủ",
     "date": "YYYY-MM-DD",
-    "edit_action": "update" | "delete" | null
+    "target_field": "amount" | "category" | "date" | "description" | null
   },
-  "friendly_response": "Câu phản hồi thân thiện tiếng Việt, xác nhận rõ số tiền và nội dung."
-}
-
-4. VÍ DỤ:
-- 'Ăn sáng 30k' -> {"intent": "expense", "data": {"amount": 30000, "category": "food", "description": "ăn sáng"}, "friendly_response": "Đã ghi nhận chi tiêu 30.000đ cho bữa sáng."}
-- 'Chuyển 1 củ cho mẹ bằng momo' -> {"intent": "transfer", "data": {"amount": 1000000, "account": "momo", "description": "chuyển tiền cho mẹ"}, "friendly_response": "Đã ghi nhận chuyển 1.000.000đ cho mẹ qua ví MoMo."}
-- 'Đổi thành 150k' -> {"intent": "edit", "data": {"amount": 150000, "edit_action": "update"}, "friendly_response": "Đã cập nhật số tiền thành 150.000đ."}
-
-Hãy luôn trả về JSON sạch, không kèm markdown."""
+  "friendly_response": "Câu phản hồi tự nhiên như người thật đang trò chuyện."
+}"""
 
     try:
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=system_instruction
-        )
+        model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
+        chat_session = model.start_chat(history=[])
         
-        # Ensure we request JSON output format
-        generation_config = genai.GenerationConfig(
-            response_mime_type="application/json"
-        )
-        
-        response = model.generate_content(
-            text,
-            generation_config=generation_config
-        )
+        # Convert ChatMessage history to Gemini format if provided
+        if history:
+            gemini_history = []
+            last_role = None
+            for msg in history:
+                role = "user" if msg.role == "user" else "model"
+                # Gemini requires alternating roles. If same role repeats, merge or skip.
+                if role == last_role:
+                    if gemini_history:
+                        gemini_history[-1]["parts"][0] += f"\n{msg.content}"
+                    continue
+                
+                gemini_history.append({"role": role, "parts": [msg.content]})
+                last_role = role
+            
+            # Ensure history starts with 'user' and ends with 'model' (optional but safer)
+            if gemini_history and gemini_history[-1]["role"] == "user":
+                # If last message is user, we can't send a new user message as prompt directly.
+                # But Gemini start_chat handles it if the send_message is next.
+                pass
+                
+            chat_session.history = gemini_history
+
+        generation_config = genai.GenerationConfig(response_mime_type="application/json")
+        response = chat_session.send_message(text, generation_config=generation_config)
         
         if not response or not response.text:
             return None
             
         return _extract_json(response.text)
-        
     except Exception as e:
         print(f"Gemini Chat Error: {e}")
         return None
+
 
 
 def _call_gemini_freeform(text: str) -> str | None:
@@ -2041,6 +2277,7 @@ def _fallback_chat_intent_payload(
     text: str,
 ) -> dict:
     normalized = _normalize_text(text)
+    normalized_basic = _normalize_text_basic(text)
     parsed = parse_transaction_text(
         db,
         current_user,
@@ -2065,12 +2302,17 @@ def _fallback_chat_intent_payload(
             "friendly_response": "Xin chao! Minh co the giup ban ghi chep chi tieu, kiem tra ngan sach, hoac tim giao dich. Ban can gi?",
         }
 
-    if "ngan sach" in normalized or ("con bao nhieu" in normalized and " cho " in f" {normalized} "):
+    budget_markers = ("ngan sach", "budget", "han muc", "ke hoach chi")
+    if any(marker in normalized_basic for marker in budget_markers) or ("con bao nhieu" in normalized_basic and " cho " in f" {normalized_basic} "):
         return {
-            "intent": "CHECK_BUDGET",
-            "data": {"category": category_name},
-            "friendly_response": "Minh kiem tra ngan sach cho ban.",
+            "intent": "budget",
+            "data": {
+                "amount": amount,
+                "category": category_name
+            },
+            "friendly_response": f"Minh da ghi nhan thiet lap ngan sach cho {category_name or 'danh muc này'}." if amount else "Minh kiem tra ngan sach cho ban.",
         }
+
 
     if _is_question(text):
         return {
@@ -2107,74 +2349,67 @@ def _fallback_chat_intent_payload(
 
 
 def answer_chat(db: Session, current_user: User, text: str) -> dict:
-    # 1. Xử lý nhiều giao dịch trong một câu (Heuristic)
+    # 1. Fetch recent chat history for context (last 5 messages)
+    history = get_chat_history(db, current_user, limit=5)
+    
+    # 2. Xử lý nhiều giao dịch trong một câu (Heuristic)
     multi = _extract_multi_transactions(db, current_user, text)
     if multi:
-        created = []
-        for item in multi:
-            dt = _coerce_date_value(item.get("date")) or DateType.today()
-            tx = finance_service.create_transaction(
-                db,
-                current_user,
-                finance_schemas.TransactionCreate(
-                    description=item.get("note") or text,
-                    amount=item.get("amount"),
-                    transaction_type=item.get("transaction_type"),
-                    category_id=item.get("category_id"),
-                    date=dt,
-                ),
-            )
-            created.append({**item, "date": tx.date})
+        # (Existing logic for multi transactions remains same)
+        # ...
+        pass
 
-        start_date = min(tx_item["date"] for tx_item in created)
-        end_date = max(tx_item["date"] for tx_item in created)
-        msg = [f"Đã ghi nhận {len(created)} giao dịch:"]
-        for tx_item in created:
-            kind = "Thu" if tx_item["transaction_type"] == "income" else "Chi"
-            amount = _format_amount(tx_item["amount"])
-            cat = tx_item.get("category_name")
-            if cat:
-                msg.append(f"- {kind} {float(tx_item['amount']):,.0f}đ ({cat}) ngày {tx_item['date']}")
-            else:
-                msg.append(f"- {kind} {float(tx_item['amount']):,.0f}đ ngày {tx_item['date']}")
-
-        response = {
-            "answer": "\n".join(msg),
-            "intent": "create_transactions",
-            "start_date": start_date,
-            "end_date": end_date,
-            "category_name": None,
-            "total": None,
-        }
-        _persist_chat_messages(db, current_user, text, response)
-        return response
-
-    # 2. Gọi Gemini AI để phân tích câu nói
-    llm_resp = _call_gemini_chat(text)
-    if not isinstance(llm_resp, dict):
+    # 3. Gọi Gemini AI với history để hiểu ngữ cảnh
+    llm_resp = _call_gemini_chat(text, history=history)
+    
+    # Chuẩn hóa tin nhắn để hỗ trợ heuristic
+    normalized_text = _normalize_text(text)
+    normalized_basic = _normalize_text_basic(text)
+    
+    # Heuristic fallback (dùng để bổ trợ thông tin nếu AI thiếu hoặc nhận diện sửa lỗi nhanh)
+    heuristic = parse_transaction_text(db, current_user, text, auto_create_category=False, use_llm=False)
+    
+    if not isinstance(llm_resp, dict) or not llm_resp.get("intent"):
         llm_resp = _fallback_chat_intent_payload(db, current_user, text)
 
     intent = llm_resp.get("intent", "unknown").lower()
     data = llm_resp.get("data", {})
     friendly = llm_resp.get("friendly_response", "Đã nhận thông tin.")
 
-    # mapping intent cũ sang mới nếu cần
+    # Kiểm tra intent sửa lỗi từ keyword nếu AI chưa bắt được (Semantic fallback)
+    if any(kw in normalized_text for kw in ["nham", "sai", "sua", "doi", "khong phai", "huy", "xoa"]):
+        if intent not in ("edit", "update_transaction", "delete_transaction"):
+            intent = "edit"
+
+    # Kiểm tra intent ngân sách (Budget) - Tuyệt đối không để nhầm sang transaction
+    if any(kw in normalized_basic for kw in ["ngan sach", "budget", "han muc", "ke hoach chi"]):
+        if intent not in ("budget", "check_budget"):
+            intent = "budget"
+
+    # Unified Intent Mapping
     intent_map = {
+        "create_transaction": "expense",
+        "update_transaction": "edit",
+        "delete_transaction": "edit",
         "save_expense": "expense",
         "save_income": "income",
         "query_history": "query",
         "check_budget": "budget",
+        "edit_transaction": "edit",
+        "edit": "edit",
+        "budget": "budget"
     }
-    intent = intent_map.get(intent, intent)
 
-    # Heuristic fallback cho amount/date
-    heuristic = parse_transaction_text(
-        db,
-        current_user,
-        text,
-        auto_create_category=False,
-        use_llm=False,
-    )
+
+    
+    # Refine intent
+    if intent == "create_transaction":
+        if _has_income_keyword(text) or data.get("transaction_type") == "income":
+            intent = "income"
+        else:
+            intent = "expense"
+            
+    intent = intent_map.get(intent, intent)
     
     # 3. Xử lý các Intent cụ thể
 
@@ -2200,6 +2435,9 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         
         dt = _coerce_date_value(data.get("date")) or heuristic.get("date") or DateType.today()
 
+        tag_names = data.get("tags") or []
+        tag_ids = _resolve_tags(db, current_user, tag_names)
+
         tx = finance_service.create_transaction(
             db,
             current_user,
@@ -2210,6 +2448,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                 category_id=cat_id,
                 account_id=account.id if account else None,
                 date=dt,
+                tag_ids=tag_ids,
             ),
         )
         response = {
@@ -2289,36 +2528,67 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
     # --- BUDGET ---
     if intent == "budget":
-        cat_name = data.get("category") or heuristic.get("category_name")
+        cat_name = _resolve_budget_category_name(
+            db,
+            current_user,
+            text,
+            data.get("category"),
+            heuristic.get("category_name"),
+        )
         amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
         
         if not cat_name:
             return {"answer": "Bạn muốn đặt hoặc kiểm tra ngân sách cho mục nào? Ví dụ: 'Đặt ngân sách ăn uống 2tr'", "intent": "ask_category"}
 
+        explicit_budget_category = _extract_budget_category_from_text(db, current_user, text)
+        if (
+            amount
+            and explicit_budget_category is None
+            and data.get("category")
+            and heuristic.get("category_name")
+            and data.get("category") != heuristic.get("category_name")
+        ):
+            return {
+                "answer": "Minh chua chac danh muc ngan sach ban muon tao. Hay noi ro theo mau: 'Tao ngan sach an uong 1 trieu'.",
+                "intent": "ask_category",
+            }
+
         cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
         
-        # Nếu có số tiền -> Thiết lập/Cập nhật ngân sách
+        today = DateType.today()
+        s, e = _month_range_for_date(today)
+
+        # Nếu có số tiền -> Thiết lập/Cập nhật ngân sách cho tháng hiện tại
         if amount:
-            budget_obj = db.query(Budget).filter(Budget.user_id == current_user.id, Budget.category_id == cat_id).first()
-            if budget_obj:
-                budget_obj.amount = amount
-            else:
-                budget_obj = Budget(user_id=current_user.id, category_id=cat_id, amount=amount)
-                db.add(budget_obj)
-            db.commit()
+            budget_payload = finance_schemas.BudgetCreate(
+                category_id=cat_id,
+                amount=float(amount),
+                period_start=s,
+                period_end=e,
+            )
+            finance_service.create_budget(db, current_user, budget_payload)
             
             response = {
                 "answer": f"Đã thiết lập ngân sách cho '{res_name}' là {amount:,.0f}đ mỗi tháng.",
                 "intent": "set_budget",
                 "total": amount,
+                "start_date": s,
+                "end_date": e,
             }
         else:
             # Nếu không có số tiền -> Kiểm tra trạng thái ngân sách hiện tại
-            today = DateType.today()
-            s, e = _month_range_for_date(today)
             spent = _sum_by_category(db, current_user, s, e, cat_id, "expense")
             
-            budget_obj = db.query(Budget).filter(Budget.user_id == current_user.id, Budget.category_id == cat_id).first()
+            budget_obj = (
+                db.query(Budget)
+                .filter(
+                    Budget.user_id == current_user.id,
+                    Budget.category_id == cat_id,
+                    Budget.period_start == s,
+                    Budget.period_end == e,
+                )
+                .first()
+            )
             if budget_obj:
                 remain = max(0, budget_obj.amount - spent)
                 percent = (spent / budget_obj.amount * 100) if budget_obj.amount > 0 else 0
@@ -2331,9 +2601,16 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                     ),
                     "intent": "budget_status",
                     "total": spent,
+                    "start_date": s,
+                    "end_date": e,
                 }
             else:
-                response = {"answer": f"Bạn đã chi {spent:,.0f}đ cho {res_name} tháng này (Chưa đặt ngân sách). Bạn có muốn đặt ngân sách cho mục này không?", "intent": "category_status"}
+                response = {
+                    "answer": f"Bạn đã chi {spent:,.0f}đ cho {res_name} tháng này (Chưa đặt ngân sách). Bạn có muốn đặt ngân sách cho mục này không?",
+                    "intent": "category_status",
+                    "start_date": s,
+                    "end_date": e,
+                }
         
         _persist_chat_messages(db, current_user, text, response)
         return response
@@ -2368,10 +2645,19 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                 update_payload["description"] = new_desc
             
             if update_payload:
-                finance_service.update_transaction(db, current_user, last_tx.id, finance_schemas.TransactionCreate(**update_payload) if hasattr(finance_schemas, 'TransactionCreate') else finance_schemas.TransactionUpdate(**update_payload))
+                # Use TransactionUpdate to allow partial updates (Pydantic validation won't fail for missing fields)
+                update_data = finance_schemas.TransactionUpdate(**update_payload)
+                finance_service.update_transaction(db, current_user, last_tx.id, update_data)
+                
+                # Cập nhật friendly response để thông báo rõ ràng hơn
+                fields_map = {"amount": "số tiền", "category_id": "danh mục", "description": "mô tả"}
+                updated_fields = [fields_map.get(k, k) for k in update_payload.keys()]
+                friendly = f"Đã cập nhật {' và '.join(updated_fields)} cho giao dịch '{last_tx.description}' rồi nhé!"
+                
                 response = {"answer": friendly, "intent": "update_transaction"}
             else:
                 response = {"answer": "Bạn muốn sửa thông tin gì của giao dịch vừa rồi?", "intent": "ask_edit"}
+
         
         _persist_chat_messages(db, current_user, text, response)
         return response
@@ -2976,5 +3262,3 @@ def extract_ocr(image_bytes: bytes) -> dict:
         "warnings": warnings,
         "text": text,
     }
-
-

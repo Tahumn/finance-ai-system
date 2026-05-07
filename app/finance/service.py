@@ -24,13 +24,6 @@ DEFAULT_EXPENSE_CATEGORIES = [
     "Du lịch",
     "Công nghệ",
 ]
-DEFAULT_BUDGET_TARGETS = {
-    "Ăn uống": 6_000_000,
-    "Di chuyển": 4_000_000,
-    "Giải trí": 2_000_000,
-    "Nhà cửa": 3_000_000,
-    "Mua sắm": 3_500_000,
-}
 DEFAULT_TAGS = [("Tiền mặt", "#22c55e"), ("Ngân hàng", "#3b82f6"), ("Ví điện tử", "#a855f7")]
 
 
@@ -782,22 +775,94 @@ def _budget_status(progress: float) -> str:
     return "normal"
 
 
+def _month_bounds(value: date) -> tuple[date, date]:
+    first_day = date(value.year, value.month, 1)
+    next_month = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return first_day, next_month - timedelta(days=1)
+
+
+def _resolve_budget_period(period_start: date | None, period_end: date | None) -> tuple[date, date]:
+    if period_start is None and period_end is None:
+        return _month_bounds(date.today())
+    if period_start is None:
+        return _month_bounds(period_end)
+    if period_end is None:
+        return _month_bounds(period_start)
+    if period_start > period_end:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="period_start must be <= period_end")
+    return period_start, period_end
+
+
+def _calculate_budget_spent(
+    db: Session,
+    current_user: User,
+    budget: Budget,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> float:
+    effective_start = budget.period_start
+    effective_end = budget.period_end
+
+    if start_date and start_date > effective_start:
+        effective_start = start_date
+    if end_date and end_date < effective_end:
+        effective_end = end_date
+    if effective_start > effective_end:
+        return 0.0
+
+    spent = (
+        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.transaction_type == "expense",
+            Transaction.category_id == budget.category_id,
+            Transaction.date >= effective_start,
+            Transaction.date <= effective_end,
+        )
+        .scalar()
+    )
+    return float(spent or 0.0)
+
+
+def _to_budget_read(
+    budget: Budget,
+    category_name: str,
+    spent: float,
+) -> schemas.BudgetRead:
+    amount = float(budget.amount or 0.0)
+    remaining = amount - spent
+    progress = (spent / amount * 100) if amount > 0 else 0.0
+    return schemas.BudgetRead(
+        id=budget.id,
+        user_id=budget.user_id,
+        category_id=budget.category_id,
+        category=category_name,
+        amount=amount,
+        period_start=budget.period_start,
+        period_end=budget.period_end,
+        spent=spent,
+        remaining=remaining,
+        progress=progress,
+        status=_budget_status(progress),
+    )
+
+
 def list_budgets(
     db: Session,
     current_user: User,
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> list[schemas.BudgetRead]:
-    budgets = (
-        db.query(Budget)
-        .filter(Budget.user_id == current_user.id)
-        .order_by(Budget.id.desc())
-        .all()
-    )
+    query = db.query(Budget).filter(Budget.user_id == current_user.id)
+    if start_date:
+        query = query.filter(Budget.period_end >= start_date)
+    if end_date:
+        query = query.filter(Budget.period_start <= end_date)
+    budgets = query.order_by(Budget.period_start.desc(), Budget.id.desc()).all()
     if not budgets:
         return []
 
-    category_ids = [item.category_id for item in budgets]
+    category_ids = sorted({item.category_id for item in budgets})
     categories = (
         db.query(Category)
         .filter(Category.user_id == current_user.id, Category.id.in_(category_ids))
@@ -805,49 +870,21 @@ def list_budgets(
     )
     category_map = {item.id: item.name for item in categories}
 
-    tx_query = db.query(Transaction).filter(
-        Transaction.user_id == current_user.id,
-        Transaction.transaction_type == "expense",
-        Transaction.category_id.in_(category_ids),
-    )
-    if start_date:
-        tx_query = tx_query.filter(Transaction.date >= start_date)
-    if end_date:
-        tx_query = tx_query.filter(Transaction.date <= end_date)
-
-    spent_rows = (
-        tx_query.with_entities(
-            Transaction.category_id,
-            func.coalesce(func.sum(Transaction.amount), 0.0),
-        )
-        .group_by(Transaction.category_id)
-        .all()
-    )
-    spent_map = {row[0]: float(row[1] or 0.0) for row in spent_rows}
-
     result: list[schemas.BudgetRead] = []
     for item in budgets:
-        spent = spent_map.get(item.category_id, 0.0)
-        amount = float(item.amount or 0.0)
-        remaining = amount - spent
-        progress = (spent / amount * 100) if amount > 0 else 0.0
-        result.append(
-            schemas.BudgetRead(
-                id=item.id,
-                user_id=item.user_id,
-                category_id=item.category_id,
-                category=category_map.get(item.category_id, "Uncategorized"),
-                amount=amount,
-                spent=spent,
-                remaining=remaining,
-                progress=progress,
-                status=_budget_status(progress),
-            )
+        spent = _calculate_budget_spent(
+            db,
+            current_user,
+            item,
+            start_date=start_date,
+            end_date=end_date,
         )
+        result.append(_to_budget_read(item, category_map.get(item.category_id, "Uncategorized"), spent))
     return result
 
 
 def create_budget(db: Session, current_user: User, payload: schemas.BudgetCreate) -> schemas.BudgetRead:
+    period_start, period_end = _resolve_budget_period(payload.period_start, payload.period_end)
     category = (
         db.query(Category)
         .filter(Category.id == payload.category_id, Category.user_id == current_user.id)
@@ -858,7 +895,12 @@ def create_budget(db: Session, current_user: User, payload: schemas.BudgetCreate
 
     exists = (
         db.query(Budget)
-        .filter(Budget.user_id == current_user.id, Budget.category_id == payload.category_id)
+        .filter(
+            Budget.user_id == current_user.id,
+            Budget.category_id == payload.category_id,
+            Budget.period_start == period_start,
+            Budget.period_end == period_end,
+        )
         .first()
     )
     if exists:
@@ -866,35 +908,23 @@ def create_budget(db: Session, current_user: User, payload: schemas.BudgetCreate
         db.commit()
         db.refresh(exists)
         emit_finance_update("budgets", current_user.id, exists.id)
-        return schemas.BudgetRead(
-            id=exists.id,
-            user_id=exists.user_id,
-            category_id=exists.category_id,
-            category=category.name,
-            amount=float(exists.amount or 0.0),
-            spent=0.0,
-            remaining=float(exists.amount or 0.0),
-            progress=0.0,
-            status="normal",
-        )
+        spent = _calculate_budget_spent(db, current_user, exists)
+        return _to_budget_read(exists, category.name, spent)
 
-    budget = Budget(user_id=current_user.id, category_id=payload.category_id, amount=payload.amount)
+    budget = Budget(
+        user_id=current_user.id,
+        category_id=payload.category_id,
+        amount=payload.amount,
+        period_start=period_start,
+        period_end=period_end,
+    )
     db.add(budget)
     db.commit()
     db.refresh(budget)
     emit_finance_update("budgets", current_user.id, budget.id)
 
-    return schemas.BudgetRead(
-        id=budget.id,
-        user_id=budget.user_id,
-        category_id=budget.category_id,
-        category=category.name,
-        amount=float(budget.amount or 0.0),
-        spent=0.0,
-        remaining=float(budget.amount or 0.0),
-        progress=0.0,
-        status="normal",
-    )
+    spent = _calculate_budget_spent(db, current_user, budget)
+    return _to_budget_read(budget, category.name, spent)
 
 
 def update_budget(
@@ -921,17 +951,8 @@ def update_budget(
         .filter(Category.id == budget.category_id, Category.user_id == current_user.id)
         .first()
     )
-    return schemas.BudgetRead(
-        id=budget.id,
-        user_id=budget.user_id,
-        category_id=budget.category_id,
-        category=category.name if category else "Uncategorized",
-        amount=float(budget.amount or 0.0),
-        spent=0.0,
-        remaining=float(budget.amount or 0.0),
-        progress=0.0,
-        status="normal",
-    )
+    spent = _calculate_budget_spent(db, current_user, budget)
+    return _to_budget_read(budget, category.name if category else "Uncategorized", spent)
 
 
 def delete_budget(db: Session, current_user: User, budget_id: int) -> None:
@@ -1105,19 +1126,8 @@ def bootstrap_finance_data(db: Session, current_user: User) -> dict:
         db.add(Tag(user_id=current_user.id, name=name, color=color))
         created_tags += 1
 
-    for category_name, amount in DEFAULT_BUDGET_TARGETS.items():
-        category = category_by_name.get(category_name)
-        if not category:
-            continue
-        exists = (
-            db.query(Budget)
-            .filter(Budget.user_id == current_user.id, Budget.category_id == category.id)
-            .first()
-        )
-        if exists:
-            continue
-        db.add(Budget(user_id=current_user.id, category_id=category.id, amount=float(amount)))
-        created_budgets += 1
+    # Do not auto-create budgets in bootstrap.
+    # Budgets should only be created explicitly by user action.
 
     db.commit()
     if created_categories:
@@ -1208,3 +1218,4 @@ def delete_bill(db: Session, current_user: User, bill_id: int) -> None:
     db.delete(item)
     db.commit()
     emit_finance_update("bills", current_user.id, bill_id)
+
