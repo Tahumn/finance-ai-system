@@ -40,7 +40,9 @@ import {
   getChartData,
   getReportsOverview,
   listSavingsGoals,
-  listBills
+  listBills,
+  createBill,
+  updateBill
 } from "./api/finance.js";
 import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
@@ -54,7 +56,7 @@ import CategoriesScreen from "./features/categories/CategoriesScreen.jsx";
 import ReportsScreen from "./features/reports/ReportsScreen.jsx";
 import TransactionsScreen from "./features/transactions/TransactionsScreen.jsx";
 import ChatScreen from "./features/chat/ChatScreen.jsx";
-import OcrScreen from "./features/ocr/OcrScreen.jsx";
+import OcrScreen from "./features/ocr/OcrScreen.jsx"; // Main OCR component
 import BudgetsScreen from "./features/budgets/BudgetsScreen.jsx";
 import GoalsScreen from "./features/goals/GoalsScreen.jsx";
 import TagsScreen from "./features/tags/TagsScreen.jsx";
@@ -151,6 +153,7 @@ export default function App() {
   const [uiPrefs, setUiPrefs] = useState(() => getUiPrefs());
   const [view, setView] = useState("dashboard");
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [newlyCreatedId, setNewlyCreatedId] = useState(null);
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
@@ -508,6 +511,15 @@ export default function App() {
         limit: 20,
         offset: 0
       };
+      const safeFetch = async (promise, fallback) => {
+        try {
+          return await promise;
+        } catch (err) {
+          console.error("Fetch failed:", err);
+          return fallback;
+        }
+      };
+
       const [
         cats,
         tagsList,
@@ -524,20 +536,20 @@ export default function App() {
         tipsData,
         overviewData
       ] = await Promise.all([
-        listCategories(),
-        listTags(),
-        listTransactions(params),
-        getSummary({ start_date: filters.start, end_date: filters.end }),
-        getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "expense" }),
-        getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "income" }),
-        getChartData({ limit_months: 6 }),
-        listBudgets({ start_date: filters.start, end_date: filters.end }),
-        listAccounts(),
-        listBills(),
-        listSavingsGoals(),
-        getAnomalies(),
-        getSavingsTips(),
-        getReportsOverview({ start_date: filters.start, end_date: filters.end })
+        safeFetch(listCategories(), []),
+        safeFetch(listTags(), []),
+        safeFetch(listTransactions(params), { items: [], total: 0 }),
+        safeFetch(getSummary({ start_date: filters.start, end_date: filters.end }), { income: 0, expense: 0, balance: 0 }),
+        safeFetch(getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "expense" }), []),
+        safeFetch(getCategoryBreakdown({ start_date: filters.start, end_date: filters.end, transaction_type: "income" }), []),
+        safeFetch(getChartData({ limit_months: 6 }), { series: [] }),
+        safeFetch(listBudgets({ start_date: filters.start, end_date: filters.end }), []),
+        safeFetch(listAccounts(), []),
+        safeFetch(listBills(), []),
+        safeFetch(listSavingsGoals(), []),
+        safeFetch(getAnomalies(), { alerts: [] }),
+        safeFetch(getSavingsTips(), []),
+        safeFetch(getReportsOverview({ start_date: filters.start, end_date: filters.end }), null)
       ]);
       setCategories(cats);
       setTags(tagsList);
@@ -551,6 +563,7 @@ export default function App() {
       setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
       setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
+      setSavingsTips(tipsData || []);
       setReportsOverview(overviewData || {
         daily_series: [],
         monthly_series: [],
@@ -682,11 +695,42 @@ export default function App() {
     }
   }, [authState.status, filters, needsOnboarding]);
 
+  const handleCreateBill = useCallback(async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      const created = await createBill(payload);
+      setNewlyCreatedId(created.id);
+      setTimeout(() => setNewlyCreatedId(null), 5000);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to create bill.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadFinanceData]);
+
+  const handleUpdateBill = async (billId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateBill(billId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to update bill.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateTransaction = async (payload) => {
     setLoading(true);
     setError("");
     try {
       const created = await createTransaction(payload);
+      setNewlyCreatedId(created.id);
+      setTimeout(() => setNewlyCreatedId(null), 5000);
       const email = authState.user?.email || "guest";
       await pushNotification(email, buildTransactionNotification(created));
       await loadFinanceData();
@@ -1051,6 +1095,7 @@ export default function App() {
         {view === "transactions" && (
           <TransactionsScreen
             transactions={transactionsWithLabels}
+            newlyCreatedId={newlyCreatedId}
             totalCount={transactions.total}
             hasMore={transactions.items.length < transactions.total}
             onLoadMore={handleLoadMoreTransactions}
@@ -1071,6 +1116,9 @@ export default function App() {
             onDeleteTag={handleDeleteTag}
             userEmail={authState.user?.email}
             onCreateTransaction={handleCreateTransaction}
+            onCreateBill={handleCreateBill}
+            aiSuggestions={savingsTips}
+            monthlySeries={monthlySeries}
             onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />
@@ -1142,6 +1190,8 @@ export default function App() {
             onCreateCategory={handleCreateCategory}
             onCreateTag={handleCreateTag}
             onCreateTransaction={handleCreateTransaction}
+            onCreateBill={handleCreateBill}
+            onNavigate={handleChangeView}
             loading={loading}
             onClose={() => handleChangeView("dashboard")}
           />
@@ -1174,8 +1224,11 @@ export default function App() {
         {view === "bills" && (
           <BillsScreen
             bills={bills}
+            newlyCreatedId={newlyCreatedId}
             loading={loading}
             onGoOcr={() => handleChangeView("ocr")}
+            onCreateTransaction={handleCreateTransaction}
+            onUpdateBill={handleUpdateBill}
           />
         )}
       </main>

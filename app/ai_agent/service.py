@@ -35,9 +35,9 @@ from app.finance.models import (
     Goal,
     Reminder,
     Subscription,
+    Tag,
     Transaction,
     Transfer,
-    Tag,
 )
 
 try:
@@ -96,17 +96,8 @@ UNIT_MULTIPLIER = {
 COLLOQUIAL_UNIT_MULTIPLIER = {
     "cu": 1_000_000,
     "lit": 100_000,
-    "xi": 100_000,
-    "chai": 1_000_000,
+    "xi": 10_000,
 }
-
-# Merger slang units into main multiplier for heuristic consistency
-UNIT_MULTIPLIER.update(COLLOQUIAL_UNIT_MULTIPLIER)
-UNIT_MULTIPLIER.update({
-    "k": 1000, "nghin": 1000, "ngan": 1000,
-    "tr": 1000000, "triệu": 1000000, "tỷ": 1000000000
-})
-
 
 VN_NUMBER_WORDS = {
     "khong": 0,
@@ -124,42 +115,43 @@ VN_NUMBER_WORDS = {
 }
 
 INCOME_KEYWORDS = [
-    "thu", "nhận", "lãnh lương", "lương", "bonus", "thưởng", "refund", "hoàn tiền",
-    "ting ting", "về tiền", "vào tiền", "bank vào", "ck tới", "paypal về", "khách ck", 
-    "khách trả", "job về", "ăn kèo", "có kèo", "deal xong", "có project",
-    "mẹ cho", "ba cho", "được cho", "được tặng", "lì xì", "được lì xì",
-    "chốt lời", "có lãi", "trade lời", "bán coin", "bán cổ phiếu"
+    "thu",
+    "luong",
+    "lanh",  # "lanh luong"
+    "bonus",
+    "lai",
+    "nhan",
+    "refund",
+    "hoan tien",
+    "thuong",
+    "duoc cho",
+    "duoc tang",
+    "duoc bieu",
+    "duoc li xi",
+    "li xi",
+    "lixi",
+    "duoc ho tro",
+    "duoc chuyen",
 ]
-
 EXPENSE_KEYWORDS = [
-    "chi", "chi tiêu", "mua", "trả", "thanh toán", "đóng", "tốn", "mất", "hết", "xài", "tiêu", "ứng",
-    "ăn", "uống", "ăn vặt", "ăn sáng", "ăn trưa", "ăn tối", "buffet", "lẩu", "nướng", "trà sữa", "cà phê", "cafe",
-    "bay", "bay màu", "bay mất", "đốt", "đốt tiền", "ném", "ném tiền", "đập ví", "rách ví", "rút ví", 
-    "thủng ví", "viêm màng túi", "khom lưng", "xả ví", "rút máu", "toang", "đau ví",
-    "order", "lên đơn", "chốt đơn", "săn sale", "flash sale", "cop", "hốt", "tậu", "quất", "gom",
-    "grab", "be", "taxi", "book xe", "đổ xăng", "bơm xăng", "gửi xe",
-    "nộp", "học phí", "trả nợ", "trả góp", "bill"
+    "chi",
+    "mua",
+    "tra",
+    "thanh toan",
+    "phi",
+    "hoa don",
+    "an",
+    "uong",
+    "di lai",
+    "xang",
+    "taxi",
 ]
-
-CORRECTION_KEYWORDS = [
-    "nhầm", "ghi sai", "sai rồi", "không phải", "à không", "ý là", "sửa lại", "đổi lại", "đổi thành", 
-    "phải là", "mới đúng", "ghi nhầm", "fix lại", "edit lại", "cập nhật lại", "tôi nói nhầm", 
-    "viết nhầm", "nhầm lẫn", "không tính", "bỏ giao dịch đó", "xóa giao dịch đó"
-]
-
-DELETE_KEYWORDS = ["xóa", "hủy", "remove", "delete", "undo", "rollback", "bỏ"]
-CONFIRM_KEYWORDS = ["ok", "oke", "okela", "yes", "yep", "uhm", "đúng rồi", "chuẩn", "xác nhận"]
-REJECT_KEYWORDS = ["không", "ko", "k", "không phải", "sai rồi", "hủy", "bỏ đi", "cancel"]
-MULTI_CONNECTORS = ["rồi", "xong", "sau đó", "kèm", "với", "và", "cùng với", "&"]
-RECENT_REFERENCE_KEYWORDS = ["hồi nãy", "lúc nãy", "vừa rồi", "mới đây", "gần nhất", "giao dịch đó", "cái đó", "bill đó"]
-
 
 def _has_income_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in INCOME_KEYWORDS:
-        # Normalize the keyword as well to ensure match against normalized text
-        kw_norm = _normalize_text(kw)
+        kw_norm = kw.strip().lower()
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -168,7 +160,6 @@ def _has_income_keyword(text: str) -> bool:
         else:
             if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
                 return True
-
     return False
 
 
@@ -176,8 +167,7 @@ def _has_expense_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in EXPENSE_KEYWORDS:
-        # Normalize the keyword as well
-        kw_norm = _normalize_text(kw)
+        kw_norm = kw.strip().lower()
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -186,46 +176,24 @@ def _has_expense_keyword(text: str) -> bool:
         else:
             if re.search(rf"\b{re.escape(kw_norm)}\b", normalized):
                 return True
-
     return False
 
 CATEGORY_KEYWORDS = {
-    # FOOD & DRINKS
-    "cơm": "Ăn uống", "phở": "Ăn uống", "bún": "Ăn uống", "hủ tiếu": "Ăn uống", "mì": "Ăn uống",
-    "lẩu": "Ăn uống", "nướng": "Ăn uống", "pizza": "Ăn uống", "gà rán": "Ăn uống", "đồ ăn": "Ăn uống",
-    "ăn vặt": "Ăn uống", "buffet": "Ăn uống", "ăn sáng": "Ăn uống", "ăn trưa": "Ăn uống", "ăn tối": "Ăn uống",
-    "hamburger": "Ăn uống", "banh mi": "Ăn uống",
-    "trà sữa": "Ăn uống", "cà phê": "Ăn uống", "cafe": "Ăn uống", "cf": "Ăn uống", "matcha": "Ăn uống",
-    "highland": "Ăn uống", "starbucks": "Ăn uống", "phúc long": "Ăn uống", "katinat": "Ăn uống",
-    "grabfood": "Ăn uống", "shopeefood": "Ăn uống", "befood": "Ăn uống",
-
-    # TRANSPORT
-    "grab": "Di chuyển", "be": "Di chuyển", "gojek": "Di chuyển", "taxi": "Di chuyển", "xe ôm": "Di chuyển",
-    "metro": "Di chuyển", "bus": "Di chuyển", "xe buýt": "Di chuyển", "xăng": "Di chuyển", 
-    "đổ xăng": "Di chuyển", "gửi xe": "Di chuyển",
-
-    # SHOPPING
-    "shopee": "Mua sắm", "lazada": "Mua sắm", "tiki": "Mua sắm", "tiktok shop": "Mua sắm", 
-    "mua sắm": "Mua sắm", "order": "Mua sắm", "áo": "Mua sắm", "quần": "Mua sắm", "giày": "Mua sắm", 
-    "dép": "Mua sắm", "túi": "Mua sắm", "mỹ phẩm": "Mua sắm", "skin care": "Mua sắm",
-
-    # TECHNOLOGY
-    "iphone": "Công nghệ", "ipad": "Công nghệ", "bàn phím": "Công nghệ", "chuột": "Công nghệ",
-
-    # ENTERTAINMENT
-    "netflix": "Giải trí", "spotify": "Giải trí", "karaoke": "Giải trí", "game": "Giải trí", 
-    "steam": "Giải trí", "valorant": "Giải trí", "pubg": "Giải trí", "lol": "Giải trí", 
-    "bar": "Giải trí", "club": "Giải trí", "beer": "Giải trí", "nhậu": "Giải trí",
-
-    # HEALTH
-    "thuốc": "Sức khỏe", "bệnh viện": "Sức khỏe", "khám": "Sức khỏe", "gym": "Sức khỏe", "vitamin": "Sức khỏe",
-
-    # EDUCATION
-    "học phí": "Giáo dục", "course": "Giáo dục", "udemy": "Giáo dục", "coursera": "Giáo dục", 
-    "toeic": "Giáo dục", "ielts": "Giáo dục",
-
-    # HOUSING
-    "tiền nhà": "Nhà cửa", "điện": "Nhà cửa", "nước": "Nhà cửa", "wifi": "Nhà cửa", "internet": "Nhà cửa",
+    "an uong": "Food",
+    "cafe": "Coffee",
+    "ca phe": "Coffee",
+    "di lai": "Transport",
+    "xang": "Transport",
+    "taxi": "Transport",
+    "mua sam": "Shopping",
+    "mua": "Shopping",
+    "nha": "Housing",
+    "suc khoe": "Health",
+    "y te": "Health",
+    "giai tri": "Entertainment",
+    "hoc": "Education",
+    "luong": "Salary",
+    "dau tu": "Investment",
 }
 
 ONBOARDING_USAGE_PHRASES = (
@@ -329,6 +297,62 @@ OCR_PRETAX_KEYWORDS = ("truoc thue", "pre tax", "before tax")
 OCR_NOTE_KEYWORDS = ("ghi chu", "note", "chu thich")
 OCR_MERCHANT_HINTS = ("don vi ban hang", "cua hang", "cong ty", "store", "shop", "market")
 OCR_MERCHANT_IGNORE = ("xuat hoa don cho", "nguoi mua", "buyer", "khach hang")
+
+MERCHANT_ALIASES = {
+    "dookki": "DOOKKI Korean Topokki Buffet",
+    "dooki": "DOOKKI Korean Topokki Buffet",
+    "đoo": "DOOKKI Korean Topokki Buffet",
+    "doo": "DOOKKI Korean Topokki Buffet",
+    "oo": "DOOKKI Korean Topokki Buffet",
+    "familymart": "FamilyMart",
+    "circle k": "Circle K",
+    "winmart": "WinMart",
+    "highlands": "Highlands Coffee",
+    "the coffee house": "The Coffee House",
+    "grab": "Grab",
+    "shopee": "Shopee",
+    "lazada": "Lazada",
+    "tiki": "Tiki",
+    "starbucks": "Starbucks",
+    "phuc long": "Phúc Long Coffee & Tea",
+}
+
+PAYMENT_SOURCE_MAPPING = {
+    "momo": "Ví điện tử",
+    "zalopay": "Ví điện tử",
+    "vnpay": "Ví điện tử",
+    "shopeepay": "Ví điện tử",
+    "grabpay": "Ví điện tử",
+    "e-wallet": "Ví điện tử",
+    "cash": "Tiền mặt",
+    "tien mat": "Tiền mặt",
+    "khach tra": "Tiền mặt",
+    "bank": "Ngân hàng",
+    "card": "Ngân hàng",
+    "visa": "Ngân hàng",
+    "mastercard": "Ngân hàng",
+    "pos": "Ngân hàng",
+    "atm": "Ngân hàng",
+    "chuyen khoan": "Ngân hàng",
+}
+
+CATEGORY_MAPPING = {
+    "an uong": "Ăn uống",
+    "food": "Ăn uống",
+    "restaurant": "Ăn uống",
+    "cafe": "Ăn uống",
+    "coffee": "Ăn uống",
+    "mua sam": "Mua sắm",
+    "shopping": "Mua sắm",
+    "sieu thi": "Mua sắm",
+    "market": "Mua sắm",
+    "di lai": "Di chuyển",
+    "transport": "Di chuyển",
+    "taxi": "Di chuyển",
+    "grab": "Di chuyển",
+    "bill": "Hóa đơn",
+    "hoa don": "Hóa đơn",
+}
 
 STOPWORDS = {
     "giao",
@@ -502,27 +526,9 @@ _ACCOUNTS_BY_USER: dict[int, set[str]] = {}
 
 
 def _normalize_text(text: str) -> str:
-    if not text:
-        return ""
-    # Chuyển thành chữ thường
-    text = text.lower().strip()
-    # Loại bỏ dấu tiếng Việt (NFKD normalization)
-    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    # Thay thế teencode phổ biến cho heuristic
-    teencode_map = {
-        "ko": "khong", "k": "khong", "dc": "duoc", "đc": "duoc", 
-        "nham": "nham", "lộn": "nham", "lon": "nham"
-    }
-    for k, v in teencode_map.items():
-        text = re.sub(rf"\b{k}\b", v, text)
-    return text.strip()
-
-
-def _normalize_text_basic(text: str) -> str:
-    if not text:
-        return ""
-    text = text.lower().strip()
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8").strip()
+    normalized = unicodedata.normalize("NFD", text)
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return normalized.lower().strip()
 
 
 def _strip_date_fragments(text: str) -> str:
@@ -883,11 +889,10 @@ def _parse_amount(text: str) -> float | None:
         matches.append(value)
 
     matches.extend(_extract_colloquial_amount_candidates(normalized))
-    matches = list(set(matches))
 
     if not matches:
         return None
-    return sum(matches)
+    return max(matches)
 
 
 def _amount_has_unit(text: str) -> bool:
@@ -1076,7 +1081,7 @@ def _parse_transaction_type(text: str) -> str:
 def _pick_category_name(text: str) -> str | None:
     normalized = _normalize_text(text)
     for keyword, category in CATEGORY_KEYWORDS.items():
-        if _normalize_text(keyword) in normalized:
+        if keyword in normalized:
             return category
     return None
 
@@ -1723,67 +1728,6 @@ def get_savings_suggestions(
     }
 
 
-# Mapping từ tên danh mục tiếng Anh (AI trả về) sang tiếng Việt (tên trong DB)
-_EN_TO_VI_CATEGORY: dict[str, str] = {
-    "food": "Ăn uống",
-    "food & drink": "Ăn uống",
-    "food and drink": "Ăn uống",
-    "eating": "Ăn uống",
-    "dining": "Ăn uống",
-    "meal": "Ăn uống",
-    "coffee": "Ăn uống",
-    "drinks": "Ăn uống",
-    "transport": "Di chuyển",
-    "transportation": "Di chuyển",
-    "travel": "Di chuyển",
-    "commute": "Di chuyển",
-    "fuel": "Di chuyển",
-    "gas": "Di chuyển",
-    "taxi": "Di chuyển",
-    "shopping": "Mua sắm",
-    "clothes": "Mua sắm",
-    "clothing": "Mua sắm",
-    "fashion": "Mua sắm",
-    "bills": "Hóa đơn",
-    "utilities": "Hóa đơn",
-    "bill": "Hóa đơn",
-    "electricity": "Hóa đơn",
-    "water": "Hóa đơn",
-    "internet": "Hóa đơn",
-    "entertainment": "Giải trí",
-    "fun": "Giải trí",
-    "game": "Giải trí",
-    "games": "Giải trí",
-    "music": "Giải trí",
-    "movie": "Giải trí",
-    "health": "Sức khỏe",
-    "healthcare": "Sức khỏe",
-    "medical": "Sức khỏe",
-    "medicine": "Sức khỏe",
-    "gym": "Sức khỏe",
-    "housing": "Nhà cửa",
-    "rent": "Nhà cửa",
-    "home": "Nhà cửa",
-    "house": "Nhà cửa",
-    "education": "Giáo dục",
-    "school": "Giáo dục",
-    "tuition": "Giáo dục",
-    "course": "Giáo dục",
-    "learning": "Giáo dục",
-    "salary": "Lương",
-    "wage": "Lương",
-    "income": "Thu nhập khác",
-    "bonus": "Thưởng",
-    "investment": "Đầu tư",
-    "freelance": "Freelance",
-    "refund": "Hoàn tiền",
-    "delivery": "Mua sắm",
-    "technology": "Công nghệ",
-    "tech": "Công nghệ",
-    "software": "Công nghệ",
-}
-
-
 def _resolve_category(
     db: Session,
     current_user: User,
@@ -1792,154 +1736,23 @@ def _resolve_category(
 ) -> tuple[int | None, str | None]:
     if not category_name:
         return None, None
-
     normalized_target = _normalize_text(category_name)
-
-    # Bước 1: Thử map từ tiếng Anh sang tiếng Việt trước khi tìm kiếm
-    vi_name = _EN_TO_VI_CATEGORY.get(category_name.lower().strip()) or _EN_TO_VI_CATEGORY.get(normalized_target)
-
     existing = (
         db.query(Category)
         .filter(Category.user_id == current_user.id)
         .all()
     )
-
-    # Bước 2: Tìm chính xác theo tên gốc hoặc tên đã map
     for item in existing:
-        item_norm = _normalize_text(item.name)
-        if item_norm == normalized_target:
+        if _normalize_text(item.name) == normalized_target:
             return item.id, item.name
-        if vi_name and item_norm == _normalize_text(vi_name):
-            return item.id, item.name
-
-    # Bước 3: Fuzzy match - tìm category chứa keyword
-    for item in existing:
-        item_norm = _normalize_text(item.name)
-        if normalized_target in item_norm or item_norm in normalized_target:
-            return item.id, item.name
-
     if not auto_create:
         return None, category_name
-
-    # Bước 4: Tạo mới - ưu tiên dùng tên tiếng Việt nếu có map
-    create_name = vi_name if vi_name else category_name
-    # Kiểm tra xem tên tiếng Việt đó đã tồn tại chưa (phòng trùng sau map)
-    for item in existing:
-        if _normalize_text(item.name) == _normalize_text(create_name):
-            return item.id, item.name
-
     created = finance_service.create_category(
         db,
         current_user,
-        finance_schemas.CategoryCreate(name=create_name),
+        finance_schemas.CategoryCreate(name=category_name),
     )
     return created.id, created.name
-
-
-def _normalize_phrase_for_match(text: str) -> str:
-    normalized = _normalize_text_basic(text)
-    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-_BUDGET_CATEGORY_ALIASES: dict[str, str] = {
-    "an uong": "Ăn uống",
-    "do an": "Ăn uống",
-    "do uong": "Ăn uống",
-    "ca phe": "Ăn uống",
-    "tra sua": "Ăn uống",
-    "coffee": "Ăn uống",
-    "food": "Ăn uống",
-    "mua sam": "Mua sắm",
-    "shopping": "Mua sắm",
-    "fashion": "Mua sắm",
-    "di chuyen": "Di chuyển",
-    "xang xe": "Di chuyển",
-    "transport": "Di chuyển",
-    "hoa don": "Hóa đơn",
-    "bill": "Hóa đơn",
-    "giai tri": "Giải trí",
-    "entertainment": "Giải trí",
-    "suc khoe": "Sức khỏe",
-    "health": "Sức khỏe",
-    "nha cua": "Nhà cửa",
-    "housing": "Nhà cửa",
-    "giao duc": "Giáo dục",
-    "education": "Giáo dục",
-    "cong nghe": "Công nghệ",
-    "technology": "Công nghệ",
-}
-
-
-def _extract_budget_category_from_text(
-    db: Session,
-    current_user: User,
-    text: str,
-) -> str | None:
-    normalized_text = _normalize_phrase_for_match(text)
-    haystack = f" {normalized_text} "
-
-    existing_categories = (
-        db.query(Category)
-        .filter(Category.user_id == current_user.id)
-        .all()
-    )
-    ranked_existing = sorted(
-        existing_categories,
-        key=lambda item: len(_normalize_phrase_for_match(item.name)),
-        reverse=True,
-    )
-    for item in ranked_existing:
-        normalized_name = _normalize_phrase_for_match(item.name)
-        if normalized_name and f" {normalized_name} " in haystack:
-            return item.name
-
-    ranked_aliases = sorted(_BUDGET_CATEGORY_ALIASES.items(), key=lambda item: len(item[0]), reverse=True)
-    for alias, category_name in ranked_aliases:
-        if f" {alias} " not in haystack:
-            continue
-        existing = _get_category_by_name(db, current_user, category_name)
-        return existing.name if existing else category_name
-
-    return None
-
-
-def _resolve_budget_category_name(
-    db: Session,
-    current_user: User,
-    text: str,
-    llm_category: str | None,
-    heuristic_category: str | None,
-) -> str | None:
-    explicit_match = _extract_budget_category_from_text(db, current_user, text)
-    if explicit_match:
-        return explicit_match
-    return llm_category or heuristic_category
-
-
-def _resolve_tags(db: Session, current_user: User, tag_names: list[str]) -> list[int]:
-    """Tự động map hoặc tạo tag mới."""
-    if not tag_names:
-        return []
-    
-    tag_ids = []
-    existing_tags = db.query(Tag).filter(Tag.user_id == current_user.id).all()
-    existing_map = {_normalize_text(t.name): t for t in existing_tags}
-
-    for name in tag_names:
-        norm_name = _normalize_text(name)
-        if norm_name in existing_map:
-            tag_ids.append(existing_map[norm_name].id)
-        else:
-            # Tự động tạo tag
-            new_tag = finance_service.create_tag(
-                db, current_user, finance_schemas.TagCreate(name=name.strip())
-            )
-            existing_map[norm_name] = new_tag
-            tag_ids.append(new_tag.id)
-            
-    return tag_ids
 
 
 def _get_category_by_name(
@@ -1954,37 +1767,6 @@ def _get_category_by_name(
     for item in items:
         if _normalize_text(item.name) == normalized_target:
             return item
-    return None
-
-
-def _resolve_account(db: Session, current_user: User, account_name: str | None) -> Account | None:
-    if not account_name:
-        accounts = _list_accounts(db, current_user)
-        if not accounts:
-            return _ensure_account(db, current_user, "Tiền mặt")
-        return accounts[0]
-    normalized = _normalize_text(account_name)
-    # Map common slang to full names or just use as is
-    mapping = {
-        "vcb": "Vietcombank",
-        "tcb": "Techcombank",
-        "mb": "MB Bank",
-        "momo": "MoMo",
-        "zlpay": "ZaloPay",
-        "shopeepay": "ShopeePay",
-        "tien mat": "Tiền mặt",
-    }
-    target_name = mapping.get(normalized, account_name)
-    
-    # Try finding existing account
-    acc = _get_account_by_name(db, current_user, target_name)
-    if acc:
-        return acc
-    
-    # Auto-create account if it looks like a bank/wallet
-    if normalized in mapping or "vi" in normalized or "ngan hang" in normalized:
-        return _ensure_account(db, current_user, target_name)
-    
     return None
 
 
@@ -2084,31 +1866,19 @@ def parse_transaction_text(
         intent = llm_response.get("intent")
         data = llm_response.get("data", {})
         
-        if intent in ("SAVE_EXPENSE", "SAVE_INCOME", "create_transaction", "update_transaction"):
+        if intent in ("SAVE_EXPENSE", "SAVE_INCOME"):
             amount = _coerce_amount(data.get("amount"))
             if explicit_text_date:
                 parsed_date = explicit_text_date
             
-            # Determine type from intent or data
-            if intent == "SAVE_INCOME":
-                transaction_type = "income"
-            elif intent == "SAVE_EXPENSE":
-                transaction_type = "expense"
-            else:
-                transaction_type = data.get("transaction_type")
-                
-            # Override with keywords if explicit
+            transaction_type = "expense" if intent == "SAVE_EXPENSE" else "income"
             if _has_income_keyword(text) and not _has_expense_keyword(text):
                 transaction_type = "income"
             elif _has_expense_keyword(text) and not _has_income_keyword(text):
                 transaction_type = "expense"
-
             category_name = data.get("category")
             if data.get("note"):
                 description = data.get("note")
-            
-            tag_names = data.get("tags") or []
-            tag_ids = _resolve_tags(db, current_user, tag_names)
 
     if amount is None:
         amount = _parse_amount(text)
@@ -2144,86 +1914,92 @@ def parse_transaction_text(
         "transaction_type": transaction_type,
         "category_id": category_id,
         "category_name": resolved_name,
-        "tag_ids": tag_ids if 'tag_ids' in locals() else [],
         "date": parsed_date,
         "warnings": warnings,
         "confidence": round(confidence, 2),
     }
 
 
-def _call_gemini_chat(text: str, history: list[ChatMessage] | None = None) -> dict | None:
+def _call_gemini_chat(text: str) -> dict | None:
     if genai is None or not settings.gemini_api_key:
         return None
     
+    # Configure Gemini SDK
     genai.configure(api_key=settings.gemini_api_key)
-    MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash"
+    
+    # Get model name from environment variable (as requested)
+    MODEL_NAME = (
+        os.environ.get("GEMINI_MODEL_NAME")
+        or settings.gemini_model_name
+        or settings.gemini_model
+        or "gemini-1.5-flash"
+    )
+    
+    # Required print for Docker logs
+    print(f"Sử dụng model: {MODEL_NAME}")
 
-    system_instruction = """Bạn là AI trợ lý tài chính thông minh cho ứng dụng FoodFast.
-Nhiệm vụ: Hoạt động như một người thật, hiểu ngữ cảnh hội thoại, hiểu slang, và xử lý sửa lỗi tự nhiên.
+    system_instruction = """Bạn là Trợ lý AI Tài chính Cá nhân (Intelligent Financial Assistant) dành cho người Việt.
+Nhiệm vụ: Phân tích câu nói của người dùng để trích xuất Ý định (Intent) và Thực thể (Entities).
 
-QUY TẮC CỐT LÕI:
-1. NGỮ CẢNH (CONTEXT): Không coi mỗi tin nhắn là độc lập. Phải đọc lịch sử chat để hiểu ý người dùng.
-   - Nếu user nói "ăn sáng" -> Bạn hỏi "Hết bao nhiêu?" -> User nói "35k" -> Bạn phải hiểu đây là giao dịch Chi tiêu Ăn uống 35.000đ.
-2. SỬA LỖI (CORRECTION): Hiểu tất cả các cách nói sửa lỗi (nhầm rồi, lộn, ghi sai, fix lại, đổi thành, à không, mới đúng...).
-   - Khi phát hiện intent sửa lỗi, trả về intent 'update_transaction' và chỉ ra trường cần sửa trong 'target_field'.
-3. SLANG & TEENCODE: Hiểu "k", "củ", "xị", "chai", "ting ting", "bay màu", "ko", "đc", "nham"...
-4. KHÔNG TỰ BỊA: Nếu thiếu thông tin (số tiền/danh mục), hãy hỏi lại thay vì tự điền đại một con số.
-5. XÓA GIAO DỊCH: Hiểu "xóa", "hủy", "thôi bỏ đi" -> Intent 'delete_transaction'.
-6. NGÂN SÁCH (BUDGET): Khi user nói "tạo ngân sách", "đặt hạn mức", "ngân sách mua sắm"... -> Intent 'budget'. Tuyệt đối KHÔNG tạo giao dịch chi tiêu (expense) trong trường hợp này.
+1. QUY TẮC HIỂU NGÔN NGỮ QUỐC DÂN (VIETNAMESE COLLOQUIAL)
+- Tiền mặt/Lóng: 'củ', 'chai', 'm' -> triệu; 'lít', 'xị', 'k' -> nghìn. 
+- Ngữ cảnh: Nếu người dùng nói 'ăn bát phở ba mươi' -> hiểu là 30.000đ. Nếu nói 'mua con SH tám mươi' -> hiểu là 80.000.000đ.
+- Hành động: 'vừa lãnh', 'mới nhận', '+', 'tăng' -> thường là SAVE_INCOME. 'mất', 'hết', 'chi', '-', 'thanh toán' -> thường là SAVE_EXPENSE.
 
-OUTPUT FORMAT (JSON):
+2. PHÂN LOẠI Ý ĐỊNH (STRATEGIC INTENT)
+- SAVE_EXPENSE: Lưu giao dịch chi tiền.
+- SAVE_INCOME: Lưu giao dịch nhận tiền (Lương, thưởng, quà...).
+- QUERY_HISTORY: Truy vấn lịch sử (Tổng chi, liệt kê giao dịch).
+- CHECK_BUDGET: Kiểm tra ngân sách (Còn bao nhiêu tiền cho Ăn uống?).
+- ANOMALY_DETECTION: Cảnh báo bất thường.
+- UNKNOWN: Khi không hiểu gì cả.
 
+3. ĐỊNH DẠNG PHẢN HỒI (JSON ONLY)
+Trả về duy nhất JSON với cấu trúc:
 {
-  "intent": "create_transaction" | "update_transaction" | "delete_transaction" | "query" | "budget" | "unknown",
+  "intent": "string",
   "data": {
     "amount": number | null,
-    "category": "Ăn uống" | "Di chuyển" | "Mua sắm" | "Lương" | "Hóa đơn" | ...,
-    "tags": ["string"],
-    "description": "mô tả đầy đủ",
+    "category": "string (Tự suy luận danh mục phù hợp)",
+    "note": "string (Mô tả ngắn gọn, không dùng từ lặp)",
     "date": "YYYY-MM-DD",
-    "target_field": "amount" | "category" | "date" | "description" | null
+    "range": "today" | "current_week" | "current_month" | "last_month"
   },
-  "friendly_response": "Câu phản hồi tự nhiên như người thật đang trò chuyện."
-}"""
+  "friendly_response": "Câu trả lời tự nhiên, thân thiện, xác nhận số tiền bằng số cụ thể."
+}
+
+4. VÍ DỤ MẪU (FEW-SHOT)
+User: 'Hôm qua đi chợ hết hai trăm rưỡi' -> {"intent": "SAVE_EXPENSE", "data": {"amount": 250000, "category": "Shopping", "note": "đi chợ", "date": "yesterday"}, "friendly_response": "Đã ghi nhận! Bạn vừa chi 250.000đ đi chợ hôm qua đúng không?"}
+User: 'Mới nhận lương 20 củ' -> {"intent": "SAVE_INCOME", "data": {"amount": 20000000, "category": "Lương", "note": "nhận lương", "date": "today"}, "friendly_response": "Chúc mừng bạn! Đã cộng 20.000.000đ tiền Lương vào tài khoản."}
+User: 'Vừa trả tiền điện 500k' -> {"intent": "SAVE_EXPENSE", "data": {"amount": 500000, "category": "Hóa đơn", "note": "tiền điện", "date": "today"}, "friendly_response": "Ghi nhận 500.000đ tiền điện. Đừng quên tiết kiệm điện nhé!"}
+User: 'Cà phê với bạn hết 45' -> {"intent": "SAVE_EXPENSE", "data": {"amount": 45000, "category": "Ăn uống", "note": "cà phê", "date": "today"}, "friendly_response": "Đã lưu 45.000đ tiền cà phê."}
+
+Hãy luôn trả về JSON sạch, không kèm markdown."""
 
     try:
-        model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
-        chat_session = model.start_chat(history=[])
+        model = genai.GenerativeModel(
+            model_name=MODEL_NAME,
+            system_instruction=system_instruction
+        )
         
-        # Convert ChatMessage history to Gemini format if provided
-        if history:
-            gemini_history = []
-            last_role = None
-            for msg in history:
-                role = "user" if msg.role == "user" else "model"
-                # Gemini requires alternating roles. If same role repeats, merge or skip.
-                if role == last_role:
-                    if gemini_history:
-                        gemini_history[-1]["parts"][0] += f"\n{msg.content}"
-                    continue
-                
-                gemini_history.append({"role": role, "parts": [msg.content]})
-                last_role = role
-            
-            # Ensure history starts with 'user' and ends with 'model' (optional but safer)
-            if gemini_history and gemini_history[-1]["role"] == "user":
-                # If last message is user, we can't send a new user message as prompt directly.
-                # But Gemini start_chat handles it if the send_message is next.
-                pass
-                
-            chat_session.history = gemini_history
-
-        generation_config = genai.GenerationConfig(response_mime_type="application/json")
-        response = chat_session.send_message(text, generation_config=generation_config)
+        # Ensure we request JSON output format
+        generation_config = genai.GenerationConfig(
+            response_mime_type="application/json"
+        )
+        
+        response = model.generate_content(
+            text,
+            generation_config=generation_config
+        )
         
         if not response or not response.text:
             return None
             
         return _extract_json(response.text)
+        
     except Exception as e:
         print(f"Gemini Chat Error: {e}")
         return None
-
 
 
 def _call_gemini_freeform(text: str) -> str | None:
@@ -2277,7 +2053,6 @@ def _fallback_chat_intent_payload(
     text: str,
 ) -> dict:
     normalized = _normalize_text(text)
-    normalized_basic = _normalize_text_basic(text)
     parsed = parse_transaction_text(
         db,
         current_user,
@@ -2302,30 +2077,18 @@ def _fallback_chat_intent_payload(
             "friendly_response": "Xin chao! Minh co the giup ban ghi chep chi tieu, kiem tra ngan sach, hoac tim giao dich. Ban can gi?",
         }
 
-    budget_markers = ("ngan sach", "budget", "han muc", "ke hoach chi")
-    if any(marker in normalized_basic for marker in budget_markers) or ("con bao nhieu" in normalized_basic and " cho " in f" {normalized_basic} "):
+    if "ngan sach" in normalized or ("con bao nhieu" in normalized and " cho " in f" {normalized} "):
         return {
-            "intent": "budget",
-            "data": {
-                "amount": amount,
-                "category": category_name
-            },
-            "friendly_response": f"Minh da ghi nhan thiet lap ngan sach cho {category_name or 'danh muc này'}." if amount else "Minh kiem tra ngan sach cho ban.",
+            "intent": "CHECK_BUDGET",
+            "data": {"category": category_name},
+            "friendly_response": "Minh kiem tra ngan sach cho ban.",
         }
-
 
     if _is_question(text):
         return {
             "intent": "QUERY_HISTORY",
             "data": {"range": _infer_fallback_range(text)},
             "friendly_response": "Duoi day la tong hop thu chi.",
-        }
-
-    if any(kw in normalized for kw in ("xoa", "sua", "doi thanh", "huy", "bo qua", "ko phai", "khong phai", "nham", "thanh", "ma la")):
-        return {
-            "intent": "EDIT",
-            "data": {"query": text},
-            "friendly_response": "Minh dang thuc hien yeu cau chinh sua hoac xoa giao dich.",
         }
 
     if amount is not None:
@@ -2344,82 +2107,106 @@ def _fallback_chat_intent_payload(
     return {
         "intent": "UNKNOWN",
         "data": {},
-        "friendly_response": "Xin lỗi, mình chưa hiểu ý bạn lắm. Bạn có thể mô tả rõ hơn về giao dịch hoặc câu hỏi tài chính của bạn không? Ví dụ: 'Ăn sáng 30k' hoặc 'Số dư hiện tại bao nhiêu?'.",
+        "friendly_response": "Minh chua hieu ro yeu cau. Ban co the noi cu the hon duoc khong?",
     }
 
 
 def answer_chat(db: Session, current_user: User, text: str) -> dict:
-    # 1. Fetch recent chat history for context (last 5 messages)
-    history = get_chat_history(db, current_user, limit=5)
-    
-    # 2. Xử lý nhiều giao dịch trong một câu (Heuristic)
     multi = _extract_multi_transactions(db, current_user, text)
     if multi:
-        # (Existing logic for multi transactions remains same)
-        # ...
-        pass
+        created = []
+        for item in multi:
+            dt = _coerce_date_value(item.get("date")) or DateType.today()
+            tx = finance_service.create_transaction(
+                db,
+                current_user,
+                finance_schemas.TransactionCreate(
+                    description=item.get("note") or text,
+                    amount=item.get("amount"),
+                    transaction_type=item.get("transaction_type"),
+                    category_id=item.get("category_id"),
+                    date=dt,
+                ),
+            )
+            created.append({**item, "date": tx.date})
 
-    # 3. Gọi Gemini AI với history để hiểu ngữ cảnh
-    llm_resp = _call_gemini_chat(text, history=history)
-    
-    # Chuẩn hóa tin nhắn để hỗ trợ heuristic
-    normalized_text = _normalize_text(text)
-    normalized_basic = _normalize_text_basic(text)
-    
-    # Heuristic fallback (dùng để bổ trợ thông tin nếu AI thiếu hoặc nhận diện sửa lỗi nhanh)
-    heuristic = parse_transaction_text(db, current_user, text, auto_create_category=False, use_llm=False)
-    
-    if not isinstance(llm_resp, dict) or not llm_resp.get("intent"):
+        start_date = min(tx_item["date"] for tx_item in created)
+        end_date = max(tx_item["date"] for tx_item in created)
+        msg = [f"Da ghi nhan {len(created)} giao dich:"]
+        for tx_item in created:
+            kind = "Thu" if tx_item["transaction_type"] == "income" else "Chi"
+            amount = _format_amount(tx_item["amount"])
+            cat = tx_item.get("category_name")
+            if cat:
+                msg.append(f"- {kind} {amount}d ({cat}) ngay {tx_item['date']}")
+            else:
+                msg.append(f"- {kind} {amount}d ngay {tx_item['date']}")
+
+        response = {
+            "answer": "\n".join(msg),
+            "intent": "create_transactions",
+            "start_date": start_date,
+            "end_date": end_date,
+            "category_name": None,
+            "total": None,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
+    llm_resp = _call_gemini_chat(text)
+    if not isinstance(llm_resp, dict):
         llm_resp = _fallback_chat_intent_payload(db, current_user, text)
 
-    intent = llm_resp.get("intent", "unknown").lower()
+    intent = llm_resp.get("intent", "UNKNOWN")
     data = llm_resp.get("data", {})
-    friendly = llm_resp.get("friendly_response", "Đã nhận thông tin.")
+    friendly = llm_resp.get("friendly_response", "Da nhan thong tin.")
 
-    # Kiểm tra intent sửa lỗi từ keyword nếu AI chưa bắt được (Semantic fallback)
-    if any(kw in normalized_text for kw in ["nham", "sai", "sua", "doi", "khong phai", "huy", "xoa"]):
-        if intent not in ("edit", "update_transaction", "delete_transaction"):
-            intent = "edit"
+    heuristic = parse_transaction_text(
+        db,
+        current_user,
+        text,
+        auto_create_category=False,
+        use_llm=False,
+    )
+    heuristic_amount = heuristic.get("amount")
+    heuristic_type = heuristic.get("transaction_type")
+    heuristic_category = heuristic.get("category_name")
+    heuristic_date = heuristic.get("date")
+    explicit_text_date = _parse_date(text)
 
-    # Kiểm tra intent ngân sách (Budget) - Tuyệt đối không để nhầm sang transaction
-    if any(kw in normalized_basic for kw in ["ngan sach", "budget", "han muc", "ke hoach chi"]):
-        if intent not in ("budget", "check_budget"):
-            intent = "budget"
+    if explicit_text_date:
+        data["date"] = explicit_text_date
+    elif data.get("date"):
+        data.pop("date", None)
 
-    # Unified Intent Mapping
-    intent_map = {
-        "create_transaction": "expense",
-        "update_transaction": "edit",
-        "delete_transaction": "edit",
-        "save_expense": "expense",
-        "save_income": "income",
-        "query_history": "query",
-        "check_budget": "budget",
-        "edit_transaction": "edit",
-        "edit": "edit",
-        "budget": "budget"
-    }
+    if heuristic_amount is not None and intent not in ("QUERY_HISTORY", "CHECK_BUDGET", "ANOMALY_DETECTION"):
+        if _has_income_keyword(text) and not _has_expense_keyword(text):
+            intent = "SAVE_INCOME"
+        elif _has_expense_keyword(text) and not _has_income_keyword(text):
+            intent = "SAVE_EXPENSE"
+        if not _coerce_amount(data.get("amount")):
+            data["amount"] = heuristic_amount
+        if not data.get("category") and heuristic_category:
+            data["category"] = heuristic_category
+        if not data.get("note"):
+            data["note"] = heuristic.get("description") or text
+        if not data.get("date") and heuristic_date:
+            data["date"] = heuristic_date
 
+    if intent in ("SAVE_EXPENSE", "SAVE_INCOME"):
+        # Prioritize LLM intent if it's confident (not UNKNOWN)
+        # Only fallback to heuristics if LLM intent is missing or vague
+        if intent == "UNKNOWN":
+            if _has_income_keyword(text) and not _has_expense_keyword(text):
+                intent = "SAVE_INCOME"
+            elif _has_expense_keyword(text) and not _has_income_keyword(text):
+                intent = "SAVE_EXPENSE"
 
-    
-    # Refine intent
-    if intent == "create_transaction":
-        if _has_income_keyword(text) or data.get("transaction_type") == "income":
-            intent = "income"
-        else:
-            intent = "expense"
-            
-    intent = intent_map.get(intent, intent)
-    
-    # 3. Xử lý các Intent cụ thể
-
-    # --- EXPENSE & INCOME ---
-    if intent in ("expense", "income"):
-        tx_type = "expense" if intent == "expense" else "income"
-        amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
+        tx_type = "expense" if intent == "SAVE_EXPENSE" else "income"
+        amount = _coerce_amount(data.get("amount"))
         if not amount:
             return {
-                "answer": "Bạn vui lòng cho biết số tiền cụ thể để mình ghi chép nhé.",
+                "answer": "Vui long cho biet so tien cu the de minh ghi chep nhe.",
                 "intent": "ask_amount",
                 "start_date": None,
                 "end_date": None,
@@ -2427,33 +2214,24 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                 "total": None,
             }
 
-        cat_name = data.get("category") or heuristic.get("category_name")
+        cat_name = data.get("category")
         cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
-        
-        acc_name = data.get("account")
-        account = _resolve_account(db, current_user, acc_name)
-        
-        dt = _coerce_date_value(data.get("date")) or heuristic.get("date") or DateType.today()
-
-        tag_names = data.get("tags") or []
-        tag_ids = _resolve_tags(db, current_user, tag_names)
+        dt = _coerce_date_value(data.get("date")) or DateType.today()
 
         tx = finance_service.create_transaction(
             db,
             current_user,
             finance_schemas.TransactionCreate(
-                description=data.get("description") or data.get("note") or heuristic.get("description") or text,
+                description=data.get("note") or text,
                 amount=amount,
                 transaction_type=tx_type,
                 category_id=cat_id,
-                account_id=account.id if account else None,
                 date=dt,
-                tag_ids=tag_ids,
             ),
         )
         response = {
             "answer": friendly,
-            "intent": f"create_{tx_type}",
+            "intent": "create_transaction",
             "start_date": tx.date,
             "end_date": tx.date,
             "category_name": res_name,
@@ -2462,45 +2240,9 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         _persist_chat_messages(db, current_user, text, response)
         return response
 
-    # --- TRANSFER ---
-    if intent == "transfer":
-        amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
-        acc_name = data.get("account")
-        account = _resolve_account(db, current_user, acc_name)
-        dt = _coerce_date_value(data.get("date")) or DateType.today()
-        
-        # Với transfer trong chat đơn giản, ta ghi nhận như một giao dịch chi tiêu từ tài khoản nguồn
-        tx = finance_service.create_transaction(
-            db,
-            current_user,
-            finance_schemas.TransactionCreate(
-                description=data.get("description") or text,
-                amount=amount or 0,
-                transaction_type="expense",
-                category_id=None,
-                account_id=account.id if account else None,
-                date=dt,
-            ),
-        )
-        response = {
-            "answer": friendly,
-            "intent": "transfer",
-            "start_date": tx.date,
-            "end_date": tx.date,
-            "category_name": None,
-            "total": tx.amount,
-        }
-        _persist_chat_messages(db, current_user, text, response)
-        return response
-
-    # --- QUERY ---
-    if intent == "query":
-        # Mặc định truy vấn tháng này
+    if intent == "QUERY_HISTORY":
+        range_v = data.get("range", "current_month")
         today = DateType.today()
-        s, e = _month_range_for_date(today)
-        
-        # Nếu AI có gợi ý range
-        range_v = data.get("range")
         if range_v == "today":
             s, e = today, today
         elif range_v == "current_week":
@@ -2508,14 +2250,16 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         elif range_v == "last_month":
             last_month_day = today.replace(day=1) - timedelta(days=1)
             s, e = _month_range_for_date(last_month_day)
+        else:
+            s, e = _month_range_for_date(today)
 
         sum_data = finance_service.get_summary(db, current_user, start_date=s, end_date=e)
         response = {
             "answer": (
                 f"{friendly}\n"
-                f"- Tổng thu: {sum_data.total_income:,.0f}đ\n"
-                f"- Tổng chi: {sum_data.total_expense:,.0f}đ\n"
-                f"- Số dư kỳ này: {(sum_data.total_income - sum_data.total_expense):,.0f}đ"
+                f"- Tong thu: {sum_data.total_income:,.0f} VND\n"
+                f"- Tong chi: {sum_data.total_expense:,.0f} VND\n"
+                f"- So du: {(sum_data.total_income - sum_data.total_expense):,.0f} VND"
             ),
             "intent": "summary",
             "start_date": s,
@@ -2526,202 +2270,112 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         _persist_chat_messages(db, current_user, text, response)
         return response
 
-    # --- BUDGET ---
-    if intent == "budget":
-        cat_name = _resolve_budget_category_name(
-            db,
-            current_user,
-            text,
-            data.get("category"),
-            heuristic.get("category_name"),
-        )
-        amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
-        
+    if intent == "CHECK_BUDGET":
+        cat_name = data.get("category")
         if not cat_name:
-            return {"answer": "Bạn muốn đặt hoặc kiểm tra ngân sách cho mục nào? Ví dụ: 'Đặt ngân sách ăn uống 2tr'", "intent": "ask_category"}
-
-        explicit_budget_category = _extract_budget_category_from_text(db, current_user, text)
-        if (
-            amount
-            and explicit_budget_category is None
-            and data.get("category")
-            and heuristic.get("category_name")
-            and data.get("category") != heuristic.get("category_name")
-        ):
             return {
-                "answer": "Minh chua chac danh muc ngan sach ban muon tao. Hay noi ro theo mau: 'Tao ngan sach an uong 1 trieu'.",
+                "answer": "Ban muon kiem tra ngan sach cho danh muc nao?",
                 "intent": "ask_category",
+                "start_date": None,
+                "end_date": None,
+                "category_name": None,
+                "total": None,
             }
 
-        cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
-        
+        cat = _get_category_by_name(db, current_user, cat_name)
+        if not cat:
+            return {
+                "answer": f"Chua co du lieu cho danh muc '{cat_name}'.",
+                "intent": "not_found",
+                "start_date": None,
+                "end_date": None,
+                "category_name": cat_name,
+                "total": None,
+            }
+
         today = DateType.today()
         s, e = _month_range_for_date(today)
+        spent = _sum_by_category(db, current_user, s, e, cat.id, "expense")
 
-        # Nếu có số tiền -> Thiết lập/Cập nhật ngân sách cho tháng hiện tại
-        if amount:
-            budget_payload = finance_schemas.BudgetCreate(
-                category_id=cat_id,
-                amount=float(amount),
-                period_start=s,
-                period_end=e,
-            )
-            finance_service.create_budget(db, current_user, budget_payload)
-            
+        budget_obj = (
+            db.query(Budget)
+            .filter(Budget.user_id == current_user.id, Budget.category_id == cat.id)
+            .first()
+        )
+        if budget_obj:
+            remain = max(0, budget_obj.amount - spent)
+            percent = (spent / budget_obj.amount * 100) if budget_obj.amount > 0 else 0
             response = {
-                "answer": f"Đã thiết lập ngân sách cho '{res_name}' là {amount:,.0f}đ mỗi tháng.",
-                "intent": "set_budget",
-                "total": amount,
+                "answer": (
+                    f"{friendly}\n"
+                    f"- Ngan sach: {budget_obj.amount:,.0f} VND\n"
+                    f"- Da chi: {spent:,.0f} VND ({percent:.1f}%)\n"
+                    f"- Con lai: {remain:,.0f} VND"
+                ),
+                "intent": "budget_status",
                 "start_date": s,
                 "end_date": e,
+                "category_name": cat.name,
+                "total": spent,
             }
-        else:
-            # Nếu không có số tiền -> Kiểm tra trạng thái ngân sách hiện tại
-            spent = _sum_by_category(db, current_user, s, e, cat_id, "expense")
-            
-            budget_obj = (
-                db.query(Budget)
-                .filter(
-                    Budget.user_id == current_user.id,
-                    Budget.category_id == cat_id,
-                    Budget.period_start == s,
-                    Budget.period_end == e,
-                )
-                .first()
-            )
-            if budget_obj:
-                remain = max(0, budget_obj.amount - spent)
-                percent = (spent / budget_obj.amount * 100) if budget_obj.amount > 0 else 0
-                response = {
-                    "answer": (
-                        f"{friendly}\n"
-                        f"- Ngân sách {res_name}: {budget_obj.amount:,.0f}đ\n"
-                        f"- Đã dùng: {spent:,.0f}đ ({percent:.1f}%)\n"
-                        f"- Còn lại: {remain:,.0f}đ"
-                    ),
-                    "intent": "budget_status",
-                    "total": spent,
-                    "start_date": s,
-                    "end_date": e,
-                }
-            else:
-                response = {
-                    "answer": f"Bạn đã chi {spent:,.0f}đ cho {res_name} tháng này (Chưa đặt ngân sách). Bạn có muốn đặt ngân sách cho mục này không?",
-                    "intent": "category_status",
-                    "start_date": s,
-                    "end_date": e,
-                }
-        
-        _persist_chat_messages(db, current_user, text, response)
-        return response
-
-    # --- EDIT ---
-    if intent == "edit":
-        last_tx = db.query(Transaction).filter(Transaction.user_id == current_user.id).order_by(Transaction.id.desc()).first()
-        if not last_tx:
-            return {"answer": "Mình không tìm thấy giao dịch nào gần đây để sửa.", "intent": "not_found"}
-        
-        action = data.get("edit_action", "update")
-        if action == "delete" or "xóa" in text.lower():
-            desc = last_tx.description
-            amt = last_tx.amount
-            finance_service.delete_transaction(db, current_user, last_tx.id)
-            response = {"answer": f"Đã xóa giao dịch '{desc}' ({amt:,.0f}đ) vừa rồi.", "intent": "delete_transaction"}
-        else:
-            # Update last transaction
-            update_payload = {}
-            
-            # Ưu tiên lấy từ data (LLM), nếu không có thì lấy từ heuristic (fallback)
-            new_amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
-            new_cat = data.get("category") or heuristic.get("category_name")
-            new_desc = data.get("description") or heuristic.get("description")
-            
-            if new_amount:
-                update_payload["amount"] = new_amount
-            if new_cat:
-                cid, _ = _resolve_category(db, current_user, new_cat, True)
-                update_payload["category_id"] = cid
-            if new_desc and new_desc != text:
-                update_payload["description"] = new_desc
-            
-            if update_payload:
-                # Use TransactionUpdate to allow partial updates (Pydantic validation won't fail for missing fields)
-                update_data = finance_schemas.TransactionUpdate(**update_payload)
-                finance_service.update_transaction(db, current_user, last_tx.id, update_data)
-                
-                # Cập nhật friendly response để thông báo rõ ràng hơn
-                fields_map = {"amount": "số tiền", "category_id": "danh mục", "description": "mô tả"}
-                updated_fields = [fields_map.get(k, k) for k in update_payload.keys()]
-                friendly = f"Đã cập nhật {' và '.join(updated_fields)} cho giao dịch '{last_tx.description}' rồi nhé!"
-                
-                response = {"answer": friendly, "intent": "update_transaction"}
-            else:
-                response = {"answer": "Bạn muốn sửa thông tin gì của giao dịch vừa rồi?", "intent": "ask_edit"}
-
-        
-        _persist_chat_messages(db, current_user, text, response)
-        return response
-
-    # --- ADJUST ---
-    if intent == "adjust":
-        target_amount = _coerce_amount(data.get("amount"))
-        if target_amount is None:
-            # Nếu người dùng nói "về 0" thì target_amount có thể là 0
-            if " 0" in text or " không" in text.lower() or " trắng" in text.lower():
-                target_amount = 0.0
-            else:
-                return {"answer": "Bạn muốn điều chỉnh số dư thành bao nhiêu?", "intent": "ask_amount"}
-        
-        acc_name = data.get("account")
-        account = _resolve_account(db, current_user, acc_name)
-        
-        if not account:
-            # Nếu không chỉ định account, lấy account đầu tiên hoặc mặc định
-            accounts = _list_accounts(db, current_user)
-            if not accounts:
-                account = _ensure_account(db, current_user, "Tiền mặt")
-            else:
-                account = accounts[0]
-        
-        # Tính toán chênh lệch để tạo giao dịch điều chỉnh
-        current_balance = account.balance
-        diff = target_amount - current_balance
-        
-        if diff != 0:
-            tx_type = "income" if diff > 0 else "expense"
-            # Tìm hoặc tạo category "Điều chỉnh số dư"
-            cat_id, _ = _resolve_category(db, current_user, "Số dư đầu kỳ" if current_balance == 0 else "Điều chỉnh số dư", True)
-            
-            finance_service.create_transaction(
-                db,
-                current_user,
-                finance_schemas.TransactionCreate(
-                    description=f"Điều chỉnh số dư (Từ {current_balance:,.0f}đ lên {target_amount:,.0f}đ)" if diff > 0 else f"Điều chỉnh số dư (Từ {current_balance:,.0f}đ xuống {target_amount:,.0f}đ)",
-                    amount=abs(diff),
-                    transaction_type=tx_type,
-                    category_id=cat_id,
-                    account_id=account.id,
-                    date=DateType.today(),
-                )
-            )
-        else:
-            # Nếu số dư không đổi, vẫn bắn sự kiện để UI refresh nếu cần
-            from app.realtime import emit_finance_update
-            emit_finance_update("accounts", current_user.id, account.id)
-        
+            _persist_chat_messages(db, current_user, text, response)
+            return response
         response = {
-            "answer": f"Đã điều chỉnh số dư tài khoản '{account.name}' về {target_amount:,.0f}đ theo yêu cầu.",
-            "intent": "adjust_balance",
-            "total": target_amount,
+            "answer": f"{friendly}\nBan da chi {spent:,.0f} VND cho {cat.name} trong thang nay.",
+            "intent": "category_status",
+            "start_date": s,
+            "end_date": e,
+            "category_name": cat.name,
+            "total": spent,
         }
         _persist_chat_messages(db, current_user, text, response)
         return response
 
-    # --- UNKNOWN / FALLBACK ---
-    freeform = _call_gemini_freeform(text)
+    if intent == "ANOMALY_DETECTION":
+        anomalies = get_spending_anomalies(db, current_user)
+        if not anomalies:
+            response = {
+                "answer": "Chi tieu 30 ngay qua on dinh, chua co diem bat thuong.",
+                "intent": "anomaly_status",
+                "start_date": None,
+                "end_date": None,
+                "category_name": None,
+                "total": None,
+            }
+            _persist_chat_messages(db, current_user, text, response)
+            return response
+
+        msg = [friendly, f"Phat hien {len(anomalies)} diem can luu y:"]
+        for item in anomalies:
+            msg.append(f"- {item.date}: {item.amount:,.0f} VND ({item.reason})")
+        response = {
+            "answer": "\n".join(msg),
+            "intent": "anomaly_alert",
+            "start_date": None,
+            "end_date": None,
+            "category_name": None,
+            "total": None,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
+    if intent == "UNKNOWN":
+        freeform = _call_gemini_freeform(text)
+        if freeform:
+            response = {
+                "answer": freeform,
+                "intent": "chat_general",
+                "start_date": None,
+                "end_date": None,
+                "category_name": None,
+                "total": None,
+            }
+            _persist_chat_messages(db, current_user, text, response)
+            return response
+
     response = {
-        "answer": freeform or friendly,
-        "intent": "chat_general",
+        "answer": friendly,
+        "intent": intent,
         "start_date": None,
         "end_date": None,
         "category_name": None,
@@ -2929,40 +2583,37 @@ def _ocr_to_text(image: Image.Image, psm: int = 6) -> str:
 def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
     if genai is None or not settings.gemini_api_key:
         return None
+    
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model_name = (
-            os.environ.get("GEMINI_MODEL_NAME")
-            or settings.gemini_model_name
-            or settings.gemini_model
-            or "gemini-1.5-flash"
+        
+        primary_model = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash-latest"
+        models_to_try = [primary_model]
+        if "pro" in primary_model.lower():
+            models_to_try.extend(["gemini-1.5-flash-latest", "gemini-flash-latest", "gemini-1.5-flash"])
+            
+        system_instruction = (
+            "You are an AI financial receipt extraction expert. "
+            "Extract information from the receipt image and return ONLY JSON. "
+            "SCHEMA: {\"data\": {\"merchant\": \"Brand Name from Logo\", \"transaction_date\": \"YYYY-MM-DD\", \"suggested_note\": \"Detailed smart note in Vietnamese\", \"final_total\": 100}, \"confidence\": {\"merchant\": 90, \"final_total\": 90}}"
         )
-        model = genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=(
-                "Bạn là chuyên gia OCR hóa đơn tài chính chuyên nghiệp tại Việt Nam. "
-                "Nhiệm vụ của bạn là trích xuất thông tin từ ảnh hóa đơn sang định dạng JSON chuẩn xác.\n\n"
-                "Quy tắc trích xuất:\n"
-                "- date: Ngày hóa đơn (YYYY-MM-DD). Nếu không thấy năm, giả định năm hiện tại 2026. Nếu không có ngày, trả về null.\n"
-                "- merchant: Tên cửa hàng/siêu thị/nhà cung cấp. Bỏ qua địa chỉ chi tiết, chỉ lấy tên thương hiệu (VD: 'WinMart', 'Highlands Coffee').\n"
-                "- total: Tổng số tiền cuối cùng khách phải trả (kiểu số nguyên). Lưu ý các hóa đơn Việt Nam thường dùng dấu chấm '.' làm phân cách hàng nghìn (VD: 100.000 -> 100000).\n"
-                "- vat: Tiền thuế GTGT nếu có (số nguyên).\n"
-                "- estimated: Giá trị hàng hóa trước thuế hoặc trước khi giảm giá (số nguyên).\n"
-                "- items: Danh sách các mặt hàng (nếu có thể đọc được), mỗi item có {name, price, qty}.\n"
-                "- note: Tóm tắt ngắn gọn nội dung hóa đơn (VD: 'Mua nhu yếu phẩm', 'Uống cafe').\n"
-                "- text: Các ký tự thô nhận diện được.\n\n"
-                "TRẢ VỀ DUY NHẤT JSON, KHÔNG GIẢI THÍCH, KHÔNG MARKDOWN."
-            )
-        )
-        response = model.generate_content(
-            [{"mime_type": "image/jpeg", "data": image_bytes}]
-        )
-        text_val = getattr(response, "text", "")
-        if not text_val:
-            return None
-        return _extract_json(text_val) or {"text": text_val}
+
+        for model_name in models_to_try:
+            try:
+                print(f"DEBUG: Attempting Gemini OCR with model: {model_name}")
+                model = genai.GenerativeModel(model_name=model_name, system_instruction=system_instruction)
+                response = model.generate_content([{"mime_type": "image/jpeg", "data": image_bytes}])
+                text_val = getattr(response, "text", "")
+                if text_val:
+                    print(f"DEBUG: Gemini OCR Success with model: {model_name}")
+                    return _extract_json(text_val) or {"text": text_val}
+            except Exception as inner_e:
+                print(f"DEBUG: Gemini OCR with {model_name} failed: {inner_e}")
+                continue
+                
+        return None
     except Exception as e:
-        print(f"Gemini OCR Failed: {e}")
+        print(f"Gemini OCR Critical Error: {e}")
         return None
 
 
@@ -3187,8 +2838,90 @@ def _extract_merchant_from_lines(lines: list[str]) -> str | None:
     return None
 
 
-def extract_ocr(image_bytes: bytes) -> dict:
+def _normalize_merchant(name: str | None) -> str | None:
+    if not name:
+        return None
+    print(f"DEBUG: Normalizing merchant name: '{name}'")
+    # Aggressively remove anything not alphanumeric or space/hyphen
+    # Keeping hyphen for names like Circle-K if any
+    cleaned = re.sub(r'[^a-zA-Z0-9\sàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]', ' ', name)
+    # Collapse multiple spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    norm = cleaned.lower()
+    for alias, formal in MERCHANT_ALIASES.items():
+        if alias in norm:
+            print(f"DEBUG: Matched alias '{alias}' -> '{formal}'")
+            return formal
+            
+    # If no alias match, return the cleaned version with proper capitalization
+    result = cleaned.title() if cleaned.isupper() or cleaned.islower() else cleaned
+    print(f"DEBUG: Normalized result: '{result}'")
+    return result
+
+
+def _map_payment_source(text: str) -> str | None:
+    norm = _normalize_text(text)
+    for kw, source in PAYMENT_SOURCE_MAPPING.items():
+        if kw in norm:
+            return source
+    return None
+
+
+def _match_category(db: Session, user: User, name: str | None, text: str) -> str | None:
+    # 1. Try to match from mapping
+    norm_text = _normalize_text(text)
+    for kw, cat in CATEGORY_MAPPING.items():
+        if kw in norm_text:
+            # Check if this category exists for user
+            existing = db.query(Category).filter(Category.user_id == user.id, Category.name.ilike(cat)).first()
+            if existing:
+                return existing.name
+
+    # 2. Try to match from Gemini suggestion
+    if name:
+        existing = db.query(Category).filter(Category.user_id == user.id, Category.name.ilike(name)).first()
+        if existing:
+            return existing.name
+
+    return None
+
+
+def _match_tags(db: Session, user: User, merchant: str | None, text: str, suggested: list[str]) -> list[str]:
+    found_tags = []
+    user_tags = db.query(Tag).filter(Tag.user_id == user.id).all()
+    tag_map = {tag.name.lower(): tag.name for tag in user_tags}
+
+    # 1. Match from merchant
+    if merchant:
+        m_norm = merchant.lower()
+        if m_norm in tag_map:
+            found_tags.append(tag_map[m_norm])
+
+    # 2. Match from suggested
+    for s in suggested:
+        s_norm = s.lower()
+        if s_norm in tag_map:
+            found_tags.append(tag_map[s_norm])
+
+    # 3. Always add "Hóa đơn OCR" if exists
+    if "hóa đơn ocr" in tag_map:
+        found_tags.append(tag_map["hóa đơn ocr"])
+
+    return list(set(found_tags))
+
+
+def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
+    
+    # Save image for later display
+    import uuid
+    import os
+    os.makedirs("uploads/bills", exist_ok=True)
+    filename = f"{current_user.id}_{uuid.uuid4()}.jpg"
+    image_save_path = os.path.join("uploads/bills", filename)
+    image.save(image_save_path)
+    final_image_path = f"/uploads/bills/{filename}"
 
     gemini_result = None
     if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
@@ -3199,17 +2932,38 @@ def extract_ocr(image_bytes: bytes) -> dict:
     total = None
     date_value = None
     vat_amount = None
-    estimated = None
-    note = None
+    discount_amount = None
+    subtotal = None
+    suggested_note = None
+    category_name = None
+    suggested_tags = []
+    line_items = []
+    conf = {
+        "merchant": 0, "transaction_date": 0, "payment_source": 0,
+        "category": 0, "tags": 0, "suggested_note": 0,
+        "subtotal_before_tax": 0, "vat_amount": 0, "discount_amount": 0, "final_total": 0
+    }
 
     if gemini_result:
-        text = gemini_result.get("text") or ""
-        merchant = gemini_result.get("merchant")
-        total = _coerce_amount(gemini_result.get("total"))
-        date_value = _coerce_date_value(gemini_result.get("date"))
-        vat_amount = _coerce_amount(gemini_result.get("vat"))
-        estimated = _coerce_amount(gemini_result.get("estimated"))
-        note = gemini_result.get("note")
+        data = gemini_result.get("data", {})
+        text = data.get("raw_ocr_text") or gemini_result.get("text") or ""
+        merchant = data.get("merchant")
+        total = _coerce_amount(data.get("final_total"))
+        date_value = _coerce_date_value(data.get("transaction_date"))
+        vat_amount = _coerce_amount(data.get("vat_amount"))
+        discount_amount = _coerce_amount(data.get("discount_amount"))
+        subtotal = _coerce_amount(data.get("subtotal_before_tax"))
+        suggested_note = data.get("suggested_note")
+        category_name = data.get("category")
+        suggested_tags = data.get("tags") or []
+        line_items = data.get("line_items") or []
+        
+        g_conf = gemini_result.get("confidence", {})
+        for k in conf:
+            # Scale to 0.0-1.0
+            val = float(g_conf.get(k, 0))
+            if val > 1.0: val = val / 100.0
+            conf[k] = val
 
     if not text.strip():
         try:
@@ -3231,34 +2985,126 @@ def extract_ocr(image_bytes: bytes) -> dict:
             text = _ocr_to_text(image.convert("L"), psm=6)
 
     lines = [line.strip() for line in text.splitlines() if line.strip()]
+    
+    # Fallback/Enhancement
     if merchant is None:
         merchant = _extract_merchant_from_lines(lines) or (lines[0] if lines else None)
+        conf["merchant"] = min(conf["merchant"], 0.40) if merchant else 0
+    
+    merchant = _normalize_merchant(merchant)
+    
     if total is None:
         total = _extract_total_from_lines(lines)
-        if total is None:
-            total = _parse_amount(_normalize_ocr_numeric_tokens(text))
+        conf["final_total"] = 0.50 if total else 0
+        
     if date_value is None:
         date_value = _extract_date_from_lines(lines) or _parse_date(text)
+        conf["transaction_date"] = 0.60 if date_value else 0
+        
     if vat_amount is None:
         vat_amount = _extract_amount_for_keywords(lines, OCR_VAT_KEYWORDS)
-    if estimated is None:
-        estimated = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
-    if note is None:
-        note = _extract_note_from_lines(lines)
+        conf["vat_amount"] = 0.50 if vat_amount else 0
+        
+    if subtotal is None:
+        subtotal = _extract_amount_for_keywords(lines, OCR_ESTIMATE_KEYWORDS)
+        conf["subtotal_before_tax"] = 0.50 if subtotal else 0
 
-    computed_total, total_delta, is_total_consistent, warnings = _validate_ocr_totals(
-        total, estimated, vat_amount
-    )
+    payment_source = _map_payment_source(text)
+    if payment_source:
+        conf["payment_source"] = max(conf["payment_source"], 0.80)
+
+    matched_cat = _match_category(db, current_user, category_name, text)
+    if matched_cat:
+        category_name = matched_cat
+        conf["category"] = max(conf["category"], 0.85)
+
+    final_tags = _match_tags(db, current_user, merchant, text, suggested_tags)
+    if final_tags:
+        conf["tags"] = max(conf["tags"], 0.90)
+
+    # --- AI Note Fallback ---
+    if not suggested_note and merchant:
+        suggested_note = f"Giao dịch tại {merchant}"
+        conf["suggested_note"] = 0.50
+
+    # --- Smart Confidence Enhancement ---
+    
+    # 1. Validation Logic
+    s = subtotal or 0
+    v = vat_amount or 0
+    d = discount_amount or 0
+    f = total or 0
+    is_valid = abs((s + v - d) - f) < 1000 # Allow 1000 VND diff for rounding
+    delta = (s + v - d) - f
+
+    # 2. Heuristic Boosting
+    raw_text_norm = _normalize_text(text)
+    
+    # Boost monetary confidence if math is correct
+    if is_valid and f > 0:
+        conf["final_total"] = max(conf["final_total"], 0.98)
+        if s > 0: conf["subtotal_before_tax"] = max(conf["subtotal_before_tax"], 0.95)
+        if v > 0: conf["vat_amount"] = max(conf["vat_amount"], 0.95)
+        if d > 0: conf["discount_amount"] = max(conf["discount_amount"], 0.95)
+
+    # Boost merchant if in raw text
+    if merchant:
+        m_norm = _normalize_text(merchant)
+        if m_norm in raw_text_norm:
+            conf["merchant"] = max(conf["merchant"], 0.85)
+        
+        # Check history for merchant
+        existing_tx = db.query(Transaction).filter(
+            Transaction.user_id == current_user.id,
+            Transaction.description.ilike(f"%{merchant}%")
+        ).first()
+        if existing_tx:
+            conf["merchant"] = max(conf["merchant"], 0.95)
+
+    # Boost date if it looks like a real date from text
+    if date_value:
+        d_str = str(date_value)
+        if d_str in text or date_value.strftime("%d/%m") in text or date_value.strftime("%d-%m") in text:
+            conf["transaction_date"] = max(conf["transaction_date"], 0.90)
+        
+        # Sanity check: date shouldn't be too far in past or in future
+        today = DateType.today()
+        if date_value > today:
+            conf["transaction_date"] = min(conf["transaction_date"], 0.40)
+        elif (today - date_value).days < 7:
+            conf["transaction_date"] = max(conf["transaction_date"], 0.80)
+
+    # Penalty if total is zero
+    if not total or total <= 0:
+        conf["final_total"] = 0
+
     return {
-        "merchant": merchant,
-        "total": total,
-        "date": date_value,
-        "vat": vat_amount,
-        "estimated": estimated,
-        "note": note,
-        "computed_total": computed_total,
-        "total_delta": total_delta,
-        "is_total_consistent": is_total_consistent,
-        "warnings": warnings,
-        "text": text,
+        "data": {
+            "merchant": merchant,
+            "transaction_date": date_value,
+            "transaction_type": "expense",
+            "payment_source": payment_source,
+            "category": category_name,
+            "tags": final_tags,
+            "suggested_note": suggested_note,
+            "raw_ocr_text": text,
+            "subtotal_before_tax": subtotal,
+            "vat_amount": vat_amount,
+            "discount_amount": discount_amount,
+            "final_total": total,
+            "currency": "VND",
+            "line_items": line_items,
+            "image_path": final_image_path,
+        },
+        "confidence": conf,
+        "warnings": [] if is_valid else [f"Tiền hàng ({s}) + Thuế ({v}) - Giảm giá ({d}) != Tổng ({f})"],
+        "debug": {
+            "money_validation": {
+                "formula": "subtotal_before_tax + vat_amount - discount_amount = final_total",
+                "is_valid": is_valid,
+                "delta": delta
+            }
+        }
     }
+
+

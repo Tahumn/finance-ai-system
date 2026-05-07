@@ -129,6 +129,217 @@ const formatAnomalyTip = (anomaly) => {
   return head || tail || JSON.stringify(anomaly);
 };
 
+/* SVG icons for AI */
+const IcSparkle = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/>
+  </svg>
+);
+const IcTrendUp = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>
+  </svg>
+);
+const IcTrendDown = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 18l-9.5-9.5-5 5L1 6"/><path d="M17 18h6v-6"/>
+  </svg>
+);
+const IcAlert = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+const IcLightbulb = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M5.22 5.22l.707.707"/><path d="M1 12h1"/><path d="M21 12h1"/><path d="M18.07 5.93l.707-.707"/><path d="M12 2c-3.31 0-6 2.69-6 6 0 1.5.5 3 1.5 4.5.83 1.25 1.5 3 1.5 4.5h6c0-1.5.67-3.25 1.5-4.5 1-1.5 1.5-3 1.5-4.5 0-3.31-2.69-6-6-6z"/>
+  </svg>
+);
+
+/* Mini Sparkline for Trends */
+const TrendSparkline = ({ data = [] }) => {
+  if (data.length < 2) return null;
+  const values = data.map(d => d.expense || 0);
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const width = 100;
+  const height = 30;
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <svg width={width} height={height} className="txd-sparkline">
+      <path d={`M ${points}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
+const AiIntelligencePanel = ({ 
+  monthlySeries, 
+  anomalies, 
+  aiSuggestions, 
+  showAllTips, 
+  setShowAllTips, 
+  loading,
+  formatAnomalyTip,
+  IcSparkle,
+  IcTrendUp,
+  IcTrendDown,
+  IcAlert,
+  IcLightbulb,
+  categoryStats = [],
+  transactions = [],
+  setSelectedTx,
+  setActiveModal,
+  IcEye
+}) => {
+  // Find the category with the highest spending to provide a better tip
+  const topCategory = categoryStats.length > 0 
+    ? [...categoryStats].sort((a, b) => Math.abs(b.amt) - Math.abs(a.amt))[0] 
+    : null;
+
+  return (
+    <div className="txd-ai-horizontal-panel">
+      <div className="txd-ai-hp-header">
+        <div className="txd-ai-chip-wrap">
+          <div className="txd-ai-chip">
+            <IcSparkle size={14} /> Trợ lý Tài chính AI
+          </div>
+        </div>
+        <div className="txd-ai-status">{loading ? "Đang quét dữ liệu..." : "Hệ thống đã sẵn sàng"}</div>
+      </div>
+
+      <div className="txd-ai-hp-content">
+        {/* 1. Phân tích Biến động Chi tiết */}
+        <div className="txd-ai-hp-col trend-col">
+          <div className="txd-ai-section-title">
+            <IcTrendUp /> PHÂN TÍCH BIẾN ĐỘNG
+          </div>
+          {monthlySeries && monthlySeries.length >= 2 ? (
+            (() => {
+              const last = monthlySeries[monthlySeries.length - 1];
+              const prev = monthlySeries[monthlySeries.length - 2];
+              const diff = last.expense - prev.expense;
+              const pct = prev.expense ? (diff / prev.expense) * 100 : 0;
+              return (
+                <div className="txd-ai-trend-card pro horizontal">
+                  <div className="txd-ai-trend-header">
+                    <div className="txd-ai-trend-main">
+                      <div className={`txd-ai-trend-circle ${diff > 0 ? "up" : "down"}`}>
+                        {diff > 0 ? <IcTrendUp /> : <IcTrendDown />}
+                      </div>
+                      <div>
+                        <div className="txd-ai-trend-val">
+                          {diff > 0 ? "+" : ""}{Math.round(pct)}%
+                        </div>
+                        <div className="txd-ai-trend-label">Dòng tiền tháng này</div>
+                      </div>
+                    </div>
+                    <div className={`txd-ai-spark-container ${diff > 0 ? "up" : "down"}`}>
+                      <TrendSparkline data={monthlySeries.slice(-6)} />
+                    </div>
+                  </div>
+                  <div className="txd-ai-trend-footer">
+                    <div className="txd-ai-insight-box mini">
+                       <p className="txd-ai-trend-desc-mini">
+                         {diff > 0 
+                           ? `Cảnh báo: Chi tiêu đang vượt mức kiểm soát, tập trung tại '${topCategory?.name || 'nhóm chính'}'.` 
+                           : "Tối ưu: Bạn đang duy trì kỷ luật ngân sách xuất sắc. Xu hướng giảm chi phí đang ổn định."}
+                       </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <p className="txd-ai-empty">Đang xây dựng mô hình dự báo...</p>
+          )}
+        </div>
+
+        {/* 2. Hệ thống Cảnh báo Sớm */}
+        <div className="txd-ai-hp-col anomaly-col">
+          <div className="txd-ai-section-title warning">
+            <IcAlert /> HỆ THỐNG CẢNH BÁO SỚM
+          </div>
+          <div className="txd-ai-anomaly-list horizontal">
+            {anomalies && anomalies.length > 0 ? (
+              anomalies.slice(0, 1).map((a, idx) => {
+                const level = a.type?.toLowerCase() || "medium";
+                return (
+                  <div key={idx} className={`txd-ai-anomaly-card-premium ${level} horizontal scanner-effect`}>
+                    <div className="txd-ai-anomaly-left">
+                       <div className="txd-ai-anomaly-icon-wrap mini pulse">
+                         <IcAlert />
+                       </div>
+                    </div>
+                    <div className="txd-ai-anomaly-right">
+                       <div className="txd-ai-anomaly-meta-row">
+                          <div className="txd-ai-anomaly-status-tag">{level === 'high' ? 'RỦI RO CAO' : 'CẦN XÁC MINH'}</div>
+                          <div className="txd-ai-live-tag"><span className="dot"></span> LIVE</div>
+                       </div>
+                       <div className="txd-ai-anomaly-text-main mini"><strong>Phát hiện:</strong> {formatAnomalyTip(a)}</div>
+                        <button 
+                          className="txd-ai-anomaly-btn-premium" 
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const topHeader = document.querySelector('.txd-header-top') || document.querySelector('.tx-top-header');
+                            if (topHeader) {
+                              topHeader.scrollIntoView({ behavior: 'smooth' });
+                            } else {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                          <span>Rà soát chi tiết</span>
+                        </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="txd-ai-status-safe pro">
+                 <div className="txd-ai-safe-icon">🛡️</div>
+                 <p>Hệ thống đang bảo mật. Không có giao dịch nghi vấn trong chu kỳ này.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Chiến lược Tối ưu Tài sản */}
+        <div className="txd-ai-hp-col tips-col">
+          <div className="txd-ai-section-title savings">
+            <IcLightbulb /> CHIẾN LƯỢC TỐI ƯU TÀI SẢN
+          </div>
+          <div className="txd-ai-tips-list horizontal">
+            {(() => {
+              const finalTips = (aiSuggestions && aiSuggestions.length > 0) ? aiSuggestions : [
+                  "Chiến lược 50/30/20: Phân bổ 50% cho thiết yếu, 30% linh hoạt và 20% cho đầu tư dài hạn.",
+                  `Tối ưu nhóm '${topCategory?.name || 'chi tiêu'}': Cắt giảm 15% tại đây sẽ tạo ra khoản thặng dư đáng kể sau 12 tháng.`,
+                  "Nguyên tắc 72 giờ: Đợi 3 ngày trước khi quyết định mua sắm các món đồ giá trị lớn để tránh bốc đồng."
+                ];
+              return finalTips.slice(0, 3).map((tip, idx) => (
+                <div key={idx} className="txd-ai-tip-card pro mini expert">
+                  <div className="txd-ai-tip-body">
+                     <div className="txd-ai-tip-icon mini">🚀</div>
+                     <div className="txd-ai-tip-text mini"><strong>Chiến lược:</strong> {typeof tip === 'string' ? tip : tip.message}</div>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ─── main component ─── */
 export default function TransactionsScreen({
   transactions,
@@ -154,12 +365,18 @@ export default function TransactionsScreen({
   onParseFromText,
   accounts = [],
   anomalies = [],
+  newlyCreatedId,
+  onCreateBill,
+  aiSuggestions = [],
+  monthlySeries = []
 }) {
   /* modals */
   const [activeModal, setActiveModal] = useState(null); // "add" | "ocr" | "edit" | "detail" | "dateRange"
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState(null);
   const [editingTx, setEditingTx] = useState(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [showAllTips, setShowAllTips] = useState(false);
 
   /* desktop layout toggle */
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
@@ -299,8 +516,12 @@ export default function TransactionsScreen({
         const sign = i.transaction_type === "income" ? 1 : -1;
         return s + sign * i.amount;
       }, 0),
-    }));
-  }, [sorted]);
+    })).sort((a, b) => {
+      const dateA = a.items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      const dateB = b.items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      return sortOrder === "oldest" ? (dateA > dateB ? 1 : -1) : (dateB > dateA ? 1 : -1);
+    });
+  }, [sorted, sortOrder]);
 
   /* category breakdown for icons row */
   const categoryStats = useMemo(() => {
@@ -387,7 +608,11 @@ export default function TransactionsScreen({
       grouped[cat].count++;
       grouped[cat].total += tx.transaction_type === "income" ? Number(tx.amount) : -Number(tx.amount);
     });
-    const sortedGroups = Object.entries(grouped);
+    const sortedGroups = Object.entries(grouped).sort((a, b) => {
+      const dateA = a[1].items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      const dateB = b[1].items.reduce((max, item) => (item.date > max ? item.date : max), "0000-00-00");
+      return sortOrder === "oldest" ? (dateA > dateB ? 1 : -1) : (dateB > dateA ? 1 : -1);
+    });
 
     return (
       <div className="txd-container">
@@ -490,11 +715,10 @@ export default function TransactionsScreen({
                      </button>
                    </div>
                  )}
-                 <div className="txd-cat-list">
+                 <div className="txd-cip-scroll">
                     {categoryStats.map(([name, count]) => {
                        const meta = getCatMeta(name);
                        const amt = sorted.filter((i) => (i.categoryLabel || "Khác") === name).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0);
-                       // Mock percentage based on max value for visual matching
                        const maxAmt = Math.max(...categoryStats.map(([n]) => Math.abs(sorted.filter((i) => (i.categoryLabel || "Khác") === n).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0))));
                        const pct = maxAmt ? (Math.abs(amt) / maxAmt * 46.7).toFixed(1) : 0;
                        
@@ -511,20 +735,6 @@ export default function TransactionsScreen({
                     })}
                  </div>
               </div>
-
-              {/* AI Insights Card - below category sidebar */}
-	              {anomalies && anomalies.length > 0 && (
-	                <div className="txd-ai-card">
-	                  <div className="txd-ai-card-header">
-	                    <span>✨</span>
-	                    <h4>Gợi ý AI</h4>
-	                    <span className="txd-ai-badge">Mới</span>
-	                  </div>
-	                  {anomalies.slice(0, 2).map((a, idx) => (
-	                    <p key={idx} className="txd-ai-tip">• {formatAnomalyTip(a)}</p>
-	                  ))}
-	                </div>
-	              )}
 	           </div>
 
            {/* Right Column (List + Filters) */}
@@ -615,10 +825,17 @@ export default function TransactionsScreen({
                                       let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
                                       
                                       return (
-                                        <div key={tx.id || tx.description} className="txd-list-row" onClick={() => setSelectedTx(tx)}>
+                                        <div key={tx.id || tx.description} className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""}`} onClick={() => setSelectedTx(tx)}>
                                            <div className="lr-col main">
                                               <div className="lr-icon" style={{background: txMeta.bg, color: "#fff"}}><txMeta.SvgIcon size={14}/></div>
-                                              <span className="lr-title">{tx.description || "Giao dịch"}</span>
+                                              <span className="lr-title">
+                                                {tx.description || "Giao dịch"}
+                                                {tx.ocr_confidence > 0 && (
+                                                  <span className="tx-ocr-badge" title={`Độ tin cậy OCR: ${Math.round(tx.ocr_confidence * 100)}%`}>
+                                                    <IcOcr /> {Math.round(tx.ocr_confidence * 100)}%
+                                                  </span>
+                                                )}
+                                              </span>
                                            </div>
                                            <div className="lr-col notes">{tx.notes || "—"}</div>
                                            <div className="lr-col date">{tx.date?.split('-').reverse().join('/')}</div>
@@ -672,9 +889,32 @@ export default function TransactionsScreen({
                })()}
         </div>
       </div>
+
+      {/* AI Intelligence Horizontal Panel (Desktop Bottom) */}
+      <div className="txd-ai-footer-wrap">
+        <AiIntelligencePanel 
+          monthlySeries={monthlySeries}
+          anomalies={anomalies}
+          aiSuggestions={aiSuggestions}
+          showAllTips={showAllTips}
+          setShowAllTips={setShowAllTips}
+          loading={loading}
+          formatAnomalyTip={formatAnomalyTip}
+          IcSparkle={IcSparkle}
+          IcTrendUp={IcTrendUp}
+          IcTrendDown={IcTrendDown}
+          IcAlert={IcAlert}
+          IcLightbulb={IcLightbulb}
+          categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
+          transactions={transactions}
+          setSelectedTx={setSelectedTx}
+          setActiveModal={setActiveModal}
+          IcEye={IcEye}
+        />
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   /* ─── RENDER MOBILE ─── */
   const renderMobile = () => {
@@ -930,7 +1170,7 @@ export default function TransactionsScreen({
                       const tagColor = payTag?.name === "Tiền mặt" ? { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" } : { bg: "#dbeafe", text: "#2563eb", border: "#bfdbfe" };
 
                       return (
-                        <div key={item.id} className="tx-item">
+                        <div key={item.id} id={`tx-row-${item.id}`} className="tx-item">
                           <div className="tx-item-icon" style={{ background: meta.light, color: meta.bg }}>
                             <meta.SvgIcon size={18} />
                           </div>
@@ -1006,6 +1246,28 @@ export default function TransactionsScreen({
         )}
       </div>
 
+      {/* AI Intelligence Horizontal Panel (Mobile Bottom) */}
+      <div className="tx-mobile-ai-footer">
+        <AiIntelligencePanel 
+          monthlySeries={monthlySeries}
+          anomalies={anomalies}
+          aiSuggestions={aiSuggestions}
+          showAllTips={showAllTips}
+          setShowAllTips={setShowAllTips}
+          loading={loading}
+          formatAnomalyTip={formatAnomalyTip}
+          IcSparkle={IcSparkle}
+          IcTrendUp={IcTrendUp}
+          IcTrendDown={IcTrendDown}
+          IcAlert={IcAlert}
+          IcLightbulb={IcLightbulb}
+          categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
+          transactions={transactions}
+          setSelectedTx={setSelectedTx}
+          setActiveModal={setActiveModal}
+          IcEye={IcEye}
+        />
+      </div>
     </section>
     );
   };
@@ -1317,6 +1579,20 @@ export default function TransactionsScreen({
                       {isIncome ? "+" : "-"}{currency(selectedTx.amount)}
                     </p>
                   </div>
+                  
+                  {selectedTx.image_path && (
+                    <div className="tx-detail-receipt">
+                      <div className="tx-receipt-img" onClick={() => setIsImageModalOpen(true)}>
+                        <img 
+                          src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
+                          alt="Hóa đơn" 
+                        />
+                        <div className="tx-img-overlay">
+                          <span>Nhấn để phóng to</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="tx-detail-grid">
                     <div className="tx-detail-row">
@@ -1374,8 +1650,20 @@ export default function TransactionsScreen({
               onCreateCategory={onCreateCategory}
               onCreateTag={onCreateTag}
               onCreateTransaction={onCreateTransaction}
+              onCreateBill={onCreateBill}
               loading={loading}
               embedded
+            />
+          </div>
+        </div>
+      )}
+      {isImageModalOpen && selectedTx?.image_path && (
+        <div className="tx-modal-overlay" onClick={() => setIsImageModalOpen(false)}>
+          <div className="tx-modal-content" onClick={e => e.stopPropagation()}>
+            <button className="tx-modal-close" onClick={() => setIsImageModalOpen(false)}>&times;</button>
+            <img 
+              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
+              alt="Hóa đơn phóng lớn" 
             />
           </div>
         </div>

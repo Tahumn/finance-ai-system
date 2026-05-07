@@ -5,23 +5,37 @@ import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../.
 import { colorFor, onColor } from "../../utils/colors.js";
 import { t } from "../../utils/i18n.js";
 import { CAT_ICONS, getCatMeta } from "../../utils/categoryIcons.jsx";
+import "./ocr.css";
+
+const getConfClass = (score) => {
+  if (score >= 0.8) return "high";
+  if (score >= 0.5) return "med";
+  return "low";
+};
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
   merchant: "",
   total: "",
+  subtotal: "",
   vat: "",
-  estimated: "",
+  discount: "",
   categoryId: "",
-  note: ""
+  note: "",
+  paymentSource: "",
+  imagePath: ""
 });
 
 const baseConfidence = {
   date: 0,
   merchant: 0,
   total: 0,
+  subtotal: 0,
   vat: 0,
-  estimated: 0
+  discount: 0,
+  paymentSource: 0,
+  category: 0,
+  tags: 0
 };
 
 const sanitizeName = (name) =>
@@ -59,6 +73,8 @@ export default function OcrScreen({
   onCreateCategory,
   onCreateTag,
   onCreateTransaction,
+  onCreateBill,
+  onNavigate,
   loading,
   embedded = false,
   onClose
@@ -131,9 +147,10 @@ export default function OcrScreen({
   const computedSubTotal = useMemo(() => {
     const total = parseNumberInput(parsed.total);
     const vat = parseNumberInput(parsed.vat);
-    const discount = parseNumberInput(parsed.estimated);
-    return Math.max(0, total + vat - discount);
-  }, [parsed.total, parsed.vat, parsed.estimated]);
+    const discount = parseNumberInput(parsed.discount);
+    // Formula: subtotal = total - vat + discount
+    return Math.max(0, total - vat + discount);
+  }, [parsed.total, parsed.vat, parsed.discount]);
 
   const handleExtract = async () => {
     if (!file) {
@@ -145,28 +162,55 @@ export default function OcrScreen({
     setNotice("");
     setOcrState("running");
 
-    try {
-      const result = await extractOcr(file);
-      setParsed((current) => ({
-        ...current,
-        merchant: result.merchant || current.merchant || sanitizeName(file.name) || t("ocr.merchant_guess"),
-        total: toFormattedNumber(result.total, current.total),
-        vat: toFormattedNumber(result.vat, current.vat),
-        estimated: toFormattedNumber(result.estimated, current.estimated),
-        note: result.note || (result.text ? `OCR: ${result.text.slice(0, 200)}` : current.note),
-        date: result.date || current.date
-      }));
-      setConfidence({
-        date: result.date ? 0.8 : 0.3,
-        merchant: result.merchant ? 0.8 : 0.3,
-        total: result.total ? 0.9 : 0.3,
-        vat: result.vat ? 0.7 : 0.2,
-        estimated: result.estimated ? 0.6 : 0.2
-      });
-      setWarnings(result.warnings || []);
-      setNotice(t("ocr.notice.extracted", null, "OCR done. Review and confirm before creating transaction."));
-      setOcrState("done");
-    } catch (err) {
+      try {
+        const result = await extractOcr(file);
+        const { data, confidence: conf } = result;
+        
+        setParsed((current) => ({
+          ...current,
+          merchant: (data.merchant || "").trim() || current.merchant || sanitizeName(file.name),
+          total: toFormattedNumber(data.final_total, current.total),
+          subtotal: toFormattedNumber(data.subtotal_before_tax, current.subtotal),
+          vat: toFormattedNumber(data.vat_amount, current.vat),
+          discount: toFormattedNumber(data.discount_amount, current.discount),
+          note: data.suggested_note || current.note,
+          date: data.transaction_date || current.date,
+          categoryId: data.category ? (categories.find(c => c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
+          paymentSource: data.payment_source || current.paymentSource,
+          imagePath: data.image_path || ""
+        }));
+
+        setConfidence({
+          date: conf.transaction_date || 0,
+          merchant: conf.merchant || 0,
+          total: conf.final_total || 0,
+          subtotal: conf.subtotal_before_tax || 0,
+          vat: conf.vat_amount || 0,
+          discount: conf.discount_amount || 0,
+          paymentSource: conf.payment_source || 0,
+          category: conf.category || 0,
+          tags: conf.tags || 0
+        });
+
+        if (data.tags && data.tags.length) {
+          const foundIds = data.tags
+            .map(tName => tagNameMap[tName.toLowerCase()]?.id)
+            .filter(Boolean);
+          setSelectedTagIds(prev => [...new Set([...prev, ...foundIds])]);
+        }
+
+        if (data.payment_source) {
+          const sourceTag = paymentTagCandidates.find(t => 
+            t.name.toLowerCase().includes(data.payment_source.toLowerCase()) ||
+            data.payment_source.toLowerCase().includes(t.name.toLowerCase())
+          );
+          if (sourceTag) setFundingSourceId(sourceTag.id);
+        }
+
+        setWarnings(result.warnings || []);
+        setNotice(t("ocr.notice.extracted", null, "OCR hoàn tất! Hệ thống đã trích xuất được thông tin. Vui lòng kiểm tra và bấm Lưu."));
+        setOcrState("done");
+      } catch (err) {
       setError(err.message || t("ocr.error.extract_failed", null, "OCR failed."));
       setOcrState("idle");
     }
@@ -189,22 +233,63 @@ export default function OcrScreen({
     ]
       .filter(Boolean)
       .join(" - ");
+    setOcrState("running");
 
     try {
-      let ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
-      if (!ocrTagId && onCreateTag) {
-        const createdOcrTag = await onCreateTag({ name: "Hóa đơn OCR", color: "#ec4899" });
-        ocrTagId = createdOcrTag?.id;
-      }
-      await onCreateTransaction({
-        description: descriptionParts,
-        amount: parseNumberInput(parsed.total),
-        transaction_type: txType,
-        category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+      // 1. Always create the bill
+      const billPayload = {
+        merchant: parsed.merchant,
+        total_amount: parseNumberInput(parsed.total),
+        vat_amount: parseNumberInput(parsed.vat),
         date: parsed.date,
-        tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])]
-      });
-      setNotice(t("ocr.notice.created", null, "Transaction created from OCR."));
+        category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+        account_id: parsed.accountId ? Number(parsed.accountId) : null,
+        bill_number: referenceCode,
+        ocr_confidence: confidence.total,
+        status: autoCreate ? "confirmed" : "pending",
+        notes: parsed.note,
+        image_path: parsed.imagePath
+      };
+
+      if (typeof onCreateBill !== "function") {
+        setError(`Lỗi: Chức năng lưu hóa đơn chưa được khởi tạo (Type: ${typeof onCreateBill}).`);
+        setOcrState("idle");
+        return;
+      }
+      
+      await onCreateBill(billPayload);
+
+      // 2. If checked, also create the transaction
+      if (autoCreate) {
+        if (typeof onCreateTransaction !== "function") {
+          setError("Lỗi: Chức năng lưu giao dịch chưa được khởi tạo.");
+          setOcrState("idle");
+          return;
+        }
+
+        const ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
+
+        await onCreateTransaction({
+          description: `${parsed.merchant || t("ocr.default_desc")}${parsed.note ? " - " + parsed.note : ""}`,
+          amount: parseNumberInput(parsed.total),
+          transaction_type: txType,
+          category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
+          account_id: parsed.accountId ? Number(parsed.accountId) : null,
+          date: parsed.date,
+          tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
+          notes: parsed.note,
+          image_path: parsed.imagePath
+        });
+        
+        setNotice(t("ocr.notice.created_both", null, "Đã tạo cả hóa đơn và giao dịch thành công!"));
+      } else {
+        setNotice(t("ocr.notice.bill_created", null, "Đã lưu hóa đơn thành công!"));
+      }
+
+      if (onNavigate) {
+        setTimeout(() => onNavigate("bills"), 1500);
+      }
+
       setParsed(baseParsedState());
       setConfidence(baseConfidence);
       setFile(null);
@@ -277,7 +362,7 @@ export default function OcrScreen({
         </div>
       )}
 
-      <div className="receipt-grid ocr-layout">
+      <div className={`receipt-grid ocr-layout ${ocrState === "running" ? "running" : ""}`}>
         <div className="receipt-uploader ocr-left-col">
           <div className="ocr-upload-switch">
             <button type="button" className="active">Tải ảnh lên</button>
@@ -299,7 +384,8 @@ export default function OcrScreen({
             {ocrState === "running" ? "Đang trích xuất OCR..." : "Trích xuất lại OCR"}
           </button>
 
-          <div className="receipt-preview">
+          <div className="receipt-preview preview-container">
+            <div className="scanner-line"></div>
             {previewUrl ? <img src={previewUrl} alt="Receipt preview" /> : <p className="empty">Xem trước hóa đơn</p>}
           </div>
 
@@ -321,28 +407,44 @@ export default function OcrScreen({
         <form className="form ocr-form-panel ocr-form-modern" onSubmit={handleCreate}>
           <h4>1. Thông tin giao dịch</h4>
           <div className="row">
-            <label className="field">
-              <span>Ngày giao dịch *</span>
-              <input
-                type="date"
-                value={parsed.date}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, date: event.target.value }))
-                }
-                required
-              />
+            <label className="field-pro">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Ngày giao dịch *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.date)})`, position: 'static' }}>
+                  {Math.round(confidence.date * 100)}% Tin cậy
+                </div>
+              </div>
+              <div className="input-wrapper-pro">
+                <input
+                  type="date"
+                  className="input-pro"
+                  value={parsed.date}
+                  onChange={(event) =>
+                    setParsed((current) => ({ ...current, date: event.target.value }))
+                  }
+                  required
+                />
+              </div>
             </label>
 
-            <label className="field">
-              <span>Merchant *</span>
-              <input
-                type="text"
-                value={parsed.merchant}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, merchant: event.target.value }))
-                }
-                placeholder="Ví dụ: Circle K"
-              />
+            <label className="field-pro">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Merchant *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})`, position: 'static' }}>
+                  {Math.round(confidence.merchant * 100)}% Tin cậy
+                </div>
+              </div>
+              <div className="input-wrapper-pro">
+                <input
+                  type="text"
+                  className="input-pro"
+                  value={parsed.merchant}
+                  onChange={(event) =>
+                    setParsed((current) => ({ ...current, merchant: event.target.value }))
+                  }
+                  placeholder="Ví dụ: Circle K"
+                />
+              </div>
             </label>
           </div>
 
@@ -373,57 +475,96 @@ export default function OcrScreen({
           )}
 
           <div className="row">
-            <label className="field">
-              <span>Tổng tiền *</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.total}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    total: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-                required
-              />
+            <label className="field-pro">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Tổng tiền *</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.total)})`, position: 'static' }}>
+                  {Math.round(confidence.total * 100)}% Tin cậy
+                </div>
+              </div>
+              <div className="input-wrapper-pro">
+                <input
+                  type="text"
+                  className="input-pro"
+                  inputMode="numeric"
+                  value={parsed.total}
+                  onChange={(event) =>
+                    setParsed((current) => ({
+                      ...current,
+                      total: formatNumberInput(event.target.value)
+                    }))
+                  }
+                  placeholder="0"
+                  required
+                />
+              </div>
+              <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block' }}>
+                {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
+              </small>
             </label>
 
-            <label className="field">
-              <span>VAT</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.vat}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    vat: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-              />
+            <label className="field-pro">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>VAT</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.vat)})`, position: 'static' }}>
+                  {Math.round(confidence.vat * 100)}% Tin cậy
+                </div>
+              </div>
+              <div className="input-wrapper-pro">
+                <input
+                  type="text"
+                  className="input-pro"
+                  inputMode="numeric"
+                  value={parsed.vat}
+                  onChange={(event) =>
+                    setParsed((current) => ({
+                      ...current,
+                      vat: formatNumberInput(event.target.value)
+                    }))
+                  }
+                  placeholder="0"
+                />
+              </div>
             </label>
-            <label className="field">
-              <span>Giảm giá</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.estimated}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    estimated: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-              />
+            <label className="field-pro">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Giảm giá</span>
+                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.discount)})`, position: 'static' }}>
+                  {Math.round(confidence.discount * 100)}% Tin cậy
+                </div>
+              </div>
+              <div className="input-wrapper-pro">
+                <input
+                  type="text"
+                  className="input-pro"
+                  inputMode="numeric"
+                  value={parsed.discount}
+                  onChange={(event) =>
+                    setParsed((current) => ({
+                      ...current,
+                      discount: formatNumberInput(event.target.value)
+                    }))
+                  }
+                  placeholder="0"
+                />
+              </div>
             </label>
           </div>
 
+          <div className="confidence-legend">
+            <div className="legend-item">
+              <span className="dot high"></span> &gt;90% Tin cậy cao
+            </div>
+            <div className="legend-item">
+              <span className="dot med"></span> 70-89% Khá tin cậy
+            </div>
+            <div className="legend-item">
+              <span className="dot low"></span> &lt;70% Cần kiểm tra
+            </div>
+          </div>
+
           <label className="field">
-            <span>Tạm tính</span>
+            <span>Tiền hàng (trước VAT)</span>
             <input type="text" value={currency(computedSubTotal)} readOnly />
           </label>
 
@@ -502,21 +643,7 @@ export default function OcrScreen({
               placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu."
             />
           </label>
-          <div className="row">
-            <label className="field">
-              <span>Số hóa đơn / Mã tham chiếu</span>
-              <input
-                type="text"
-                value={referenceCode}
-                onChange={(event) => setReferenceCode(event.target.value)}
-                placeholder="Ví dụ: CK260426-00123"
-              />
-            </label>
-            <label className="field">
-              <span>Đính kèm khác</span>
-              <button type="button" className="ghost ocr-attach-btn">+ Đính kèm tệp</button>
-            </label>
-          </div>
+          {/* Removed Invoice Number and Attachments as per user request */}
 
           <div className="tag-section ocr-tag-section">
             <label className="field">
@@ -616,12 +743,23 @@ export default function OcrScreen({
                 setTagInput("");
                 setReferenceCode("");
                 setAutoCreate(true);
+                setOcrState("idle");
               }}
             >
-              Làm mới
+              Làm lại
             </button>
-            <button className="primary" type="submit" disabled={!canCreate || loading || !autoCreate}>
-              Tạo giao dịch từ hóa đơn
+            <button 
+              className="primary" 
+              type="submit" 
+              style={{ flex: 1 }} 
+              disabled={ocrState === "running" || loading}
+              onClick={() => {
+                if (!canCreate) {
+                  setError("Vui lòng nhập đầy đủ Tổng tiền và Ngày hóa đơn.");
+                }
+              }}
+            >
+              {loading ? "Đang xử lý..." : autoCreate ? "Xác nhận & Lưu Giao Dịch" : "Lưu vào Hóa đơn"}
             </button>
           </div>
         </form>
