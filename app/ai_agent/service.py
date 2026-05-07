@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 from datetime import date as DateType, datetime, timedelta
+from zoneinfo import ZoneInfo
 import base64
 import io
 import json
@@ -48,6 +49,16 @@ except Exception:
     np = None
 
 
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
+
+
+def _today_local() -> DateType:
+    try:
+        return datetime.now(ZoneInfo(APP_TIMEZONE)).date()
+    except Exception:
+        return datetime.now().date()
+
+
 def _extract_json(text: str) -> dict:
     """Extract JSON object from Gemini response text (handles markdown fences)."""
     text = text.strip()
@@ -70,9 +81,17 @@ def _extract_json(text: str) -> dict:
 
 
 AMOUNT_REGEX = re.compile(
-    r"(?P<num>\d+(?:[.,]\d+)*)\s*(?P<unit>k|nghin|ngan|tr|trieu|m|million|ty|ti)?\s*(?:đ|d|vnd|\$|eur)?(?=\s|\W|$)", 
+    r"(?P<num>"
+    r"\d{1,3}(?:\.\d{3})+"
+    r"|"
+    r"\d+(?:[.,]\d+)?"
+    r")"
+    r"\s*"
+    r"(?P<unit>k|nghin|ngàn|ngan|tr|trieu|triệu|cu|củ)"
+    r"(?:\s*(?P<half>ruoi|rưỡi|nua|nửa))?",
     re.IGNORECASE
 )
+
 DATE_DDMM_REGEX = re.compile(r"(?P<day>\d{1,2})[./-](?P<month>\d{1,2})(?:[./-](?P<year>\d{2,4}))?")
 DATE_ISO_REGEX = re.compile(r"(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})")
 DATE_TEXT_REGEX = re.compile(
@@ -98,6 +117,8 @@ COLLOQUIAL_UNIT_MULTIPLIER = {
     "lit": 100_000,
     "xi": 100_000,
     "chai": 1_000_000,
+    "canh": 1_000,
+    "ca": 1_000,
 }
 
 # Merger slang units into main multiplier for heuristic consistency
@@ -536,7 +557,7 @@ def _strip_date_fragments(text: str) -> str:
 
 def _parse_date(text: str) -> DateType | None:
     normalized = _normalize_text(text)
-    today = DateType.today()
+    today = _today_local()
     if "hom nay" in normalized or "today" in normalized:
         return today
     if "hom qua" in normalized or "yesterday" in normalized:
@@ -643,12 +664,21 @@ MULTI_CONNECTOR_REGEX = re.compile(
 
 
 def _split_transaction_segments(text: str) -> list[str]:
+
     if not text or not text.strip():
         return []
-    parts = [part.strip(" ,.;") for part in MULTI_CONNECTOR_REGEX.split(text)]
-    parts = [part for part in parts if part]
+
+    parts = re.split(
+        r",|;|\bvà\b|\brồi\b|\bsau đó\b|\bcùng với\b|&",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    parts = [p.strip(" ,.;") for p in parts if p.strip()]
+
     if len(parts) <= 1:
         return [text.strip()]
+
     return parts
 
 
@@ -675,10 +705,7 @@ def _extract_multi_transactions(
         if amount is None:
             continue
         tx_type = parsed.get("transaction_type")
-        if _has_income_keyword(segment) and not _has_expense_keyword(segment):
-            tx_type = "income"
-        elif _has_expense_keyword(segment) and not _has_income_keyword(segment):
-            tx_type = "expense"
+        tx_type = _infer_transaction_type(segment, tx_type)
         if tx_type not in ("income", "expense"):
             continue
 
@@ -701,6 +728,44 @@ def _extract_multi_transactions(
     if len(candidates) < 2:
         return []
     return candidates
+
+
+def _normalize_transaction_type(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = _normalize_text(value)
+    mapping = {
+        "income": "income",
+        "thu": "income",
+        "thu nhap": "income",
+        "save_income": "income",
+        "expense": "expense",
+        "chi": "expense",
+        "chi tieu": "expense",
+        "save_expense": "expense",
+    }
+    return mapping.get(normalized)
+
+
+def _infer_transaction_type(text: str, fallback: str | None = None) -> str:
+    normalized = _normalize_text(text)
+    income_hit = _has_income_keyword(normalized)
+    expense_hit = _has_expense_keyword(normalized)
+    if income_hit and not expense_hit:
+        return "income"
+    if expense_hit and not income_hit:
+        return "expense"
+
+    if fallback in ("income", "expense"):
+        return fallback
+
+    if _has_income_keyword(text):
+        return "income"
+
+    if _has_expense_keyword(text):
+        return "expense"
+
+    return "unknown"
 
 
 def _extract_quoted(text: str) -> list[str]:
@@ -857,6 +922,7 @@ def _extract_colloquial_amount_candidates(normalized_text: str) -> list[float]:
 def _parse_amount(text: str) -> float | None:
     normalized = _strip_date_fragments(_normalize_text(text))
     # Loại bỏ khoảng trắng bị Tesseract chen vào giữa các số
+    normalized = re.sub(r"(\d),(\d)", r"\1.\2", normalized)
     normalized = re.sub(r"(?<=\d)\s*([.,])\s*(?=\d)", r"\1", normalized)
     normalized = re.sub(r"(?<=\d)\s+(?=\d{3}(?:\s|\b|$))", "", normalized)
     normalized = re.sub(r"(?<=\d)\s+(?=\d{3}(?:\s|\b|$))", "", normalized)
@@ -866,20 +932,46 @@ def _parse_amount(text: str) -> float | None:
     normalized = re.sub(r"\b\d{1,3}(?:,\d{3})+\b", lambda match: match.group(0).replace(",", ""), normalized)
     
     matches = []
+
     for match in AMOUNT_REGEX.finditer(normalized):
+
         raw_num = match.group("num")
+
         if not raw_num:
             continue
-        # Loại bỏ sạch dấu chấm còn sót lại (nếu có) trước khi ép kiểu
-        clean_num = raw_num.replace(".", "").replace(",", ".")
+
+        # 1.500.000
+        if raw_num.count(".") > 1:
+            clean_num = raw_num.replace(".", "")
+
+        # 1,5
+        elif "," in raw_num and "." not in raw_num:
+            clean_num = raw_num.replace(",", ".")
+
+        # 1.5
+        else:
+            clean_num = raw_num
+
         try:
             value = float(clean_num)
+
         except ValueError:
             continue
+
         unit = match.group("unit")
+
+        multiplier = 1
+
         if unit:
             multiplier = UNIT_MULTIPLIER.get(unit, 1)
             value *= multiplier
+
+        full_match = match.group(0)
+
+        # 1 triệu rưỡi / 2 củ rưỡi
+        if any(x in full_match for x in ["ruoi", "rưỡi", "nua", "nửa"]):
+            value += multiplier * 0.5
+
         matches.append(value)
 
     matches.extend(_extract_colloquial_amount_candidates(normalized))
@@ -887,7 +979,7 @@ def _parse_amount(text: str) -> float | None:
 
     if not matches:
         return None
-    return sum(matches)
+    return max(matches)
 
 
 def _amount_has_unit(text: str) -> bool:
@@ -974,7 +1066,7 @@ def _parse_transfer(text: str) -> tuple[float | None, str | None, str | None, Da
         month_range = _parse_month_range(text) or _parse_relative_range(text)
         if month_range:
             date_value = month_range[0]
-    date_value = date_value or DateType.today()
+    date_value = date_value or _today_local()
     normalized = _normalize_text(text)
     match = re.search(r"tu\s+(?P<src>.+?)\s+(sang|qua|toi)\s+(?P<dst>.+)", normalized)
     if match:
@@ -1090,13 +1182,13 @@ def _parse_month_range(text: str) -> tuple[DateType, DateType] | None:
     short_match = re.fullmatch(r"(?P<month>\d{1,2})(?:[/-](?P<year>\d{4}))?", compact)
     if short_match:
         month = int(short_match.group("month"))
-        year = int(short_match.group("year")) if short_match.group("year") else DateType.today().year
+        year = int(short_match.group("year")) if short_match.group("year") else _today_local().year
     else:
         match = MONTH_REGEX.search(normalized)
         if not match:
             return None
         month = int(match.group("month"))
-        year = DateType.today().year
+        year = _today_local().year
 
         # Support "thang 12/2025" and "thang 12-2025" in addition to "nam 2025".
         after_month = normalized[match.end() :]
@@ -1119,7 +1211,7 @@ def _parse_month_range(text: str) -> tuple[DateType, DateType] | None:
 
 
 def _default_month_range() -> tuple[DateType, DateType]:
-    today = DateType.today()
+    today = _today_local()
     start = DateType(today.year, today.month, 1)
     if today.month == 12:
         end = DateType(today.year, 12, 31)
@@ -1160,7 +1252,7 @@ def _parse_year_range(text: str) -> tuple[DateType, DateType] | None:
 
 def _parse_relative_range(text: str) -> tuple[DateType, DateType] | None:
     normalized = _normalize_text(text)
-    today = DateType.today()
+    today = _today_local()
     if "hom nay" in normalized:
         return today, today
     if "hom qua" in normalized:
@@ -1455,7 +1547,7 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
 
 def get_spending_anomalies(db: Session, current_user: User) -> list[finance_schemas.AnomalyAlert]:
     # Lấy giao dịch 30 ngày qua để tính trung bình
-    today = DateType.today()
+    today = _today_local()
     start = today - timedelta(days=30)
     txs = finance_service.list_transactions(db, current_user, start_date=start, end_date=today, transaction_type="expense", limit=500)[0]
     
@@ -1498,7 +1590,7 @@ def _get_user_financial_context(
     months: int = 6,
 ) -> dict:
     """Build a financial context dict for AI prompts."""
-    today = DateType.today()
+    today = _today_local()
     start = DateType(today.year, 1, 1) if months >= 12 else (
         today.replace(day=1) if months == 1 else
         DateType(
@@ -1530,7 +1622,7 @@ def get_spending_forecast(
     from calendar import month_abbr
     ctx = _get_user_financial_context(db, current_user, months=6)
 
-    today = DateType.today()
+    today = _today_local()
     next_months = []
     for i in range(1, 4):
         m = (today.month - 1 + i) % 12 + 1
@@ -1869,6 +1961,8 @@ _BUDGET_CATEGORY_ALIASES: dict[str, str] = {
     "education": "Giáo dục",
     "cong nghe": "Công nghệ",
     "technology": "Công nghệ",
+    "du lich": "Du lịch",
+    "travel": "Du lịch",
 }
 
 
@@ -1905,6 +1999,24 @@ def _extract_budget_category_from_text(
     return None
 
 
+# def _resolve_budget_category_name(
+#     db: Session,
+#     current_user: User,
+#     text: str,
+#     llm_category: str | None,
+#     heuristic_category: str | None,
+# ) -> str | None:
+#     # Ưu tiên kết quả từ AI (Gemini) vì nó thông minh và linh hoạt hơn
+#     if llm_category and llm_category.lower() not in ("unknown", "null", "none"):
+#         return llm_category
+        
+#     # Nếu AI không chắc chắn, mới dùng đến bộ lọc từ khóa (Heuristic)
+#     explicit_match = _extract_budget_category_from_text(db, current_user, text)
+#     if explicit_match:
+#         return explicit_match
+        
+#     return heuristic_category
+
 def _resolve_budget_category_name(
     db: Session,
     current_user: User,
@@ -1912,11 +2024,22 @@ def _resolve_budget_category_name(
     llm_category: str | None,
     heuristic_category: str | None,
 ) -> str | None:
-    explicit_match = _extract_budget_category_from_text(db, current_user, text)
+
+    # Ưu tiên AI trước
+    if llm_category and llm_category.lower() not in ("unknown", "null", "none"):
+        return llm_category
+
+    # AI fail mới dùng heuristic
+    explicit_match = _extract_budget_category_from_text(
+        db,
+        current_user,
+        text,
+    )
+
     if explicit_match:
         return explicit_match
-    return llm_category or heuristic_category
 
+    return heuristic_category
 
 def _resolve_tags(db: Session, current_user: User, tag_names: list[str]) -> list[int]:
     """Tự động map hoặc tạo tag mới."""
@@ -2107,7 +2230,6 @@ def parse_transaction_text(
             if data.get("note"):
                 description = data.get("note")
             
-            tag_names = data.get("tags") or []
             tag_ids = _resolve_tags(db, current_user, tag_names)
 
     if amount is None:
@@ -2115,7 +2237,7 @@ def parse_transaction_text(
         if amount is None:
             warnings.append("amount_not_found")
     if parsed_date is None:
-        parsed_date = explicit_text_date or default_date or DateType.today()
+        parsed_date = explicit_text_date or default_date or _today_local()
     if not transaction_type:
         transaction_type = _parse_transaction_type(text)
     if not category_name:
@@ -2158,61 +2280,114 @@ def _call_gemini_chat(text: str, history: list[ChatMessage] | None = None) -> di
     genai.configure(api_key=settings.gemini_api_key)
     MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash"
 
-    system_instruction = """Bạn là AI trợ lý tài chính thông minh cho ứng dụng FoodFast.
-Nhiệm vụ: Hoạt động như một người thật, hiểu ngữ cảnh hội thoại, hiểu slang, và xử lý sửa lỗi tự nhiên.
+    system_instruction = """Bạn là FoodFast AI - Trợ lý tài chính cá nhân thông minh bậc nhất.
+Nhiệm vụ: Phân tích hội thoại và trích xuất dữ liệu tài chính chính xác.
 
-QUY TẮC CỐT LÕI:
-1. NGỮ CẢNH (CONTEXT): Không coi mỗi tin nhắn là độc lập. Phải đọc lịch sử chat để hiểu ý người dùng.
-   - Nếu user nói "ăn sáng" -> Bạn hỏi "Hết bao nhiêu?" -> User nói "35k" -> Bạn phải hiểu đây là giao dịch Chi tiêu Ăn uống 35.000đ.
-2. SỬA LỖI (CORRECTION): Hiểu tất cả các cách nói sửa lỗi (nhầm rồi, lộn, ghi sai, fix lại, đổi thành, à không, mới đúng...).
-   - Khi phát hiện intent sửa lỗi, trả về intent 'update_transaction' và chỉ ra trường cần sửa trong 'target_field'.
-3. SLANG & TEENCODE: Hiểu "k", "củ", "xị", "chai", "ting ting", "bay màu", "ko", "đc", "nham"...
-4. KHÔNG TỰ BỊA: Nếu thiếu thông tin (số tiền/danh mục), hãy hỏi lại thay vì tự điền đại một con số.
-5. XÓA GIAO DỊCH: Hiểu "xóa", "hủy", "thôi bỏ đi" -> Intent 'delete_transaction'.
-6. NGÂN SÁCH (BUDGET): Khi user nói "tạo ngân sách", "đặt hạn mức", "ngân sách mua sắm"... -> Intent 'budget'. Tuyệt đối KHÔNG tạo giao dịch chi tiêu (expense) trong trường hợp này.
+HƯỚNG DẪN XỬ LÝ:
+1. ĐA GIAO DỊCH (VÍ DỤ):
+   - Nếu trong một câu có nhiều hành động tài chính
+     (nhận tiền, chi tiêu, chuyển khoản...)
+     thì LUÔN dùng intent: "create_transactions"
 
-OUTPUT FORMAT (JSON):
+   - User: "Mẹ cho 200k, ăn sáng 40k, trà sữa 55k"
 
+   - Output:
+     {
+       "intent": "create_transactions",
+       "transactions": [
+         {
+           "amount": 200000,
+           "transaction_type": "income",
+           "category": "Quà tặng",
+           "description": "Mẹ cho"
+         },
+         {
+           "amount": 40000,
+           "transaction_type": "expense",
+           "category": "Ăn uống",
+           "description": "Ăn sáng"
+         },
+         {
+           "amount": 55000,
+           "transaction_type": "expense",
+           "category": "Ăn uống",
+           "description": "Trà sữa"
+         }
+       ]
+     }
+
+   - User: "Tôi vừa nhận được 100k từ mẹ và đã tiêu 50k cho nước"
+
+   - Output:
+     {
+       "intent": "create_transactions",
+       "transactions": [
+         {
+           "amount": 100000,
+           "transaction_type": "income",
+           "category": "Quà tặng",
+           "description": "Nhận tiền từ mẹ"
+         },
+         {
+           "amount": 50000,
+           "transaction_type": "expense",
+           "category": "Ăn uống",
+           "description": "Mua nước"
+         }
+       ]
+     }
+
+2. SỬA LỖI & NGỮ CẢNH: 
+   - Dựa vào lịch sử chat để biết user đang nói về giao dịch nào.
+   - Hiểu các câu sửa lỗi: "nhầm rồi", "đổi thành", "không phải"...
+
+3. CHÀO HỎI & TÁN GẪU:
+   - User: "Helu", "Chào nhé", "Bạn là ai"
+   - Output: intent: "greeting" hoặc "chat_general", kèm friendly_response duyên dáng.
+
+4. NGÂN SÁCH:
+   - Hiểu bất kỳ danh mục nào user muốn (Du lịch, Nuôi mèo, Đám cưới...).
+
+OUTPUT FORMAT (JSON ONLY):
 {
-  "intent": "create_transaction" | "update_transaction" | "delete_transaction" | "query" | "budget" | "unknown",
-  "data": {
-    "amount": number | null,
-    "category": "Ăn uống" | "Di chuyển" | "Mua sắm" | "Lương" | "Hóa đơn" | ...,
-    "tags": ["string"],
-    "description": "mô tả đầy đủ",
-    "date": "YYYY-MM-DD",
-    "target_field": "amount" | "category" | "date" | "description" | null
-  },
-  "friendly_response": "Câu phản hồi tự nhiên như người thật đang trò chuyện."
+  "intent": "create_transaction" | "create_transactions" | "update_transaction" | "delete_transaction" | "query" | "budget" | "greeting" | "chat_general" | "unknown",
+  "transactions": [...],
+  "data": { "amount": number, "category": "string", "description": "string" },
+  "friendly_response": "Câu trả lời tự nhiên, thân thiện."
 }"""
 
     try:
         model = genai.GenerativeModel(model_name=MODEL_NAME, system_instruction=system_instruction)
-        chat_session = model.start_chat(history=[])
         
-        # Convert ChatMessage history to Gemini format if provided
+        gemini_history = []
         if history:
-            gemini_history = []
             last_role = None
             for msg in history:
                 role = "user" if msg.role == "user" else "model"
-                # Gemini requires alternating roles. If same role repeats, merge or skip.
+                
+                # Gemini requires starting with 'user'
+                if not gemini_history and role != "user":
+                    continue
+                
+                # Gemini requires alternating roles
                 if role == last_role:
                     if gemini_history:
-                        gemini_history[-1]["parts"][0] += f"\n{msg.content}"
+                        gemini_history[-1]["parts"] = [gemini_history[-1]["parts"][0] + f"\n{msg.content}"]
                     continue
                 
                 gemini_history.append({"role": role, "parts": [msg.content]})
                 last_role = role
             
-            # Ensure history starts with 'user' and ends with 'model' (optional but safer)
+            # Ensure history doesn't end with 'user' if we're about to send a user message
             if gemini_history and gemini_history[-1]["role"] == "user":
-                # If last message is user, we can't send a new user message as prompt directly.
-                # But Gemini start_chat handles it if the send_message is next.
-                pass
-                
-            chat_session.history = gemini_history
+                # We can't easily merge here because send_message takes the next text.
+                # Just pop the last one or add a dummy model response.
+                # Safer: if last is user, just merge it into the current prompt later or skip.
+                # For now, let's just pop it to maintain alternation.
+                gemini_history.pop()
 
+        chat_session = model.start_chat(history=gemini_history)
+        
         generation_config = genai.GenerationConfig(response_mime_type="application/json")
         response = chat_session.send_message(text, generation_config=generation_config)
         
@@ -2221,12 +2396,14 @@ OUTPUT FORMAT (JSON):
             
         return _extract_json(response.text)
     except Exception as e:
+        import traceback
         print(f"Gemini Chat Error: {e}")
+        traceback.print_exc()
         return None
 
 
 
-def _call_gemini_freeform(text: str) -> str | None:
+def _call_gemini_freeform(text: str, history: list[ChatMessage] | None = None) -> str | None:
     if genai is None or not settings.gemini_api_key:
         return None
 
@@ -2249,7 +2426,26 @@ def _call_gemini_freeform(text: str) -> str | None:
             model_name=model_name,
             system_instruction=system_instruction,
         )
-        response = model.generate_content(text)
+        
+        gemini_history = []
+        if history:
+            last_role = None
+            for msg in history:
+                role = "user" if msg.role == "user" else "model"
+                if not gemini_history and role != "user":
+                    continue
+                if role == last_role:
+                    if gemini_history:
+                        gemini_history[-1]["parts"] = [gemini_history[-1]["parts"][0] + f"\n{msg.content}"]
+                    continue
+                gemini_history.append({"role": role, "parts": [msg.content]})
+                last_role = role
+            if gemini_history and gemini_history[-1]["role"] == "user":
+                gemini_history.pop()
+
+        chat_session = model.start_chat(history=gemini_history)
+        response = chat_session.send_message(text)
+        
         if not response:
             return None
         content = getattr(response, "text", None)
@@ -2278,6 +2474,13 @@ def _fallback_chat_intent_payload(
 ) -> dict:
     normalized = _normalize_text(text)
     normalized_basic = _normalize_text_basic(text)
+    heuristic = parse_transaction_text(
+    db,
+    current_user,
+    text,
+    auto_create_category=False,
+    use_llm=False,
+)
     parsed = parse_transaction_text(
         db,
         current_user,
@@ -2349,44 +2552,103 @@ def _fallback_chat_intent_payload(
 
 
 def answer_chat(db: Session, current_user: User, text: str) -> dict:
-    # 1. Fetch recent chat history for context (last 5 messages)
+    # 1. Lấy lịch sử chat để AI hiểu ngữ cảnh
     history = get_chat_history(db, current_user, limit=5)
     
-    # 2. Xử lý nhiều giao dịch trong một câu (Heuristic)
-    multi = _extract_multi_transactions(db, current_user, text)
-    if multi:
-        # (Existing logic for multi transactions remains same)
-        # ...
-        pass
-
-    # 3. Gọi Gemini AI với history để hiểu ngữ cảnh
+    # 2. GỌI AI (GEMINI) - Đây là bộ não chính xử lý ngôn ngữ tự nhiên
     llm_resp = _call_gemini_chat(text, history=history)
     
-    # Chuẩn hóa tin nhắn để hỗ trợ heuristic
+    # Chuẩn hóa tin nhắn
     normalized_text = _normalize_text(text)
     normalized_basic = _normalize_text_basic(text)
-    
-    # Heuristic fallback (dùng để bổ trợ thông tin nếu AI thiếu hoặc nhận diện sửa lỗi nhanh)
-    heuristic = parse_transaction_text(db, current_user, text, auto_create_category=False, use_llm=False)
-    
-    if not isinstance(llm_resp, dict) or not llm_resp.get("intent"):
+
+    heuristic = parse_transaction_text(
+    db,
+    current_user,
+    text,
+    auto_create_category=False,
+    use_llm=False,
+    )
+
+    # 3. KIỂM TRA PHẢN HỒI AI
+    if not llm_resp or not isinstance(llm_resp, dict) or llm_resp.get("intent") == "unknown":
+        # AI không hiểu hoặc lỗi -> Mới dùng bộ quy tắc (Rule-based) dự phòng
         llm_resp = _fallback_chat_intent_payload(db, current_user, text)
 
+    # --- INTENT CLASSIFICATION ---
     intent = llm_resp.get("intent", "unknown").lower()
     data = llm_resp.get("data", {})
     friendly = llm_resp.get("friendly_response", "Đã nhận thông tin.")
 
-    # Kiểm tra intent sửa lỗi từ keyword nếu AI chưa bắt được (Semantic fallback)
-    if any(kw in normalized_text for kw in ["nham", "sai", "sua", "doi", "khong phai", "huy", "xoa"]):
-        if intent not in ("edit", "update_transaction", "delete_transaction"):
-            intent = "edit"
+    # 4. XỬ LÝ CHÀO HỎI & TÁN GẪU (Ưu tiên AI)
+    if intent == "greeting":
+        return {"answer": friendly, "intent": "greeting"}
+    if intent == "chat_general":
+        freeform = _call_gemini_freeform(text, history=history)
+        return {"answer": freeform or friendly, "intent": "chat_general"}
 
-    # Kiểm tra intent ngân sách (Budget) - Tuyệt đối không để nhầm sang transaction
-    if any(kw in normalized_basic for kw in ["ngan sach", "budget", "han muc", "ke hoach chi"]):
-        if intent not in ("budget", "check_budget"):
-            intent = "budget"
+    # 5. XỬ LÝ ĐA GIAO DỊCH
+    multi_data = llm_resp.get("transactions")
+    # Fallback sang heuristic tách câu nếu AI không bóc tách được danh sách
+    if not multi_data and intent == "unknown":
+         multi_data = _extract_multi_transactions(db, current_user, text)
 
-    # Unified Intent Mapping
+    if intent == "create_transactions" or (intent == "unknown" and multi_data):
+
+        print("INTENT:", intent)
+        print("MULTI DATA:", multi_data)
+
+        txs_created = []
+        for item in multi_data:
+            amt = _coerce_amount(item.get("amount"))
+            if not amt:
+                continue
+            desc = item.get("description") or item.get("note") or text
+            raw_type = item.get("transaction_type")
+            normalized_type = _normalize_transaction_type(raw_type)
+            parsed_segment_type = _normalize_transaction_type(
+                parse_transaction_text(
+                    db,
+                    current_user,
+                    desc,
+                    auto_create_category=False,
+                    use_llm=False,
+                ).get("transaction_type")
+            )
+            tx_type = _infer_transaction_type(
+                desc,
+                fallback=normalized_type or parsed_segment_type,
+            )
+            cat_name = item.get("category") or item.get("category_name")
+            cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
+            item_date = _coerce_date_value(item.get("date")) or _parse_date(desc) or _parse_date(text) or _today_local()
+
+            new_tx = finance_service.create_transaction(
+                db, current_user,
+                finance_schemas.TransactionCreate(
+                    description=desc,
+                    amount=amt,
+                    transaction_type=tx_type,
+                    category_id=cat_id,
+                    date=item_date
+                )
+            )
+            txs_created.append(new_tx)
+        
+        if txs_created:
+            response = {
+                "answer": friendly if intent == "create_transactions" else f"Đã ghi nhận {len(txs_created)} giao dịch cho bạn.",
+                "intent": "create_transactions",
+                "total": sum(
+                    t.amount if t.transaction_type == "income"
+                    else -t.amount
+                    for t in txs_created
+                )
+            }
+            _persist_chat_messages(db, current_user, text, response)
+            return response
+
+    # 4. Ánh xạ Intent AI sang Logic Backend
     intent_map = {
         "create_transaction": "expense",
         "update_transaction": "edit",
@@ -2395,14 +2657,20 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         "save_income": "income",
         "query_history": "query",
         "check_budget": "budget",
-        "edit_transaction": "edit",
-        "edit": "edit",
         "budget": "budget"
     }
-
-
     
-    # Refine intent
+    # Chỉ dùng Heuristic Fallback khi AI thực sự không biết làm gì
+    if intent == "unknown":
+        h_fallback = parse_transaction_text(db, current_user, text, auto_create_category=False, use_llm=False)
+        if any(kw in normalized_text for kw in ["xoa", "huy", "bo qua"]):
+            intent = "edit"
+        elif h_fallback.get("amount"):
+            intent = "expense"
+        elif any(kw in normalized_basic for kw in ["ngan sach", "budget"]):
+            intent = "budget"
+
+    # Refine singular creation type
     if intent == "create_transaction":
         if _has_income_keyword(text) or data.get("transaction_type") == "income":
             intent = "income"
@@ -2427,13 +2695,19 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                 "total": None,
             }
 
-        cat_name = data.get("category") or heuristic.get("category_name")
+        cat_name = (
+            _extract_budget_category_from_text(db, current_user, text)
+            or data.get("category")
+            or heuristic.get("category_name")
+        )
         cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
         
         acc_name = data.get("account")
         account = _resolve_account(db, current_user, acc_name)
         
-        dt = _coerce_date_value(data.get("date")) or heuristic.get("date") or DateType.today()
+        explicit_date = _parse_date(text)
+
+        dt = explicit_date or _today_local()
 
         tag_names = data.get("tags") or []
         tag_ids = _resolve_tags(db, current_user, tag_names)
@@ -2451,8 +2725,39 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                 tag_ids=tag_ids,
             ),
         )
+
+        budget_warning = ""
+
+        if tx_type == "expense":
+
+            budget_obj = (
+                db.query(Budget)
+                .filter(
+                    Budget.user_id == current_user.id,
+                    Budget.category_id == cat_id,
+                )
+                .first()
+            )
+
+            if budget_obj:
+
+                spent = _sum_by_category(
+                    db,
+                    current_user,
+                    budget_obj.period_start,
+                    budget_obj.period_end,
+                    cat_id,
+                    "expense",
+                )
+
+                remain = budget_obj.amount - spent
+
+                budget_warning = (
+                    f"\nNgân sách '{res_name}' còn lại: {remain:,.0f}đ"
+                )
+
         response = {
-            "answer": friendly,
+            "answer": friendly + budget_warning, 
             "intent": f"create_{tx_type}",
             "start_date": tx.date,
             "end_date": tx.date,
@@ -2464,10 +2769,12 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
     # --- TRANSFER ---
     if intent == "transfer":
-        amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
+        amount = _coerce_amount(data.get("amount"))
         acc_name = data.get("account")
         account = _resolve_account(db, current_user, acc_name)
-        dt = _coerce_date_value(data.get("date")) or DateType.today()
+        explicit_date = _parse_date(text)
+
+        dt = explicit_date or _today_local()
         
         # Với transfer trong chat đơn giản, ta ghi nhận như một giao dịch chi tiêu từ tài khoản nguồn
         tx = finance_service.create_transaction(
@@ -2496,7 +2803,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     # --- QUERY ---
     if intent == "query":
         # Mặc định truy vấn tháng này
-        today = DateType.today()
+        today = _today_local()
         s, e = _month_range_for_date(today)
         
         # Nếu AI có gợi ý range
@@ -2526,14 +2833,25 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         _persist_chat_messages(db, current_user, text, response)
         return response
 
+
     # --- BUDGET ---
     if intent == "budget":
+
+        cat_name = data.get("category")
+
+        normalized = _normalize_text_basic(text)
+
+        for alias, mapped in _BUDGET_CATEGORY_ALIASES.items():
+            if alias in normalized:
+                cat_name = mapped
+                break
+
         cat_name = _resolve_budget_category_name(
             db,
             current_user,
             text,
-            data.get("category"),
-            heuristic.get("category_name"),
+            cat_name,
+            None,
         )
         amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
         
@@ -2555,7 +2873,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
         cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
         
-        today = DateType.today()
+        today = _today_local()
         s, e = _month_range_for_date(today)
 
         # Nếu có số tiền -> Thiết lập/Cập nhật ngân sách cho tháng hiện tại
@@ -2701,7 +3019,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
                     transaction_type=tx_type,
                     category_id=cat_id,
                     account_id=account.id,
-                    date=DateType.today(),
+                    date=_today_local(),
                 )
             )
         else:
@@ -2718,7 +3036,7 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
         return response
 
     # --- UNKNOWN / FALLBACK ---
-    freeform = _call_gemini_freeform(text)
+    freeform = _call_gemini_freeform(text, history=history)
     response = {
         "answer": freeform or friendly,
         "intent": "chat_general",
@@ -3262,3 +3580,7 @@ def extract_ocr(image_bytes: bytes) -> dict:
         "warnings": warnings,
         "text": text,
     }
+
+
+
+

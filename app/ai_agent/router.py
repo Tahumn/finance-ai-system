@@ -57,13 +57,37 @@ def create_transaction_from_text(
     return finance_service.create_transaction(db, current_user, tx_payload)
 
 
-@router.post("/chat", response_model=schemas.ChatResponse)
+# @router.post("/chat", response_model=schemas.ChatResponse)
+# def chat(
+#     payload: schemas.ChatRequest,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_active_user),
+# ):
+#     return service.answer_chat(db, current_user, payload.text)
+
+@router.post("/chat")
 def chat(
     payload: schemas.ChatRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    return service.answer_chat(db, current_user, payload.text)
+    try:
+        result = service.answer_chat(db, current_user, payload.text)
+
+        print("RESULT:", result)
+
+        return result
+
+    except Exception as e:
+        import traceback
+
+        print("========== ERROR ==========")
+        traceback.print_exc()
+        print("===========================")
+
+        return {
+            "error": str(e)
+        }
 
 
 @router.get("/chat/history", response_model=schemas.ChatHistoryResponse)

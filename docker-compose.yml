@@ -213,6 +213,9 @@ services:
       OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
+      - .env:/app/.env
     depends_on:
       postgres:
         condition: service_healthy

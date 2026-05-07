@@ -112,11 +112,11 @@ export default function ChatScreen({ userEmail }) {
       });
       setMessages(prev => [
         ...prev,
-        { 
-          id: `save-${Date.now()}`, 
-          role: "assistant", 
-          content: "Đã lưu giao dịch thành công! ✅", 
-          created_at: Date.now() 
+        {
+          id: `save-${Date.now()}`,
+          role: "assistant",
+          content: "Đã lưu giao dịch thành công! ✅",
+          created_at: Date.now()
         }
       ]);
     } catch (err) {
@@ -260,7 +260,7 @@ export default function ChatScreen({ userEmail }) {
               <div key={pt.month} className="forecast-item-premium">
                 <span className="label">{pt.month}</span>
                 <span className="val">{currency(pt.predicted_expense)}</span>
-                <div className="progress-track"><div className="progress-fill" style={{width: '70%', background: 'var(--primary)'}}></div></div>
+                <div className="progress-track"><div className="progress-fill" style={{ width: '70%', background: 'var(--primary)' }}></div></div>
               </div>
             ))}
           </div>
@@ -317,7 +317,7 @@ export default function ChatScreen({ userEmail }) {
             {anomalies.map((a, i) => (
               <div key={i} className={`anomaly-item-premium ${a.severity}`}>
                 <div className="anomaly-meta">
-                  <span className="date">{new Date(a.date).toLocaleDateString('vi-VN')}</span>
+                  <span className="date">{new Date(a.date + "T00:00:00").toLocaleDateString("vi-VN")}</span>
                   <span className="amt">{currency(a.amount)}</span>
                 </div>
                 <p className="reason">{a.reason || a.description}</p>
@@ -341,8 +341,8 @@ export default function ChatScreen({ userEmail }) {
             <div className="ocr-row"><span>Ngày:</span> <strong>{data.date}</strong></div>
             <div className="ocr-row"><span>Tổng tiền:</span> <strong className="primary">{currency(data.total)}</strong></div>
           </div>
-          <button 
-            className="premium-btn save-btn" 
+          <button
+            className="premium-btn save-btn"
             onClick={() => handleSaveOcr(data)}
           >
             Lưu vào sổ cái

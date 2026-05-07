@@ -160,7 +160,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
             {alerts.slice(0, 2).map((a, i) => (
               <div key={i} className="anomaly-item">
                 <div className="anomaly-header">
-                  <span className="date">{new Date(a.date).toLocaleDateString('vi-VN')}</span>
+                  <span className="date">{new Date(a.date + "T00:00:00").toLocaleDateString("vi-VN")}</span>
                   <span className={`severity ${a.severity}`}>{a.severity}</span>
                 </div>
                 <p className="reason">{a.reason}</p>
@@ -189,7 +189,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               <span>{data.date || "---"}</span>
             </div>
           </div>
-          <button 
+          <button
             className="save-tx-btn"
             onClick={() => handleSaveOcr(data)}
             disabled={loading}
@@ -232,12 +232,12 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
 
     try {
       const response = await chatWithAi(text);
-      let content = response.answer;
-      
-      const newMsg = { 
-        role: "assistant", 
+      let content = response?.answer || "AI không phản hồi.";
+
+      const newMsg = {
+        role: "assistant",
         content,
-        intent: response.intent 
+        intent: response.intent
       };
 
       // Tự động nhận diện ý định để lấy dữ liệu phong phú (Rich Data)
@@ -258,7 +258,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
       setMessages((prev) => [...prev, newMsg]);
 
       const refreshIntents = [
-        "create_transaction", 
+        "create_transaction",
         "create_transactions",
         "create_expense",
         "create_income",
@@ -312,14 +312,14 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               −
             </button>
           </header>
-          
+
           <div className="chatbot-messages" ref={scrollRef}>
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-row ${msg.role}`}>
                 {msg.role === "assistant" && <div className="msg-avatar">🤖</div>}
                 <div className="message-content-wrapper">
                   <div className="message-bubble">
-                    {msg.content.split('\n').map((line, i) => (
+                    {(msg.content || "").split('\n').map((line, i) => (
                       <p key={i}>{line}</p>
                     ))}
                   </div>
@@ -346,8 +346,8 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               <>
                 <div className="quick-actions-bar">
                   {QUICK_ACTIONS.map((action, i) => (
-                    <button 
-                      key={i} 
+                    <button
+                      key={i}
                       className="action-chip"
                       onClick={() => handleSend(action.query)}
                       disabled={loading}
