@@ -218,3 +218,27 @@ class Bill(Base):
     bill_number = Column(String, nullable=True)
     items = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+class AccountUpdateHistory(Base):
+    __tablename__ = "account_update_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    action = Column(String, nullable=False)  # e.g. "create", "update", "delete"
+    item_name = Column(String, nullable=False)
+    change_amount = Column(Float, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    performer = Column(String, nullable=False, default="Bạn")
+
+class SavingsContribution(Base):
+    __tablename__ = "savings_contributions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    goal_id = Column(Integer, ForeignKey("savings_goals.id"), nullable=False, index=True)
+    amount = Column(Float, nullable=False)
+    date = Column(Date, nullable=False, default=date.today)
+    description = Column(String, nullable=True)
+    source = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

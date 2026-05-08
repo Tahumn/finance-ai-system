@@ -41,23 +41,23 @@
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  background: var(--primary);
+  background: linear-gradient(135deg, #FF6B95, #B847E0);
   color: white;
   border: none;
   border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(21, 101, 192, 0.35);
+  box-shadow: 0 8px 24px rgba(184, 71, 224, 0.35);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
 .chatbot-launcher.mini {
-  width: 52px;
-  height: 52px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   padding: 0;
   justify-content: center;
-  box-shadow: 0 10px 24px rgba(236, 72, 153, 0.35);
-  background: linear-gradient(135deg, #ec4899, #7c3aed);
+  box-shadow: 0 10px 24px rgba(184, 71, 224, 0.35);
+  background: linear-gradient(135deg, #FF6B95, #B847E0);
 }
 
 .chatbot-launcher:hover {
@@ -98,41 +98,42 @@
 
 .chatbot-header {
   padding: 16px 20px;
-  background: white;
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg, #FF6B95 0%, #B847E0 100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  color: white;
 }
 
 .header-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.bot-avatar {
-  width: 36px;
-  height: 36px;
-  background: var(--primary);
-  color: white;
-  border-radius: 10px;
+.bot-avatar-circle {
+  width: 44px;
+  height: 44px;
+  background: white;
+  color: #B847E0;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 8px;
 }
 
 .chatbot-header h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
+  color: white;
 }
 
 .online-status {
   font-size: 11px;
-  color: #2acb7f;
+  color: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -142,19 +143,27 @@
   content: "";
   width: 6px;
   height: 6px;
-  background: #2acb7f;
+  background: #4ade80;
   border-radius: 50%;
 }
 
-.close-btn {
-  background: none;
+.minimize-btn {
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   font-size: 24px;
-  color: var(--muted);
+  color: white;
   cursor: pointer;
-  padding: 4px;
-  line-height: 1;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.minimize-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .chatbot-messages {

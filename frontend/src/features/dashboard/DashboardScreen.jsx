@@ -208,6 +208,7 @@ export default function DashboardScreen({
   onGoAddTransaction,
   onGoReports,
   onGoBudgets,
+  onGoGoals,
   rangePreset,
   onSelectPreset,
   userEmail,
@@ -273,6 +274,10 @@ export default function DashboardScreen({
           </div>
           <h2>{showBalance ? currency(summary?.balance || 0) : '****** đ'}</h2>
           <p className="dbc-update">Cập nhật lúc {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+          <button className="dbc-btn-add" onClick={onGoAddTransaction} style={{ marginTop: '16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Thêm giao dịch
+          </button>
         </div>
         <div className="dbc-graphic">
           <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
@@ -507,7 +512,7 @@ export default function DashboardScreen({
           <div className="dashboard-panel dp-goals">
             <div className="dp-header">
               <h3>Mục tiêu tiết kiệm</h3>
-              <button className="ghost-link" onClick={() => {}}>Xem tất cả</button>
+              <button className="ghost-link" onClick={onGoGoals}>Xem tất cả</button>
             </div>
             <div className="dp-body dp-goals-body">
               {savingsGoals.length ? savingsGoals.slice(0, 4).map((goal, idx) => {

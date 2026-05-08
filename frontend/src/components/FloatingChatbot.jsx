@@ -3,6 +3,18 @@ import { chatWithAi, getChatHistory, getForecast, getAnomalies, getSavingsTips }
 import { currency } from "../utils/format.js";
 import "./FloatingChatbot.css";
 
+const RobotIcon = ({ size = 24 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+    <path d="M7 11C7 8.23858 9.23858 6 12 6C14.7614 6 17 8.23858 17 11V14C17 16.7614 14.7614 19 12 19C9.23858 19 7 16.7614 7 14V11Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+    <rect x="9" y="10" width="6" height="4" rx="2" fill="currentColor" />
+    <circle cx="10.5" cy="12" r="0.8" fill="white" />
+    <circle cx="13.5" cy="12" r="0.8" fill="white" />
+    <path d="M11 16H13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M12 6V4M12 4L10 3M12 4L14 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+);
+
 const QUICK_ACTIONS = [
   { label: "Tuần này tiêu gì?", query: "Tuần này tôi tiêu bao nhiêu rồi?" },
   { label: "Kiểm tra ngân sách", query: "Tôi còn bao nhiêu tiền cho Ăn uống?" },
@@ -295,14 +307,16 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
         <div className="chatbot-window">
           <header className="chatbot-header">
             <div className="header-info">
-              <div className="bot-avatar">AI</div>
+              <div className="bot-avatar-circle">
+                <RobotIcon />
+              </div>
               <div>
-                <h3>Trợ lý Tài chính</h3>
+                <h3>Trợ lý AI</h3>
                 <span className="online-status">Đang trực tuyến</span>
               </div>
             </div>
             <button
-              className="close-btn"
+              className="minimize-btn"
               onClick={() => {
                 setIsOpen(false);
                 setIsMinimized(true);
@@ -383,14 +397,9 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
           }}
         >
           <div className="launcher-icon">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="9" />
-              <circle cx="9" cy="11" r="1.2" fill="currentColor" />
-              <circle cx="15" cy="11" r="1.2" fill="currentColor" />
-              <path d="M8 15c1.1 1 2.3 1.5 4 1.5S14.9 16 16 15" />
-            </svg>
+            <RobotIcon size={26} />
           </div>
-          {!isMinimized ? <div className="launcher-label">Hỏi AI</div> : null}
+          {!isMinimized ? <div className="launcher-label">trợ lý AI -</div> : null}
         </button>
       )}
     </div>

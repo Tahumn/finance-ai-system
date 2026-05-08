@@ -13,9 +13,16 @@ const emptyParsedData = {
 
 export default function OcrScreen({
   categories,
-  onParseFromText, // Hàm để gọi API phân tích văn bản
-  onCreateTransaction, // Hàm để tạo giao dịch sau khi phân tích
-  loading // Trạng thái loading từ App.jsx
+  tags,
+  accounts,
+  userEmail,
+  onParseFromText,
+  onCreateTransaction,
+  onCreateCategory,
+  onCreateTag,
+  loading,
+  embedded,
+  onClose
 }) {
   const [ocrText, setOcrText] = useState("");
   const [parsedReceipt, setParsedReceipt] = useState(emptyParsedData);

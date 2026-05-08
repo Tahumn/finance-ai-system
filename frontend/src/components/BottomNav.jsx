@@ -47,12 +47,18 @@ const SvgReceipt = ({ active }) => (
   </svg>
 );
 
+const SvgTarget = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+  </svg>
+);
+
 export default function BottomNav({ active, onChange }) {
   const tabs = useMemo(() => [
     { key: "dashboard", label: "Tổng", Icon: SvgHome },
     { key: "transactions", label: "Giao dịch", Icon: SvgList },
-    { key: "accounts", label: "Tài khoản", Icon: SvgWallet },
-    { key: "bills", label: "Hóa đơn", Icon: SvgReceipt },
+    { key: "accounts", label: "Ví", Icon: SvgWallet },
+    { key: "goals", label: "Mục tiêu", Icon: SvgTarget },
     { key: "reports", label: "Báo cáo", Icon: SvgBarChart },
     { key: "settings", label: "Cài đặt", Icon: SvgGear }
   ], []);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   getDefaultTimezone,
   saveCategoryPrefs,
@@ -7,219 +7,73 @@ import {
 } from "../../utils/userPrefs.js";
 import { saveUiPrefs } from "../../utils/uiPrefs.js";
 import { STRINGS, t } from "../../utils/i18n.js";
-import { createCategory, createTransaction, listCategories } from "../../api/finance.js";
-import { formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
+import { createCategory, createTransaction, listCategories, createAccount } from "../../api/finance.js";
+import { formatNumberInput, parseNumberInput, toInputDate, currency } from "../../utils/format.js";
 
 const DEFAULT_CATEGORIES = [
-  { id: "food", name: { vi: "Ăn uống", en: "Food" }, icon: "🍜", color: "#ff8b5f" },
-  { id: "transport", name: { vi: "Di chuyển", en: "Transport" }, icon: "🚗", color: "#38b6ff" },
-  { id: "fun", name: { vi: "Giải trí", en: "Entertainment" }, icon: "🎮", color: "#ffd166" },
-  { id: "saving", name: { vi: "Tiết kiệm", en: "Savings" }, icon: "💰", color: "#06d6a0" },
-  { id: "income", name: { vi: "Thu nhập", en: "Income" }, icon: "💼", color: "#8e7dff" }
+  { id: "food", name: "Ăn uống", icon: "🍜", color: "#ff8b5f" },
+  { id: "transport", name: "Di chuyển", icon: "🚗", color: "#38b6ff" },
+  { id: "fun", name: "Giải trí", icon: "🎮", color: "#ffd166" },
+  { id: "saving", name: "Tiết kiệm", icon: "💰", color: "#06d6a0" },
+  { id: "bill", name: "Hóa đơn", icon: "📄", color: "#ff7b6b" },
+  { id: "income", name: "Thu nhập", icon: "💼", color: "#8e7dff" }
 ];
-
-const CURRENCY_OPTIONS = ["VND", "USD", "EUR", "JPY", "KRW", "SGD", "GBP"];
 
 const PRIMARY_COLORS = [
-  { id: "blue", labels: { vi: "Xanh dương", en: "Blue" }, value: "#2e6bd1" },
-  { id: "green", labels: { vi: "Xanh lá", en: "Green" }, value: "#2d7a5f" },
-  { id: "purple", labels: { vi: "Tím", en: "Purple" }, value: "#6d5bd0" },
-  { id: "orange", labels: { vi: "Cam", en: "Orange" }, value: "#d86a4b" }
+  { id: "blue", label: "Xanh dương", value: "#2563eb" },
+  { id: "green", label: "Xanh lá", value: "#10b981" },
+  { id: "purple", label: "Tím", value: "#7c3aed" },
+  { id: "orange", label: "Cam", value: "#f59e0b" }
 ];
 
-const FONT_SIZES = [
-  { id: "small", labels: { vi: "Nhỏ", en: "Small" } },
-  { id: "medium", labels: { vi: "Vừa", en: "Medium" } },
-  { id: "large", labels: { vi: "Lớn", en: "Large" } }
-];
-
-const THEMES = [
-  { id: "light", labels: { vi: "Sáng (Light)", en: "Light" } },
-  { id: "dark", labels: { vi: "Tối (Dark)", en: "Dark" } }
-];
-
-const LANGUAGE_OPTIONS = [
-  { id: "vi", labels: { vi: "Tiếng Việt", en: "Vietnamese" } },
-  { id: "en", labels: { vi: "English", en: "English" } }
-];
-
-const parseCsvLine = (line) => {
-  const result = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    if (char === '"') {
-      const next = line[i + 1];
-      if (next === '"') {
-        current += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === "," && !inQuotes) {
-      result.push(current);
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  result.push(current);
-  return result.map((value) => value.trim().replace(/^"|"$/g, ""));
-};
-
-const parseCsvText = (text) => {
-  const lines = text.split(/\r?\n/).filter((line) => line.trim());
-  if (!lines.length) return { headers: [], rows: [] };
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase());
-  const rows = lines.slice(1).map((line) => parseCsvLine(line));
-  return { headers, rows };
-};
-
-const mapCsvRows = (headers, rows) => {
-  const index = (nameList) => headers.findIndex((header) => nameList.includes(header));
-  const dateIndex = index(["date", "ngay", "ngay_giao_dich"]);
-  const descIndex = index(["description", "desc", "mo_ta", "mota"]);
-  const amountIndex = index(["amount", "so_tien", "money"]);
-  const typeIndex = index(["type", "transaction_type", "loai"]);
-  const categoryIndex = index(["category", "danh_muc"]);
-  return rows.map((row) => ({
-    date: row[dateIndex] || "",
-    description: row[descIndex] || "",
-    amount: row[amountIndex] || "",
-    transaction_type: row[typeIndex] || "",
-    category: row[categoryIndex] || ""
-  }));
-};
-
-const hexToRgb = (hex) => {
-  if (!hex) return null;
-  const value = hex.replace("#", "");
-  if (value.length !== 6) return null;
-  const number = parseInt(value, 16);
-  if (Number.isNaN(number)) return null;
-  return {
-    r: (number >> 16) & 255,
-    g: (number >> 8) & 255,
-    b: number & 255
-  };
-};
-
-const relativeLuminance = ({ r, g, b }) => {
-  const convert = (val) => {
-    const channel = val / 255;
-    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * convert(r) + 0.7152 * convert(g) + 0.0722 * convert(b);
-};
-
-const contrastRatio = (fg, bg) => {
-  const fgRgb = hexToRgb(fg);
-  const bgRgb = hexToRgb(bg);
-  if (!fgRgb || !bgRgb) return 0;
-  const l1 = relativeLuminance(fgRgb);
-  const l2 = relativeLuminance(bgRgb);
-  const lighter = Math.max(l1, l2);
-  const darker = Math.min(l1, l2);
-  return (lighter + 0.05) / (darker + 0.05);
-};
-
-const buildLocalT = (language) => (key, vars, fallback) => {
-  const base = STRINGS[language] || STRINGS.vi;
-  const text = base[key] || STRINGS.vi[key] || fallback || key;
-  if (!vars) return text;
-  return Object.entries(vars).reduce(
-    (acc, [field, value]) => acc.replace(new RegExp(`{${field}}`, "g"), String(value)),
-    text
-  );
+const PROVIDERS = {
+  bank: [
+    "Vietcombank", "Techcombank", "BIDV", "Agribank", "Vietinbank", 
+    "MB Bank", "TPBank", "VPBank", "ACB", "OCB", "VIB"
+  ],
+  wallet: ["MoMo", "ZaloPay", "ShopeePay", "Viettel Money", "Moca"],
+  credit: ["Visa", "Mastercard", "JCB", "American Express"]
 };
 
 export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete }) {
   const [step, setStep] = useState(1);
-  const [balance, setBalance] = useState("");
-  const [currencyCode, setCurrencyCode] = useState("VND");
-  const [timezone, setTimezone] = useState(getDefaultTimezone());
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const totalSteps = 4;
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Step 1: Account Setup
+  const [accName, setAccName] = useState("");
+  const [accType, setAccType] = useState("bank");
+  const [accProvider, setAccProvider] = useState("");
+  const [accLast4, setAccLast4] = useState("");
+  const [accBalance, setAccBalance] = useState("");
+  const [accLimit, setAccLimit] = useState("");
+
+  // Step 2: Categories
   const [categories, setCategories] = useState(
-    DEFAULT_CATEGORIES.map((item) => ({
-      id: item.id,
-      enabled: true,
-      name: item.name.vi,
-      icon: item.icon,
-      color: item.color
-    }))
+    DEFAULT_CATEGORIES.map((item) => ({ ...item, enabled: true }))
   );
+
+  // Step 3: Personalization
   const [language, setLanguage] = useState("vi");
-  const [previousLanguage, setPreviousLanguage] = useState("vi");
   const [theme, setTheme] = useState("light");
   const [primaryColor, setPrimaryColor] = useState(PRIMARY_COLORS[0].value);
-  const [customPrimary, setCustomPrimary] = useState("#2e6bd1");
+  const [customPrimary, setCustomPrimary] = useState("#2563eb");
   const [fontScale, setFontScale] = useState("medium");
   const [textColorMode, setTextColorMode] = useState("auto");
-  const [textColor, setTextColor] = useState("#171717");
-  const [importRows, setImportRows] = useState([]);
-  const [csvPreview, setCsvPreview] = useState([]);
-  const [importSkipped, setImportSkipped] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const totalSteps = 5;
-  const tLocal = useMemo(() => buildLocalT(language), [language]);
-  const formatLocalCurrency = useMemo(
-    () => (value) =>
-      new Intl.NumberFormat(language === "en" ? "en-US" : "vi-VN", {
-        style: "currency",
-        currency: currencyCode
-      }).format(value || 0),
-    [language, currencyCode]
-  );
-
-  const timezoneOptions = useMemo(() => {
-    if (typeof Intl !== "undefined" && Intl.supportedValuesOf) {
-      return Intl.supportedValuesOf("timeZone");
-    }
-    return ["Asia/Ho_Chi_Minh", "UTC", "Asia/Singapore", "America/New_York", "Europe/London"];
-  }, []);
-
-  const selectedCategories = useMemo(
-    () => categories.filter((item) => item.enabled && item.name.trim()),
-    [categories]
-  );
-
-  const themeBackground = theme === "dark" ? "#151922" : "#ffffff";
-  const autoTextColor = theme === "dark" ? "#f1f2f4" : "#171717";
-  const previewTextColor = textColorMode === "custom" ? textColor : autoTextColor;
-  const previewContrast = contrastRatio(previewTextColor, themeBackground);
-  const contrastOk = textColorMode !== "custom" || previewContrast >= 4.5;
-
-  const balanceValid = balance !== "" && !Number.isNaN(parseNumberInput(balance));
-  const stepValid = [
-    balanceValid && currencyCode && timezone,
-    selectedCategories.length > 0,
-    contrastOk,
-    true,
-    true
-  ];
-
   const progressValue = (step / totalSteps) * 100;
 
-  const handleCategoryChange = (id, field, value) => {
-    setCategories((current) =>
-      current.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
-  };
-
-  const handleCsvUpload = async (file) => {
-    if (!file) return;
-    const text = await file.text();
-    const { headers, rows } = parseCsvText(text);
-    const mapped = mapCsvRows(headers, rows);
-    setImportRows(mapped);
-    setCsvPreview(mapped.slice(0, 5));
-    setImportSkipped(false);
-  };
-
   const handleNext = () => {
-    if (!stepValid[step - 1]) return;
+    if (step === 1 && (!accName || !accBalance)) return;
     setStep((current) => Math.min(totalSteps, current + 1));
   };
 
@@ -231,76 +85,36 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
     setSaving(true);
     setError("");
     try {
-      const cleanedCategories = selectedCategories.map((item) => ({
-        ...item,
-        name: item.name.trim()
-      }));
-      const created = await Promise.all(
-        cleanedCategories.map((item) => createCategory(item.name).catch(() => null))
-      );
-      let nameToId = {};
-      created.forEach((item, index) => {
-        if (item?.id) {
-          nameToId[cleanedCategories[index].name.toLowerCase()] = item.id;
-        }
-      });
-      if (Object.keys(nameToId).length < cleanedCategories.length) {
-        const fetched = await listCategories();
-        nameToId = fetched.reduce((acc, item) => {
-          acc[item.name.toLowerCase()] = item.id;
-          return acc;
-        }, {});
-      }
-      const categoryPrefs = cleanedCategories.reduce((acc, item) => {
+      // 1. Create categories
+      const enabledCats = categories.filter(c => c.enabled);
+      await Promise.all(enabledCats.map(c => createCategory(c.name).catch(() => null)));
+      
+      const categoryPrefs = enabledCats.reduce((acc, item) => {
         acc[item.name] = { icon: item.icon, color: item.color };
         return acc;
       }, {});
       saveCategoryPrefs(userEmail, categoryPrefs);
 
-      const startingBalance = parseNumberInput(balance);
-      if (!Number.isNaN(startingBalance) && startingBalance !== 0) {
-        await createTransaction({
-          description: "Initial Balance",
-          amount: Math.abs(startingBalance),
-          transaction_type: startingBalance >= 0 ? "income" : "expense",
-          category_id: null,
-          date: toInputDate(new Date())
-        });
-      }
+      // 2. Create first account
+      await createAccount({
+        name: accName,
+        type: accType,
+        provider: accProvider,
+        last4: accLast4,
+        balance: parseNumberInput(accBalance),
+        credit_limit: parseNumberInput(accLimit) || null,
+        color: primaryColor === "custom" ? customPrimary : primaryColor
+      });
 
-      if (!importSkipped && importRows.length) {
-        const sanitized = importRows
-          .map((row) => {
-            const rawAmount = String(row.amount || "0").replace(/,/g, "");
-            const parsedAmount = Number(rawAmount);
-            const rawType = String(row.transaction_type || "").toLowerCase();
-            const normalizedType =
-              rawType === "income" || rawType === "expense" ? rawType : "expense";
-            return {
-              description: row.description || "Imported",
-              amount: parsedAmount,
-              transaction_type: normalizedType,
-              category_id: row.category
-                ? nameToId[row.category.toLowerCase()] || null
-                : null,
-              date: row.date || toInputDate(new Date())
-            };
-          })
-          .filter((row) => row.amount && row.description);
-        for (const payload of sanitized) {
-          await createTransaction(payload);
-        }
-      }
-
+      // 3. Save preferences
       saveUserPrefs(userEmail, {
         language,
-        currency: currencyCode,
-        timezone,
+        currency: "VND",
+        timezone: getDefaultTimezone(),
         theme,
         primaryColor: primaryColor === "custom" ? customPrimary : primaryColor,
         fontScale,
-        textColorMode,
-        textColor: textColorMode === "custom" ? textColor : ""
+        textColorMode
       });
 
       saveUiPrefs(userEmail, {
@@ -312,427 +126,354 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
       setOnboardingDone(userEmail, true);
       onComplete();
     } catch (err) {
-      setError(err?.message || t("common.error"));
+      setError(err?.message || "Đã có lỗi xảy ra. Vui lòng thử lại.");
     } finally {
       setSaving(false);
     }
   };
 
-  const stepTitleMap = {
-    1: tLocal("onboarding.step1.title"),
-    2: tLocal("onboarding.step2.title"),
-    3: tLocal("onboarding.step3.title"),
-    4: tLocal("onboarding.step4.title"),
-    5: tLocal("onboarding.step5.title")
-  };
-
-  const currentPrimary = primaryColor === "custom" ? customPrimary : primaryColor;
-
   return (
-    <main className="onboarding-shell">
-      <section className="onboarding-card">
-        <header className="onboarding-header">
-          <div className="onboarding-heading">
-            <p className="eyebrow">{tLocal("onboarding.title")}</p>
-            <h1>{tLocal("onboarding.step", { current: step, total: totalSteps })}</h1>
-            <p className="onboarding-subtitle">{stepTitleMap[step]}</p>
+    <main className="ob-shell">
+      <div className="ob-container">
+        <header className="ob-header">
+          <div className="ob-header-left">
+            <span className="ob-eyebrow">THIẾT LẬP LẦN ĐẦU</span>
+            <h1>Bước {step} / {totalSteps}</h1>
           </div>
-          <div className="onboarding-progress">
-            <div className="progress-bar">
-              <span style={{ width: `${progressValue}%` }} />
-            </div>
-            <span className="progress-text">
-              {step}/{totalSteps}
-            </span>
+          <div className="ob-header-right">
+            <span className="ob-progress-fraction">{step}/{totalSteps}</span>
           </div>
+          <div className="ob-progress-container">
+             <div className="ob-progress-track">
+               <div className="ob-progress-fill" style={{ width: `${(step / totalSteps) * 100}%` }}></div>
+               {[1, 2, 3, 4].map(s => (
+                 <div key={s} className={`ob-progress-dot ${s <= step ? "active" : ""}`} style={{ left: `${((s - 1) / (totalSteps - 1)) * 100}%` }}></div>
+               ))}
+             </div>
+          </div>
+          <p className="ob-subtitle">
+            {step === 1 && "Hoàn tất các thông tin cơ bản để khởi tạo tài khoản của bạn."}
+            {step === 2 && "Chọn các danh mục bạn thường sử dụng. Bạn có thể thay đổi hoặc thêm mới sau này."}
+            {step === 3 && "Tùy chỉnh ngôn ngữ và giao diện để phù hợp với thói quen sử dụng của bạn."}
+            {step === 4 && "Vui lòng xem lại các thiết lập của bạn trước khi bắt đầu."}
+          </p>
         </header>
 
-        {step === 1 && (
-          <div className="onboarding-step">
-            <h2>{tLocal("onboarding.step1.title")}</h2>
-            <p className="muted">{tLocal("onboarding.step1.note")}</p>
-            <div className="grid three onboarding-form-grid">
-              <div className="field onboarding-field">
-                <label>{tLocal("onboarding.step1.balance")}</label>
-                <div className="input-with-icon">
-                  <span className="input-prefix">💳</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={balance}
-                    onChange={(event) => setBalance(formatNumberInput(event.target.value))}
-                    placeholder="0"
-                    required
-                  />
+        <div className="ob-content">
+          {step === 1 && (
+            <div className="ob-step ob-step-1">
+              <div className="ob-form-col">
+                <div className="ob-section-title">
+                  <div className="ob-icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                  <div>
+                    <h3>Tạo tài khoản / thẻ đầu tiên</h3>
+                    <p>Lưu tài khoản hoặc thẻ đầu tiên của bạn và số dư mở đầu để bắt đầu quản lý tài chính.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="field onboarding-field">
-                <label>{tLocal("onboarding.step1.currency")}</label>
-                <div className="input-with-icon">
-                  <span className="input-prefix">💱</span>
-                  <select value={currencyCode} onChange={(event) => setCurrencyCode(event.target.value)}>
-                    {CURRENCY_OPTIONS.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="field onboarding-field">
-                <label>{tLocal("onboarding.step1.timezone")}</label>
-                <div className="input-with-icon">
-                  <span className="input-prefix">🕒</span>
-                  <select value={timezone} onChange={(event) => setTimezone(event.target.value)}>
-                    {timezoneOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="onboarding-note">
-              <span>ℹ️</span>
-              <p>{tLocal("onboarding.step1.note")}</p>
-            </div>
-          </div>
-        )}
 
-        {step === 2 && (
-          <div className="onboarding-step">
-            <h2>{tLocal("onboarding.step2.title")}</h2>
-            <p className="muted">{tLocal("onboarding.step2.helper")}</p>
-            <div className="category-setup">
-              {categories.map((item) => (
-                <div key={item.id} className="category-item">
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={item.enabled}
-                      onChange={(event) => handleCategoryChange(item.id, "enabled", event.target.checked)}
-                    />
-                    <span />
-                  </label>
-                  <div className="field">
-                    <label>{tLocal("onboarding.step2.name")}</label>
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(event) => handleCategoryChange(item.id, "name", event.target.value)}
-                    />
-                  </div>
-                  <div className="field">
-                    <label>{tLocal("onboarding.step2.icon")}</label>
-                    <div className="icon-input-wrap">
-                      <input
-                        type="text"
-                        value={item.icon}
-                        onChange={(event) => handleCategoryChange(item.id, "icon", event.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>{tLocal("onboarding.step2.color")}</label>
-                    <div className="color-input">
-                      <span className="color-swatch" style={{ background: item.color }} />
-                      <input
-                        type="color"
-                        value={item.color}
-                        onChange={(event) => handleCategoryChange(item.id, "color", event.target.value)}
-                      />
-                    </div>
-                  </div>
+                <div className="ob-field">
+                  <label>Tên tài khoản / thẻ *</label>
+                  <input type="text" value={accName} onChange={e => setAccName(e.target.value)} placeholder="Ví dụ: Tài khoản lương, Techcombank, Thẻ Visa..." />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {step === 3 && (
-          <div className="onboarding-step">
-            <h2>{tLocal("onboarding.step3.title")}</h2>
-            <p className="muted">Tùy chỉnh trải nghiệm sử dụng theo sở thích của bạn.</p>
-            <div className="grid two onboarding-form-grid">
-              <div className="field">
-                <label>{tLocal("onboarding.step3.language")}</label>
-                <div className="chip-group">
-                  {LANGUAGE_OPTIONS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={language === item.id ? "chip active" : "chip"}
-                      onClick={() => {
-                        const nextLang = item.id;
-                        setCategories((current) =>
-                          current.map((cat) => {
-                            const defaults = DEFAULT_CATEGORIES.find((d) => d.id === cat.id)?.name;
-                            if (!defaults) return cat;
-                            const prevDefault = defaults[previousLanguage];
-                            const nextDefault = defaults[nextLang];
-                            if (cat.name === prevDefault) {
-                              return { ...cat, name: nextDefault };
-                            }
-                            return cat;
-                          })
-                        );
-                        setPreviousLanguage(nextLang);
-                        setLanguage(nextLang);
-                      }}
-                    >
-                      {item.labels[language] || item.labels.vi}
+                <div className="ob-field">
+                  <label>Loại *</label>
+                  <div className="ob-type-group">
+                    <button className={accType === "cash" ? "active" : ""} onClick={() => {setAccType("cash"); setAccProvider("");}}>
+                       <div className="type-icon">💵</div>
+                       <span>Tiền mặt</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <label>{tLocal("onboarding.step3.theme")}</label>
-                <div className="chip-group">
-                  {THEMES.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={theme === item.id ? "chip active" : "chip"}
-                      onClick={() => setTheme(item.id)}
-                    >
-                      {item.labels[language] || item.labels.vi}
+                    <button className={accType === "bank" ? "active" : ""} onClick={() => {setAccType("bank"); setAccProvider("");}}>
+                       <div className="type-icon">🏛️</div>
+                       <span>Ngân hàng</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <label>{tLocal("onboarding.step3.primary")}</label>
-                <div className="chip-group">
-                  {PRIMARY_COLORS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={primaryColor === item.value ? "chip active" : "chip"}
-                      onClick={() => setPrimaryColor(item.value)}
-                    >
-                      <span className="dot" style={{ background: item.value }} />
-                      {item.labels[language] || item.labels.vi}
+                    <button className={accType === "wallet" ? "active" : ""} onClick={() => {setAccType("wallet"); setAccProvider("");}}>
+                       <div className="type-icon">📱</div>
+                       <span>Ví điện tử</span>
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={primaryColor === "custom" ? "chip active" : "chip"}
-                    onClick={() => setPrimaryColor("custom")}
-                  >
-                    🎨 Custom
-                  </button>
+                    <button className={accType === "credit" ? "active" : ""} onClick={() => {setAccType("credit"); setAccProvider("");}}>
+                       <div className="type-icon">💳</div>
+                       <span>Thẻ tín dụng</span>
+                    </button>
+                  </div>
                 </div>
-                {primaryColor === "custom" && (
-                  <div className="color-input">
-                    <span className="color-swatch" style={{ background: customPrimary }} />
-                    <input
-                      type="color"
-                      value={customPrimary}
-                      onChange={(event) => setCustomPrimary(event.target.value)}
-                    />
+
+                {accType !== "cash" && (
+                  <div className="ob-field">
+                    <label>Nhà cung cấp</label>
+                    <select value={accProvider} onChange={e => setAccProvider(e.target.value)}>
+                      <option value="">Chọn nhà cung cấp</option>
+                      {(PROVIDERS[accType] || []).map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
                   </div>
                 )}
-              </div>
-              <div className="field">
-                <label>{tLocal("onboarding.step3.font")}</label>
-                <div className="chip-group">
-                  {FONT_SIZES.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={fontScale === item.id ? "chip active" : "chip"}
-                      onClick={() => setFontScale(item.id)}
-                    >
-                      {item.labels[language] || item.labels.vi}
-                    </button>
-                  ))}
+
+                <div className="ob-row">
+                  {accType !== "cash" && (
+                    <div className="ob-field">
+                      <label>4 số cuối (nếu có)</label>
+                      <input type="text" value={accLast4} onChange={e => setAccLast4(e.target.value.replace(/\D/g, ""))} placeholder="Ví dụ: 1234" maxLength={4} />
+                    </div>
+                  )}
+                  <div className="ob-field">
+                    <label>Số dư ban đầu *</label>
+                    <input type="text" value={accBalance} onChange={e => setAccBalance(formatNumberInput(e.target.value))} placeholder="Ví dụ: 1.000.000 đ" />
+                  </div>
                 </div>
-              </div>
-              <div className="field">
-                <label>{tLocal("onboarding.step3.text_color")}</label>
-                <div className="chip-group">
-                  <button
-                    type="button"
-                    className={textColorMode === "auto" ? "chip active" : "chip"}
-                    onClick={() => setTextColorMode("auto")}
-                  >
-                    {tLocal("onboarding.step3.auto")}
-                  </button>
-                  <button
-                    type="button"
-                    className={textColorMode === "custom" ? "chip active" : "chip"}
-                    onClick={() => setTextColorMode("custom")}
-                  >
-                    {tLocal("onboarding.step3.custom")}
-                  </button>
-                </div>
-                {textColorMode === "custom" && (
-                  <div className="color-input">
-                    <span className="color-swatch" style={{ background: textColor }} />
-                    <input
-                      type="color"
-                      value={textColor}
-                      onChange={(event) => setTextColor(event.target.value)}
-                    />
+
+                {accType !== "cash" && (
+                  <div className="ob-field">
+                    <label>Hạn mức (nếu có) <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></label>
+                    <div className="input-wrap">
+                      <input type="text" value={accLimit} onChange={e => setAccLimit(formatNumberInput(e.target.value))} placeholder="Ví dụ: 20.000.000 đ" />
+                      <span className="unit">đ</span>
+                    </div>
                   </div>
                 )}
-                {!contrastOk && <p className="form-error">{tLocal("onboarding.step3.contrast_bad")}</p>}
-              </div>
-            </div>
 
-            <div className="preview-card" style={{ background: themeBackground, color: previewTextColor }}>
-              <div className="preview-header">
-                <span className="badge">{tLocal("onboarding.step3.preview")}</span>
-                <button
-                  type="button"
-                  className="preview-button"
-                  style={{
-                    background:
-                      primaryColor === "custom" ? customPrimary : primaryColor,
-                    color: "#fff"
-                  }}
-                >
-                  {tLocal("dashboard.add_tx")}
-                </button>
-              </div>
-              <h3>{tLocal("dashboard.overview")}</h3>
-              <p className="muted">{tLocal("dashboard.balance")}</p>
-              <strong>{formatLocalCurrency(2500000)}</strong>
-              <div className="preview-metrics">
-                <div>💰 {formatLocalCurrency(4200000)}</div>
-                <div>💸 {formatLocalCurrency(1700000)}</div>
-                <div>🏦 {formatLocalCurrency(2500000)}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="onboarding-step">
-            <h2>{tLocal("onboarding.step4.title")}</h2>
-            <p className="muted">Bạn có thể nhập dữ liệu giao dịch từ file CSV để bắt đầu nhanh hơn.</p>
-            <div className="import-layout">
-              <label className="upload-dropzone">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={(event) => handleCsvUpload(event.target.files?.[0])}
-                />
-                <div className="upload-dropzone-content">
-                  <div className="upload-icon">☁️</div>
-                  <h4>Kéo & thả file vào đây</h4>
-                  <p>hoặc chọn tệp CSV từ máy tính</p>
+                <div className="ob-preview-mini">
+                   <p className="preview-label">Xem trước</p>
+                   <div className="acc-mini-card">
+                      <div className="acc-mini-icon">🏛️</div>
+                      <div className="acc-mini-main">
+                         <strong>{accName || (accType === "cash" ? "Tiền mặt" : "Tài khoản mới")}</strong>
+                         <span>Số dư ban đầu</span>
+                         <strong>{accBalance || "0"} đ</strong>
+                      </div>
+                      <div className="acc-mini-badge">Mới</div>
+                      <div className="acc-mini-more">...</div>
+                   </div>
                 </div>
-              </label>
-              <div className="import-side-note">
-                <h4>Bỏ qua bước nhập dữ liệu</h4>
-                <p>Bạn có thể thêm giao dịch thủ công sau khi hoàn tất thiết lập.</p>
-                <button className="ghost" type="button" onClick={() => setImportSkipped(true)}>
-                  {tLocal("onboarding.step4.skip")}
-                </button>
+
+                <div className="ob-info-note">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                  <span>Số dư ban đầu sẽ được lưu cho tài khoản/thẻ này và được dùng khi tạo giao dịch.</span>
+                </div>
               </div>
             </div>
-            {!importSkipped && !!csvPreview.length && (
-              <div className="preview-table">
-                <div className="preview-head">{tLocal("onboarding.step4.preview")}</div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Description</th>
-                      <th>Amount</th>
-                      <th>Type</th>
-                      <th>Category</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {csvPreview.map((row, index) => (
-                      <tr key={`row-${index}`}>
-                        <td>{row.date}</td>
-                        <td>{row.description}</td>
-                        <td>{row.amount}</td>
-                        <td>{row.transaction_type}</td>
-                        <td>{row.category}</td>
-                      </tr>
+          )}
+
+          {step === 2 && (
+            <div className="ob-step ob-step-2">
+               <div className="ob-cat-section">
+                  <div className="ob-cat-list">
+                    {categories.map((cat, idx) => (
+                      <div key={idx} className="ob-cat-card">
+                        <label className="ob-check-wrap">
+                          <input type="checkbox" checked={cat.enabled} onChange={e => {
+                            const newCats = [...categories];
+                            newCats[idx].enabled = e.target.checked;
+                            setCategories(newCats);
+                          }} />
+                          <span className="checkmark"></span>
+                        </label>
+                        <div className="ob-cat-icon-box" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}>
+                           {cat.icon}
+                        </div>
+                        <input type="text" value={cat.name} onChange={e => {
+                           const newCats = [...categories];
+                           newCats[idx].name = e.target.value;
+                           setCategories(newCats);
+                        }} />
+                        <div className="ob-cat-color-pick">
+                           <div className="color-circle" style={{ backgroundColor: cat.color }}></div>
+                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+                  </div>
+                  <button className="ob-btn-add-cat">
+                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                     Thêm danh mục khác
+                  </button>
+               </div>
+            </div>
+          )}
 
-        {step === 5 && (
-          <div className="onboarding-step">
-            <h2>{tLocal("onboarding.step5.title")}</h2>
-            <p className="muted">Vui lòng kiểm tra lại các thiết lập của bạn trước khi bắt đầu sử dụng ứng dụng.</p>
-            <div className="summary-grid">
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.balance")}</p>
-                <strong>{formatLocalCurrency(parseNumberInput(balance || 0))}</strong>
+          {step === 3 && (
+            <div className="ob-step ob-step-3">
+              <div className="ob-section-title">
+                  <div className="ob-icon-box"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
+                  <div>
+                    <h3>Ngôn ngữ & Giao diện</h3>
+                    <p>Tùy chỉnh ngôn ngữ và giao diện để phù hợp với thói quen sử dụng của bạn.</p>
+                  </div>
               </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.categories")}</p>
-                <strong>{selectedCategories.length}</strong>
+
+              <div className="ob-settings-list">
+                 <div className="ob-setting-item">
+                    <div className="osi-left">🌐</div>
+                    <div className="osi-main">Ngôn ngữ</div>
+                    <div className="osi-right">
+                       <span>{language === "vi" ? "Tiếng Việt" : "English"}</span>
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                 </div>
+                 <div className="ob-setting-item">
+                    <div className="osi-left">☀️</div>
+                    <div className="osi-main">Chế độ màu</div>
+                    <div className="osi-right">
+                       <span>{theme === "light" ? "Sáng" : "Tối"}</span>
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                 </div>
+                 <div className="ob-setting-item">
+                    <div className="osi-left">🎨</div>
+                    <div className="osi-main">Màu chủ đạo</div>
+                    <div className="osi-right">
+                       <span>Xanh dương</span>
+                       <div className="color-dot" style={{ backgroundColor: primaryColor }}></div>
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                 </div>
+                 <div className="ob-setting-item">
+                    <div className="osi-left">Aa</div>
+                    <div className="osi-main">Cỡ chữ</div>
+                    <div className="osi-right">
+                       <span>Trung bình</span>
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                 </div>
+                 <div className="ob-setting-item">
+                    <div className="osi-left">T</div>
+                    <div className="osi-main">Màu chữ</div>
+                    <div className="osi-right">
+                       <span>Tối</span>
+                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                 </div>
               </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.language")}</p>
-                <strong>
-                  {LANGUAGE_OPTIONS.find((item) => item.id === language)?.labels[language] ||
-                    LANGUAGE_OPTIONS[0].labels[language]}
-                </strong>
-              </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.theme")}</p>
-                <strong>{theme}</strong>
-              </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.currency")}</p>
-                <strong>{currencyCode}</strong>
-              </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.timezone")}</p>
-                <strong>{timezone}</strong>
-              </div>
-              <div className="summary-item">
-                <p>{tLocal("onboarding.step5.import")}</p>
-                <strong>{importSkipped ? 0 : importRows.length}</strong>
+
+              <div className="ob-preview-mobile">
+                 <p className="preview-label">Xem trước giao diện</p>
+                 <div className="mock-app">
+                    <div className="mock-sidebar">
+                       <div className="ms-item active">🏠</div>
+                       <div className="ms-item">🕒</div>
+                       <div className="ms-item">👛</div>
+                       <div className="ms-item">...</div>
+                    </div>
+                    <div className="mock-main">
+                       <div className="mock-header">
+                          <div>
+                            <strong>Tổng quan</strong>
+                            <p>Số dư tài khoản</p>
+                          </div>
+                          <select><option>Tháng này</option></select>
+                       </div>
+                       <div className="mock-balance">
+                          <strong>120.500.000 đ</strong>
+                          <span className="trend">↑ 12,5% <small>so với tuần trước</small></span>
+                       </div>
+                       <div className="mock-chart">
+                          <svg viewBox="0 0 200 60"><path d="M0 50 Q 50 20, 100 40 T 200 10" stroke="#2563eb" fill="none" strokeWidth="2" /></svg>
+                       </div>
+                    </div>
+                 </div>
               </div>
             </div>
-            <p className="setup-security-note">🔒 Dữ liệu của bạn luôn được bảo mật và chỉ bạn có quyền truy cập.</p>
-          </div>
-        )}
+          )}
 
-        {error && <p className="form-error">{error}</p>}
+          {step === 4 && (
+            <div className="ob-step ob-step-4">
+               <div className="ob-section-title">
+                  <div>
+                    <h3>Xác nhận & Hoàn tất</h3>
+                    <p>Vui lòng xem lại các thiết lập của bạn trước khi bắt đầu.</p>
+                  </div>
+               </div>
+               
+               <div className="ob-confirm-list">
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#eff6ff" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Tài khoản / thẻ đầu tiên</span>
+                        <div className="occ-val">
+                           🏛️ Ngân hàng
+                        </div>
+                     </div>
+                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>
+                  </div>
 
-        <div className="wizard-actions">
-          <button className="ghost" type="button" onClick={handleBack} disabled={step === 1 || saving}>
-            {tLocal("common.prev")}
-          </button>
-          {step < totalSteps ? (
-            <button
-              className="primary"
-              type="button"
-              onClick={handleNext}
-              disabled={!stepValid[step - 1] || saving}
-              style={{ background: currentPrimary, borderColor: currentPrimary }}
-            >
-              {tLocal("common.next")}
-            </button>
-          ) : (
-            <button
-              className="primary"
-              type="button"
-              onClick={handleFinish}
-              disabled={saving}
-              style={{ background: currentPrimary, borderColor: currentPrimary }}
-            >
-              {saving ? tLocal("common.loading") : tLocal("common.finish")}
-            </button>
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#f0fdf4" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Số dư ban đầu</span>
+                        <strong>{accBalance || "0"} đ</strong>
+                     </div>
+                  </div>
+
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#fffbeb" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Số danh mục đã chọn</span>
+                        <strong>{categories.filter(c => c.enabled).length}</strong>
+                     </div>
+                  </div>
+
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#f5f3ff" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Ngôn ngữ</span>
+                        <strong>{language === "vi" ? "Tiếng Việt" : "English"}</strong>
+                     </div>
+                  </div>
+
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#eff6ff" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Chế độ màu</span>
+                        <strong>{theme === "light" ? "Light" : "Dark"}</strong>
+                     </div>
+                  </div>
+
+                  <div className="ob-confirm-card">
+                     <div className="occ-icon" style={{ backgroundColor: "#fef2f2" }}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                     </div>
+                     <div className="occ-main">
+                        <span>Giao dịch import</span>
+                        <strong>0</strong>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="ob-security-card">
+                  <div className="osc-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                  </div>
+                  <p>Finanzy cam kết bảo mật thông tin và an toàn dữ liệu của bạn.</p>
+               </div>
+            </div>
           )}
         </div>
-      </section>
+
+        <footer className="ob-footer-actions">
+           <button className="ob-btn-back" onClick={handleBack} disabled={step === 1 || saving}>
+             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+             Quay lại
+           </button>
+           {step < totalSteps ? (
+             <button className="ob-btn-next" onClick={handleNext}>
+               Tiếp tục <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+             </button>
+           ) : (
+             <button className="ob-btn-finish" onClick={handleFinish} disabled={saving}>
+               {saving ? "Đang xử lý..." : "Bắt đầu sử dụng"} <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+             </button>
+           )}
+        </footer>
+      </div>
     </main>
   );
 }

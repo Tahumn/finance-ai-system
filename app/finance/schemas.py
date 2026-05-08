@@ -335,3 +335,33 @@ class BillRead(BaseModel):
     created_at: DateTimeType
 
     model_config = ConfigDict(from_attributes=True)
+    
+class AccountUpdateHistoryRead(BaseModel):
+    id: int
+    user_id: int
+    account_id: int
+    action: str
+    item_name: str
+    change_amount: float | None
+    created_at: DateTimeType
+    performer: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SavingsContributionCreate(BaseModel):
+    amount: float = Field(..., gt=0)
+    date: DateType | None = None
+    description: str | None = None
+    source: str | None = None
+
+class SavingsContributionRead(BaseModel):
+    id: int
+    user_id: int
+    goal_id: int
+    amount: float
+    date: DateType
+    description: str | None
+    source: str | None
+    created_at: DateTimeType
+
+    model_config = ConfigDict(from_attributes=True)

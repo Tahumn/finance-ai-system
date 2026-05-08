@@ -177,3 +177,5 @@ export const listBills = async () => {
     throw err;
   }
 };
+
+export const listAccountHistory = () => request("/finance/accounts/history");

@@ -40,7 +40,8 @@ import {
   getChartData,
   getReportsOverview,
   listSavingsGoals,
-  listBills
+  listBills,
+  listAccountHistory
 } from "./api/finance.js";
 import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
@@ -170,6 +171,7 @@ export default function App() {
   const [budgets, setBudgets] = useState([]);
   const [savingsGoals, setSavingsGoals] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [accountHistory, setAccountHistory] = useState([]);
   const [bills, setBills] = useState([]);
   const [reportsOverview, setReportsOverview] = useState({
     daily_series: [],
@@ -195,6 +197,13 @@ export default function App() {
   const needsOnboardingRef = useRef(needsOnboarding);
   const refreshTimerRef = useRef(null);
   const bootstrapTriedRef = useRef(false);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const prefs = getUiPrefs(authState.user?.email);
@@ -522,7 +531,8 @@ export default function App() {
         goalsData,
         anomalyData,
         tipsData,
-        overviewData
+        overviewData,
+        accountHistoryData
       ] = await Promise.all([
         listCategories(),
         listTags(),
@@ -537,7 +547,8 @@ export default function App() {
         listSavingsGoals(),
         getAnomalies(),
         getSavingsTips(),
-        getReportsOverview({ start_date: filters.start, end_date: filters.end })
+        getReportsOverview({ start_date: filters.start, end_date: filters.end }),
+        listAccountHistory()
       ]);
       setCategories(cats);
       setTags(tagsList);
@@ -548,6 +559,7 @@ export default function App() {
       setMonthlySeries(chartData?.series || []);
       setBudgets(Array.isArray(budgetsData) ? budgetsData : []);
       setAccounts(Array.isArray(accountsData) ? accountsData : []);
+      setAccountHistory(Array.isArray(accountHistoryData) ? accountHistoryData : []);
       setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
       setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
@@ -931,11 +943,32 @@ export default function App() {
     }
   };
 
+  const handleUpdateCategory = async (id, payload) => {
+    try {
+      await updateCategory(id, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Không thể cập nhật danh mục");
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    try {
+      await deleteCategory(id);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Không thể xóa danh mục");
+    }
+  };
   const selectRangePreset = (preset) => {
     setRangePreset(preset);
     const nextRange = getRangeFromPreset(preset);
     setFilters((current) => ({ ...current, ...nextRange }));
   };
+
+  if (authState.status === "checking") {
+    return <div className="app-loading">Loading...</div>;
+  }
 
   const showDateFilters = isAuthed && view === "dashboard";
   const notificationCounts = getNotificationCounts(notifications);
@@ -979,217 +1012,191 @@ export default function App() {
   }
 
   return (
-    <div className="app-layout">
-      <SideMenu
-        active={view}
-        onChange={handleChangeView}
-        onLogout={handleAccountAction}
-        user={isAuthed ? authState.user : null}
-        notificationsCount={notificationCounts.unread}
-      />
+    <div className={`app-layout ${isDesktop ? 'is-desktop' : 'is-mobile'} theme-${uiPrefs.colorTheme} mode-${uiPrefs.colorMode} lang-${uiPrefs.language}`}>
+      {isDesktop && <SideMenu active={view} onChange={handleChangeView} user={authState.user} notificationsCount={getNotificationCounts(notifications).unread} onLogout={handleLogout} />}
 
       <div className="main-wrapper">
-        <TopBar
-           user={authState.user}
-           notificationsCount={notificationCounts.unread}
-           onChange={handleChangeView}
-        />
+        {!isDesktop && (
+          <TopBar
+            user={authState.user}
+            onLogout={handleLogout}
+            onGoProfile={() => handleChangeView("settings")}
+            onGoSettings={() => handleChangeView("settings")}
+            onGoNotifications={() => handleChangeView("notifications")}
+            notificationCount={getNotificationCounts(notifications).unread}
+          />
+        )}
 
-        <main className={`app-content${view === "reports" ? " app-content-reports" : ""}`}>
+        <main className="main-content">
+          <StatusBanner loading={loading} error={error} />
+
           {view === "dashboard" && (
-            <>
-              <header className="page-header">
-                <div>
-                  {isAuthed && <p className="eyebrow">{t("dashboard.greeting")}</p>}
-                  <h1>
-                    {isAuthed
-                      ? authState.user?.username || authState.user?.email || t("user.default")
-                      : t("nav.overview")}
-                  </h1>
-                </div>
-              </header>
-
-
-            </>
+            <DashboardScreen
+              summary={summary}
+              breakdown={breakdownWithShare}
+              incomeBreakdown={incomeBreakdownWithShare}
+              transactions={transactionsWithLabels}
+              monthlySeries={monthlySeries}
+              anomalies={anomalies}
+              savingsGoals={savingsGoals}
+              budgets={budgets}
+              onViewTransactions={() => handleChangeView("transactions")}
+              onGoOcr={() => handleChangeView("ocr")}
+              onGoChat={() => handleChangeView("chat")}
+              onGoReports={() => handleChangeView("reports")}
+              onGoAddTransaction={() => handleChangeView("transactions")}
+              onGoBudgets={() => handleChangeView("budgets")}
+              onGoGoals={() => handleChangeView("goals")}
+              rangePreset={rangePreset}
+              onSelectPreset={selectRangePreset}
+              userEmail={authState.user?.email}
+            />
           )}
 
-        {showDateFilters && (
-          <DateRangeFilters
-            start={filters.start}
-            end={filters.end}
-            onChange={(next) => {
-              setRangePreset("custom");
-              setFilters((current) => ({ ...current, ...next }));
-            }}
-          />
-        )}
+          {view === "transactions" && (
+            <TransactionsScreen
+              transactions={transactionsWithLabels}
+              totalCount={transactions.total}
+              hasMore={transactions.items.length < transactions.total}
+              onLoadMore={handleLoadMoreTransactions}
+              categories={categories}
+              accounts={accounts}
+              tags={tags}
+              filters={filters}
+              anomalies={anomalies}
+              onFiltersChange={setFilters}
+              onCreate={handleCreateTransaction}
+              onCreateFromText={handleCreateFromText}
+              onParseFromText={handleParseFromText}
+              onUpdate={handleUpdateTransaction}
+              onDelete={handleDeleteTransaction}
+              onCreateCategory={handleCreateCategory}
+              onUpdateCategory={handleUpdateCategory}
+              onDeleteCategory={handleDeleteCategory}
+              onCreateTag={handleCreateTag}
+              onUpdateTag={handleUpdateTag}
+              onDeleteTag={handleDeleteTag}
+              userEmail={authState.user?.email}
+              onCreateTransaction={handleCreateTransaction}
+              onBack={() => handleChangeView("dashboard")}
+              loading={loading}
+            />
+          )}
 
-        <StatusBanner loading={loading} error={error} />
+          {view === "categories" && (
+            <CategoriesScreen
+              categories={categories}
+              onCreate={handleCreateCategory}
+              onBack={() => handleChangeView("dashboard")}
+              loading={loading}
+              userEmail={authState.user?.email}
+            />
+          )}
 
-        {view === "dashboard" && (
-          <DashboardScreen
-            summary={summary}
-            breakdown={breakdownWithShare}
-            incomeBreakdown={incomeBreakdownWithShare}
-            transactions={transactionsWithLabels}
-            monthlySeries={monthlySeries}
-            anomalies={anomalies}
-            savingsGoals={savingsGoals}
-            budgets={budgets}
-            onViewTransactions={() => handleChangeView("transactions")}
-            onGoOcr={() => handleChangeView("ocr")}
-            onGoChat={() => handleChangeView("chat")}
-            onGoReports={() => handleChangeView("reports")}
-            onGoAddTransaction={() => {}}
-            onGoBudgets={() => handleChangeView("budgets")}
-            rangePreset={rangePreset}
-            onSelectPreset={selectRangePreset}
-            userEmail={authState.user?.email}
-          />
-        )}
+          {view === "tags" && (
+            <TagsScreen
+              tags={tags}
+              onCreate={handleCreateTag}
+              onUpdate={handleUpdateTag}
+              onDelete={handleDeleteTag}
+              loading={loading}
+            />
+          )}
 
-        {view === "transactions" && (
-          <TransactionsScreen
-            transactions={transactionsWithLabels}
-            totalCount={transactions.total}
-            hasMore={transactions.items.length < transactions.total}
-            onLoadMore={handleLoadMoreTransactions}
-            categories={categories}
-            accounts={accounts}
-            tags={tags}
-            filters={filters}
-            anomalies={anomalies}
-            onFiltersChange={setFilters}
-            onCreate={handleCreateTransaction}
-            onCreateFromText={handleCreateFromText}
-            onParseFromText={handleParseFromText}
-            onUpdate={handleUpdateTransaction}
-            onDelete={handleDeleteTransaction}
-            onCreateCategory={handleCreateCategory}
-            onCreateTag={handleCreateTag}
-            onUpdateTag={handleUpdateTag}
-            onDeleteTag={handleDeleteTag}
-            userEmail={authState.user?.email}
-            onCreateTransaction={handleCreateTransaction}
-            onBack={() => handleChangeView("dashboard")}
-            loading={loading}
-          />
-        )}
+          {view === "reports" && (
+            <ReportsScreen
+              summary={summary}
+              monthlySeries={monthlySeries}
+              breakdown={breakdownWithShare}
+              transactions={transactionsWithLabels}
+              reportsOverview={reportsOverview}
+              userEmail={authState.user?.email}
+              savingsGoals={savingsGoals}
+              filters={filters}
+              onFiltersChange={setFilters}
+              onBack={() => handleChangeView("dashboard")}
+            />
+          )}
 
-        {view === "categories" && (
-          <CategoriesScreen
-            categories={categories}
-            onCreate={handleCreateCategory}
-            onBack={() => handleChangeView("dashboard")}
-            loading={loading}
-            userEmail={authState.user?.email}
-          />
-        )}
+          {view === "budgets" && (
+            <BudgetsScreen
+              categories={categories}
+              transactions={transactionsWithLabels}
+              budgets={budgets}
+              filters={filters}
+              onCreateBudget={handleCreateBudget}
+              onUpdateBudget={handleUpdateBudget}
+              onDeleteBudget={handleDeleteBudget}
+              onFiltersChange={setFilters}
+              loading={loading}
+              userEmail={authState.user?.email}
+            />
+          )}
 
-        {view === "tags" && (
-          <TagsScreen
-            tags={tags}
-            onCreate={handleCreateTag}
-            onUpdate={handleUpdateTag}
-            onDelete={handleDeleteTag}
-            loading={loading}
-          />
-        )}
+          {view === "goals" && (
+            <GoalsScreen
+              goals={savingsGoals}
+              aiSuggestions={savingsTips}
+              onCreateGoal={handleCreateSavingsGoal}
+              onUpdateGoal={handleUpdateSavingsGoal}
+              onDeleteGoal={handleDeleteSavingsGoal}
+              loading={loading}
+            />
+          )}
 
-        {view === "reports" && (
-          <ReportsScreen
-            summary={summary}
-            monthlySeries={monthlySeries}
-            breakdown={breakdownWithShare}
-            transactions={transactionsWithLabels}
-            reportsOverview={reportsOverview}
-            userEmail={authState.user?.email}
-            onBack={() => handleChangeView("dashboard")}
-          />
-        )}
+          {view === "ocr" && (
+            <OcrScreen
+              categories={categories}
+              tags={tags}
+              userEmail={authState.user?.email}
+              onCreateCategory={handleCreateCategory}
+              onCreateTag={handleCreateTag}
+              onCreateTransaction={handleCreateTransaction}
+              loading={loading}
+              onClose={() => handleChangeView("dashboard")}
+            />
+          )}
 
-        {view === "budgets" && (
-          <BudgetsScreen
-            categories={categories}
-            transactions={transactionsWithLabels}
-            budgets={budgets}
-            filters={filters}
-            onCreateBudget={handleCreateBudget}
-            onUpdateBudget={handleUpdateBudget}
-            onDeleteBudget={handleDeleteBudget}
-            onFiltersChange={setFilters}
-            loading={loading}
-            userEmail={authState.user?.email}
-          />
-        )}
+          {view === "accounts" && (
+            <AccountsScreen
+              accounts={accounts}
+              history={accountHistory}
+              onCreateAccount={handleCreateAccount}
+              onUpdateAccount={handleUpdateAccount}
+              onDeleteAccount={handleDeleteAccount}
+              loading={loading}
+            />
+          )}
 
-        {view === "goals" && (
-          <GoalsScreen
-            goals={savingsGoals}
-            aiSuggestions={savingsTips}
-            onCreateGoal={handleCreateSavingsGoal}
-            onUpdateGoal={handleUpdateSavingsGoal}
-            onDeleteGoal={handleDeleteSavingsGoal}
-            loading={loading}
-          />
-        )}
+          {view === "settings" && <SettingsScreen user={authState.user} />}
+          {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
+          {view === "notifications" && (
+            <NotificationsScreen
+              notifications={notifications}
+              onBack={() => handleChangeView("dashboard")}
+              onMarkRead={(id) => markNotificationRead(authState.user?.email || "guest", id)}
+              onMarkAllRead={() => markAllRead(authState.user?.email || "guest")}
+              onClearAll={() => clearNotifications(authState.user?.email || "guest")}
+            />
+          )}
 
-        {view === "ocr" && (
-          <OcrScreen
-            categories={categories}
-            tags={tags}
-            userEmail={authState.user?.email}
-            onCreateCategory={handleCreateCategory}
-            onCreateTag={handleCreateTag}
-            onCreateTransaction={handleCreateTransaction}
-            loading={loading}
-            onClose={() => handleChangeView("dashboard")}
-          />
-        )}
+          {view === "bills" && (
+            <BillsScreen
+              bills={bills}
+              loading={loading}
+              onGoOcr={() => handleChangeView("ocr")}
+            />
+          )}
+        </main>
 
-        {view === "accounts" && (
-          <AccountsScreen
-            accounts={accounts}
-            onCreateAccount={handleCreateAccount}
-            onUpdateAccount={handleUpdateAccount}
-            onDeleteAccount={handleDeleteAccount}
-            loading={loading}
-          />
-        )}
-
-        {view === "settings" && <SettingsScreen user={authState.user} />}
-
-        {view === "chat" && <ChatScreen userEmail={authState.user?.email} />}
-
-        {view === "notifications" && (
-          <NotificationsScreen
-            notifications={notifications}
-            onBack={() => handleChangeView("dashboard")}
-            onMarkRead={(id) => markNotificationRead(authState.user?.email || "guest", id)}
-            onMarkAllRead={() => markAllRead(authState.user?.email || "guest")}
-            onClearAll={() => clearNotifications(authState.user?.email || "guest")}
-          />
-        )}
-
-        {view === "bills" && (
-          <BillsScreen
-            bills={bills}
-            loading={loading}
-            onGoOcr={() => handleChangeView("ocr")}
-          />
-        )}
-      </main>
+        {!isDesktop && <BottomNav active={view} onChange={handleChangeView} />}
       </div>
+
       <FloatingChatbot
-        isAuthed={authState.status === "authed"}
+        isAuthed={isAuthed}
         userEmail={authState.user?.email}
         onCreateTransaction={handleCreateTransaction}
       />
-      {view !== "auth" && view !== "onboarding" && (
-        <div className="mobile-nav-wrapper">
-          <BottomNav active={view} onChange={handleChangeView} />
-        </div>
-      )}
     </div>
   );
 }

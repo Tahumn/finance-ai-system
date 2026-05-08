@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-
 import { extractOcr } from "../../api/ai.js";
 import { currency, formatNumberInput, parseNumberInput, toInputDate } from "../../utils/format.js";
 import { colorFor, onColor } from "../../utils/colors.js";
 import { t } from "../../utils/i18n.js";
 import { CAT_ICONS, getCatMeta } from "../../utils/categoryIcons.jsx";
+import "./ocr.css";
 
 const baseParsedState = () => ({
   date: toInputDate(new Date()),
@@ -52,9 +52,18 @@ const getOcrCategoryTheme = (name, fallbackColor) => {
   return { meta, bg: meta.light, fg: meta.bg, dot: meta.bg };
 };
 
+// Simple UI Icons
+const CameraIcon = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
+const UploadIcon = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+const SearchIcon = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+const RefreshIcon = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>;
+const XIcon = ({size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const SparkleIcon = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>;
+
 export default function OcrScreen({
   categories,
   tags = [],
+  accounts = [],
   userEmail,
   onCreateCategory,
   onCreateTag,
@@ -63,19 +72,6 @@ export default function OcrScreen({
   embedded = false,
   onClose
 }) {
-  const paymentTagCandidates = useMemo(
-    () =>
-      tags.filter((tag) => {
-        const value = String(tag.name || "").toLowerCase();
-        return (
-          value.includes("tiền mặt") ||
-          value.includes("ngân hàng") ||
-          value.includes("ví") ||
-          value.includes("momo")
-        );
-      }),
-    [tags]
-  );
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsed, setParsed] = useState(baseParsedState);
@@ -88,37 +84,25 @@ export default function OcrScreen({
   const [tagInput, setTagInput] = useState("");
   const [txType, setTxType] = useState("expense");
   const [fundingSourceId, setFundingSourceId] = useState("");
-  const [showAddCategory, setShowAddCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [referenceCode, setReferenceCode] = useState("");
   const [autoCreate, setAutoCreate] = useState(true);
+  const [showAllTags, setShowAllTags] = useState(false);
 
   const tagMap = useMemo(() => {
     const map = {};
-    tags.forEach((tag) => {
-      map[tag.id] = tag;
-    });
+    tags.forEach((tag) => { map[tag.id] = tag; });
     return map;
   }, [tags]);
 
   const tagNameMap = useMemo(() => {
     const map = {};
-    tags.forEach((tag) => {
-      if (tag?.name) map[tag.name.toLowerCase()] = tag;
-    });
+    tags.forEach((tag) => { if (tag?.name) map[tag.name.toLowerCase()] = tag; });
     return map;
   }, [tags]);
 
   useEffect(() => {
-    setSelectedTagIds((current) => current.filter((id) => tagMap[id]));
-  }, [tagMap]);
-
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl("");
-      return;
-    }
+    if (!file) { setPreviewUrl(""); return; }
     const nextUrl = URL.createObjectURL(file);
     setPreviewUrl(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
@@ -128,6 +112,7 @@ export default function OcrScreen({
     () => parseNumberInput(parsed.total) > 0 && Boolean(parsed.date),
     [parsed.total, parsed.date]
   );
+
   const computedSubTotal = useMemo(() => {
     const total = parseNumberInput(parsed.total);
     const vat = parseNumberInput(parsed.vat);
@@ -136,15 +121,8 @@ export default function OcrScreen({
   }, [parsed.total, parsed.vat, parsed.estimated]);
 
   const handleExtract = async () => {
-    if (!file) {
-      setError(t("ocr.error.no_file", null, "Please select a receipt image first."));
-      return;
-    }
-
-    setError("");
-    setNotice("");
-    setOcrState("running");
-
+    if (!file) { setError(t("ocr.error.no_file", null, "Please select a receipt image first.")); return; }
+    setError(""); setNotice(""); setOcrState("running");
     try {
       const result = await extractOcr(file);
       setParsed((current) => ({
@@ -158,10 +136,10 @@ export default function OcrScreen({
       }));
       setConfidence({
         date: result.date ? 0.8 : 0.3,
-        merchant: result.merchant ? 0.8 : 0.3,
-        total: result.total ? 0.9 : 0.3,
-        vat: result.vat ? 0.7 : 0.2,
-        estimated: result.estimated ? 0.6 : 0.2
+        merchant: result.merchant ? 0.92 : 0.4,
+        total: result.total ? 0.92 : 0.3,
+        vat: result.vat ? 0.88 : 0.2,
+        estimated: result.estimated ? 1.0 : 0.2
       });
       setWarnings(result.warnings || []);
       setNotice(t("ocr.notice.extracted", null, "OCR done. Review and confirm before creating transaction."));
@@ -173,23 +151,10 @@ export default function OcrScreen({
   };
 
   const handleCreate = async (event) => {
-    event.preventDefault();
-    if (!canCreate) {
-      setError(t("ocr.error.missing", null, "Missing required data: date and total amount."));
-      return;
-    }
-
-    setError("");
-    setNotice("");
-
-    const descriptionParts = [
-      parsed.merchant || t("ocr.default_desc"),
-      referenceCode ? `Ref:${referenceCode}` : "",
-      parsed.note
-    ]
-      .filter(Boolean)
-      .join(" - ");
-
+    if (event) event.preventDefault();
+    if (!canCreate) return;
+    setError(""); setNotice("");
+    const descriptionParts = [parsed.merchant || t("ocr.default_desc"), referenceCode ? `Ref:${referenceCode}` : "", parsed.note].filter(Boolean).join(" - ");
     try {
       let ocrTagId = tagNameMap["hóa đơn ocr"]?.id || tagNameMap["hoa don ocr"]?.id;
       if (!ocrTagId && onCreateTag) {
@@ -202,428 +167,252 @@ export default function OcrScreen({
         transaction_type: txType,
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
         date: parsed.date,
-        tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])]
+        tag_ids: [...new Set([...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
+        account_id: fundingSourceId ? Number(fundingSourceId) : null
       });
       setNotice(t("ocr.notice.created", null, "Transaction created from OCR."));
-      setParsed(baseParsedState());
-      setConfidence(baseConfidence);
-      setFile(null);
-      setOcrState("idle");
-      setWarnings([]);
-      setSelectedTagIds([]);
-      setFundingSourceId("");
-      setTxType("expense");
-      setTagInput("");
-      setReferenceCode("");
-      setAutoCreate(true);
-    } catch {
-      setError(t("ocr.error.create_failed", null, "Failed to create transaction from OCR."));
-    }
-  };
-
-  const addTagByName = async (value) => {
-    const normalized = normalizeTag(value);
-    if (!normalized) return;
-
-    const existing = tagNameMap[normalized.toLowerCase()];
-    if (existing) {
-      setSelectedTagIds((current) =>
-        current.includes(existing.id) ? current : [...current, existing.id]
-      );
-      setTagInput("");
-      return;
-    }
-
-    if (!onCreateTag) return;
-    const created = await onCreateTag({ name: normalized, color: "#1565c0" });
-    if (created?.id) {
-      setSelectedTagIds((current) => [...current, created.id]);
-    }
-    setTagInput("");
+      if (onClose) onClose();
+    } catch { setError(t("ocr.error.create_failed", null, "Failed to create transaction from OCR.")); }
   };
 
   const toggleSuggestedTag = (tagId) => {
-    setSelectedTagIds((current) =>
-      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
-    );
+    setSelectedTagIds((current) => current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]);
   };
 
-  const removeTag = (tagId) => setSelectedTagIds((current) => current.filter((id) => id !== tagId));
   const filteredCategories = useMemo(() => {
     const q = String(categoryQuery || "").trim().toLowerCase();
-    if (!q) return categories;
+    if (!q) return categories.slice(0, 10);
     return categories.filter((c) => String(c.name || "").toLowerCase().includes(q));
   }, [categories, categoryQuery]);
-  const handleQuickCreateCategory = async () => {
-    const value = String(newCategoryName || "").trim();
-    if (!value || !onCreateCategory) return;
-    await onCreateCategory(value);
-    setShowAddCategory(false);
-    setNewCategoryName("");
-  };
 
   const Shell = embedded ? "div" : "section";
 
   return (
-    <Shell className={embedded ? "ocr-embedded" : "panel"}>
-      {!embedded && (
-        <div className="panel-header">
-          <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
-          {onClose && (
-            <button type="button" className="ocr-close-btn" onClick={onClose} aria-label="Đóng">
-              ×
-            </button>
-          )}
+    <Shell className="ocr-layout-wrap">
+      <div className="ocr-header-pro">
+        <div className="ocr-title-area">
+          <h2>Nhập hóa đơn (OCR)</h2>
+          <p>Tự động trích xuất thông tin từ ảnh hóa đơn và cho phép chỉnh sửa trước khi lưu.</p>
         </div>
-      )}
+        <div className="ocr-header-actions">
+           <button type="button" className="ocr-btn-outline" onClick={handleCreate} disabled={!canCreate || loading}>
+             <SparkleIcon size={16}/> Tạo giao dịch từ hóa đơn
+           </button>
+        </div>
+        {onClose && (
+           <button type="button" className="ocr-close-btn-fixed" onClick={onClose} aria-label="Đóng">
+             <XIcon size={24}/>
+           </button>
+        )}
+      </div>
 
-      <div className="receipt-grid ocr-layout">
-        <div className="receipt-uploader ocr-left-col">
-          <div className="ocr-upload-switch">
-            <button type="button" className="active">Tải ảnh lên</button>
-            <button type="button">Camera</button>
-          </div>
-          <label className="field ocr-dropzone">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
-            <div>
-              <p>Kéo & thả ảnh hóa đơn hoặc chọn tệp</p>
-              <span>Ảnh JPG/PNG, rõ nét để OCR chính xác hơn</span>
-            </div>
-          </label>
+      <div className="ocr-grid-pro">
+        <div className="ocr-col-left">
+           <div className="ocr-card-pro">
+              <div className="ocr-upload-nav">
+                <button type="button" className="active"><UploadIcon size={16}/> Tải ảnh lên</button>
+                <button type="button"><CameraIcon size={16}/> Camera</button>
+              </div>
+              <label className="ocr-drop-area">
+                <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} hidden />
+                <div className="ocr-drop-icon"><UploadIcon size={24}/></div>
+                <div className="ocr-drop-text">
+                  <p>Kéo & thả ảnh hóa đơn vào đây</p>
+                  <span>Hỗ trợ JPG, PNG tối đa 10MB</span>
+                </div>
+                <button type="button" className="ocr-btn-select">Chọn ảnh từ máy</button>
+              </label>
+           </div>
 
-          <button className="ghost ocr-extract-btn" type="button" onClick={handleExtract}>
-            {ocrState === "running" ? "Đang trích xuất OCR..." : "Trích xuất lại OCR"}
-          </button>
+           <div className="ocr-preview-section">
+              <h4>Xem trước hóa đơn</h4>
+              <div className="ocr-preview-box">
+                {previewUrl ? <img src={previewUrl} alt="Receipt" /> : <p className="empty">Chưa có ảnh hóa đơn</p>}
+              </div>
+           </div>
 
-          <div className="receipt-preview">
-            {previewUrl ? <img src={previewUrl} alt="Receipt preview" /> : <p className="empty">Xem trước hóa đơn</p>}
-          </div>
-
-          <div className="ocr-result-card">
-            <h4>Kết quả OCR</h4>
-            <div className="ocr-result-grid">
-              <span>Merchant</span>
-              <strong>{parsed.merchant || "--"}</strong>
-              <span>Ngày giao dịch</span>
-              <strong>{parsed.date || "--"}</strong>
-              <span>Tổng tiền</span>
-              <strong>{parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}</strong>
-              <span>Độ tin cậy</span>
-              <strong>{Math.round(confidence.total * 100)}%</strong>
-            </div>
-          </div>
+           <div className="ocr-result-box">
+              <h4>Kết quả OCR</h4>
+              <div className="ocr-res-item">
+                <label>Merchant</label>
+                <strong>{parsed.merchant || "Chưa xác định"}</strong>
+              </div>
+              <div className="ocr-res-item">
+                <label>Ngày giao dịch</label>
+                <strong>{parsed.date?.split("-").reverse().join("/") || "--/--/----"}</strong>
+              </div>
+              <div className="ocr-res-item">
+                <label>Tổng tiền</label>
+                <strong>{parsed.total ? currency(parseNumberInput(parsed.total)) : "0 d"}</strong>
+              </div>
+              <div className="ocr-res-item">
+                <label>Độ tin cậy</label>
+                <div className="ocr-conf-badge">{Math.round(confidence.total * 100)}% ✓</div>
+              </div>
+              <button type="button" className="ocr-btn-retry" onClick={handleExtract} disabled={ocrState === "running"}>
+                <RefreshIcon size={16}/> {ocrState === "running" ? "Đang xử lý..." : "Trích xuất lại OCR"}
+              </button>
+           </div>
         </div>
 
-        <form className="form ocr-form-panel ocr-form-modern" onSubmit={handleCreate}>
-          <h4>1. Thông tin giao dịch</h4>
-          <div className="row">
-            <label className="field">
-              <span>Ngày giao dịch *</span>
-              <input
-                type="date"
-                value={parsed.date}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, date: event.target.value }))
-                }
-                required
-              />
-            </label>
-
-            <label className="field">
-              <span>Merchant *</span>
-              <input
-                type="text"
-                value={parsed.merchant}
-                onChange={(event) =>
-                  setParsed((current) => ({ ...current, merchant: event.target.value }))
-                }
-                placeholder="Ví dụ: Circle K"
-              />
-            </label>
-          </div>
-
-          <div className="ocr-pill-row">
-            <span>Loại giao dịch</span>
-            <div className="ocr-inline-pills">
-              <button type="button" className={txType === "expense" ? "active" : ""} onClick={() => setTxType("expense")}>Chi tiêu</button>
-              <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
-            </div>
-          </div>
-
-          {!!paymentTagCandidates.length && (
-            <div className="ocr-pill-row">
-              <span>Nguồn tiền *</span>
-              <div className="ocr-inline-pills wrap">
-                {paymentTagCandidates.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className={fundingSourceId === tag.id ? "active" : ""}
-                    onClick={() => setFundingSourceId(tag.id)}
-                  >
-                    {tag.name}
-                  </button>
-                ))}
+        <form className="ocr-col-right" onSubmit={handleCreate}>
+           <div className="ocr-section-pro">
+              <h3 className="ocr-sec-title">1. Thông tin giao dịch</h3>
+              <div className="ocr-field-row">
+                 <label className="ocr-input-field">
+                   <span>Ngày giao dịch *</span>
+                   <div className="ocr-input-wrap">
+                      <input type="date" value={parsed.date} onChange={e => setParsed(p=>({...p, date: e.target.value}))} required />
+                   </div>
+                 </label>
+                 <label className="ocr-input-field">
+                   <span>Merchant *</span>
+                   <div className="ocr-input-wrap">
+                      <input type="text" value={parsed.merchant} onChange={e => setParsed(p=>({...p, merchant: e.target.value}))} placeholder="Vd: Circle K" />
+                      <div className="ocr-input-badge">OCR {Math.round(confidence.merchant * 100)}%</div>
+                   </div>
+                 </label>
               </div>
-            </div>
-          )}
 
-          <div className="row">
-            <label className="field">
-              <span>Tổng tiền *</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.total}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    total: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-                required
-              />
-            </label>
-
-            <label className="field">
-              <span>VAT</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.vat}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    vat: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-              />
-            </label>
-            <label className="field">
-              <span>Giảm giá</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={parsed.estimated}
-                onChange={(event) =>
-                  setParsed((current) => ({
-                    ...current,
-                    estimated: formatNumberInput(event.target.value)
-                  }))
-                }
-                placeholder="0"
-              />
-            </label>
-          </div>
-
-          <label className="field">
-            <span>Tạm tính</span>
-            <input type="text" value={currency(computedSubTotal)} readOnly />
-          </label>
-
-          <h4 className="ocr-section-title ocr-section-inline">
-            <span>2. Danh mục</span>
-            <button
-              type="button"
-              className="ghost ocr-add-category-btn"
-              onClick={() => setShowAddCategory((s) => !s)}
-            >
-              + Thêm danh mục
-            </button>
-          </h4>
-          {showAddCategory && (
-            <div className="ocr-inline-create">
-              <input
-                type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Nhập tên danh mục mới..."
-              />
-              <button type="button" className="primary" onClick={handleQuickCreateCategory}>
-                Lưu
-              </button>
-            </div>
-          )}
-          <label className="field">
-            <span>Chọn danh mục</span>
-            <input
-              type="text"
-              value={categoryQuery}
-              onChange={(e) => setCategoryQuery(e.target.value)}
-              placeholder="Tìm danh mục..."
-            />
-            <div className="category-picker">
-              <button
-                type="button"
-                className={`category-pill ${!parsed.categoryId ? "selected" : ""}`}
-                onClick={() => setParsed((current) => ({ ...current, categoryId: "" }))}
-                aria-pressed={!parsed.categoryId}
-              >
-                {t("transactions.none", null, "Không")}
-              </button>
-              {filteredCategories.map((category) => {
-                const bg = colorFor(category.name, userEmail);
-                const selected = String(parsed.categoryId) === String(category.id);
-                const theme = getOcrCategoryTheme(category.name, bg);
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`category-pill ocr-category-pill ${selected ? "selected" : ""}`}
-                    onClick={() => setParsed((current) => ({ ...current, categoryId: String(category.id) }))}
-                    aria-pressed={selected}
-                    style={{ "--pill-bg": theme.bg, "--pill-fg": theme.fg, "--pill-dot": theme.dot }}
-                  >
-                    <span className="pill-icon" aria-hidden="true">
-                      <theme.meta.SvgIcon size={14} />
-                    </span>
-                    <span className="pill-text">{category.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </label>
-
-          <h4 className="ocr-section-title">3. Chi tiết bổ sung</h4>
-          <label className="field">
-            <span>Ghi chú</span>
-            <textarea
-              rows="3"
-              value={parsed.note}
-              onChange={(event) =>
-                setParsed((current) => ({ ...current, note: event.target.value }))
-              }
-              placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu."
-            />
-          </label>
-          <div className="row">
-            <label className="field">
-              <span>Số hóa đơn / Mã tham chiếu</span>
-              <input
-                type="text"
-                value={referenceCode}
-                onChange={(event) => setReferenceCode(event.target.value)}
-                placeholder="Ví dụ: CK260426-00123"
-              />
-            </label>
-            <label className="field">
-              <span>Đính kèm khác</span>
-              <button type="button" className="ghost ocr-attach-btn">+ Đính kèm tệp</button>
-            </label>
-          </div>
-
-          <div className="tag-section ocr-tag-section">
-            <label className="field">
-              <span>{t("transactions.field.tags")}</span>
-              <div className="tag-input-row">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(event) => setTagInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === ",") {
-                      event.preventDefault();
-                      addTagByName(tagInput);
-                    }
-                  }}
-                  placeholder={t("transactions.tags.placeholder", null, "Nhập nhãn và nhấn Enter")}
-                />
-                <button className="ghost" type="button" onClick={() => addTagByName(tagInput)}>
-                  {t("transactions.tags.add", null, "Thêm nhãn")}
-                </button>
+              <div className="ocr-pill-group">
+                 <span>Loại giao dịch</span>
+                 <div className="ocr-pill-nav">
+                    <button type="button" className={txType === "expense" ? "active" : ""} onClick={() => setTxType("expense")}>Chi tiêu</button>
+                    <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
+                 </div>
               </div>
-            </label>
 
-            {tags.length ? (
-              <div className="tag-options">
-                {tags.map((tag) => {
-                  const active = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id || tag.name}
-                      type="button"
-                      className={`tag-option color-pill ${active ? "active" : ""}`}
-                      onClick={() => toggleSuggestedTag(tag.id)}
-                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
-                    >
-                      <span className="pill-text">{tag.name}</span>
-                    </button>
-                  );
+              <div className="ocr-pill-group">
+                 <span>Nguồn tiền *</span>
+                 <div className="ocr-pill-nav scrollable">
+                    {accounts.length ? accounts.map(acc => (
+                      <button key={acc.id} type="button" className={String(fundingSourceId) === String(acc.id) ? "active" : ""} onClick={() => setFundingSourceId(String(acc.id))}>
+                        {acc.name}
+                      </button>
+                    )) : (
+                      <>
+                        <button type="button" className="active">Tiền mặt</button>
+                        <button type="button">Ngân hàng</button>
+                      </>
+                    )}
+                 </div>
+              </div>
+
+              <div className="ocr-field-row tri">
+                 <label className="ocr-input-field">
+                   <span>Tổng tiền *</span>
+                   <div className="ocr-input-wrap">
+                      <input type="text" value={parsed.total} onChange={e => setParsed(p=>({...p, total: formatNumberInput(e.target.value)}))} required />
+                      <div className="ocr-input-badge">OCR {Math.round(confidence.total * 100)}%</div>
+                   </div>
+                 </label>
+                 <label className="ocr-input-field">
+                   <span>VAT</span>
+                   <div className="ocr-input-wrap">
+                      <input type="text" value={parsed.vat} onChange={e => setParsed(p=>({...p, vat: formatNumberInput(e.target.value)}))} />
+                      <div className="ocr-input-badge">OCR {Math.round(confidence.vat * 100)}%</div>
+                   </div>
+                 </label>
+                 <label className="ocr-input-field">
+                   <span>Giảm giá</span>
+                   <div className="ocr-input-wrap">
+                      <input type="text" value={parsed.estimated} onChange={e => setParsed(p=>({...p, estimated: formatNumberInput(e.target.value)}))} />
+                      <div className="ocr-input-badge">OCR {Math.round(confidence.estimated * 100)}%</div>
+                   </div>
+                 </label>
+              </div>
+
+              <label className="ocr-input-field">
+                 <span>Tạm tính</span>
+                 <div className="ocr-input-wrap">
+                    <input type="text" value={currency(computedSubTotal)} readOnly />
+                    <div className="ocr-input-badge" style={{color: '#94a3b8'}}>Tự động tính</div>
+                 </div>
+              </label>
+           </div>
+
+           <div className="ocr-section-pro">
+              <h3 className="ocr-sec-title">2. Danh mục</h3>
+              <div className="ocr-ai-suggest">
+                <SparkleIcon size={18} />
+                <span>Gợi ý từ OCR: phù hợp nhất với danh mục <strong>Ăn uống</strong></span>
+              </div>
+              <div className="ocr-search-bar">
+                 <SearchIcon size={16} className="ocr-search-icon" />
+                 <input type="text" value={categoryQuery} onChange={e => setCategoryQuery(e.target.value)} placeholder="Tìm danh mục..." />
+              </div>
+              <div className="ocr-category-grid">
+                {filteredCategories.map(cat => {
+                   const bg = colorFor(cat.name, userEmail);
+                   const selected = String(parsed.categoryId) === String(cat.id);
+                   const meta = getCatMeta(cat.name);
+                   return (
+                     <div key={cat.id} className={`ocr-cat-card ${selected ? "active" : ""}`} onClick={() => setParsed(p => ({...p, categoryId: String(cat.id)}))}>
+                        <div className="ocr-cat-icon" style={{background: bg}}><meta.SvgIcon size={14} /></div>
+                        <span className="ocr-cat-name">{cat.name}</span>
+                     </div>
+                   );
                 })}
               </div>
-            ) : null}
+           </div>
 
-            <div className="tag-selected">
-              {selectedTagIds.length ? (
-                selectedTagIds.map((tagId) => {
-                  const tag = tagMap[tagId];
-                  if (!tag) return null;
-                  return (
-                    <button
-                      key={tagId}
-                      type="button"
-                      className="tag-chip removable color-pill"
-                      onClick={() => removeTag(tagId)}
-                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
-                    >
-                      <span className="pill-text">{tag.name}</span>
-                      <span className="tag-remove">×</span>
-                    </button>
-                  );
-                })
-              ) : (
-                <span className="muted">{t("transactions.tags.empty", null, "Chưa có nhãn nào")}</span>
-              )}
-            </div>
-          </div>
+           <div className="ocr-section-pro">
+              <h3 className="ocr-sec-title">3. Chi tiết bổ sung</h3>
+              <div className="ocr-input-field" style={{marginBottom: 20}}>
+                <span>Ghi chú</span>
+                <div className="ocr-input-wrap">
+                  <textarea rows="2" value={parsed.note} onChange={e => setParsed(p=>({...p, note: e.target.value}))} placeholder="Ghi chú thêm về hóa đơn..." />
+                </div>
+              </div>
+              <div className="ocr-field-row">
+                 <label className="ocr-input-field">
+                   <span>Số hóa đơn / Mã tham chiếu</span>
+                   <div className="ocr-input-wrap">
+                      <input type="text" value={referenceCode} onChange={e => setReferenceCode(e.target.value)} placeholder="Vd: INV-12345" />
+                   </div>
+                 </label>
+                 <label className="ocr-input-field">
+                   <span>Đính kèm khác</span>
+                   <button type="button" className="ocr-btn-retry"><UploadIcon size={16}/> Thêm tệp</button>
+                 </label>
+              </div>
 
-          {warnings.length > 0 && <p className="form-error">{warnings.join(" ")}</p>}
-          {notice && <p className="form-note">{notice}</p>}
-          {error && <p className="form-error">{error}</p>}
+              <div className="ocr-input-field" style={{marginTop: 20}}>
+                <span>Nhãn (Tags)</span>
+                <div className="ocr-pill-group wrap" style={{marginTop: 8}}>
+                   {(showAllTags ? tags : tags.slice(0, 10)).map(tag => (
+                      <button key={tag.id} type="button" className={`tag-option color-pill ${selectedTagIds.includes(tag.id) ? "active" : ""}`} onClick={() => toggleSuggestedTag(tag.id)} style={{"--pill-bg": tag.color, "--pill-fg": onColor(tag.color)}}>
+                        {tag.name} {selectedTagIds.includes(tag.id) && "×"}
+                      </button>
+                   ))}
+                   <button type="button" className="ocr-btn-retry" style={{width: 'auto', padding: '4px 12px', fontSize: 12}} onClick={() => setShowAllTags(!showAllTags)}>
+                     {showAllTags ? "Thu gọn" : "Thêm thẻ..."}
+                   </button>
+                </div>
+              </div>
+           </div>
 
-          <label className="ocr-auto-create">
-            <input
-              type="checkbox"
-              checked={autoCreate}
-              onChange={(event) => setAutoCreate(event.target.checked)}
-            />
-            <div>
-              <strong>Tạo giao dịch từ hóa đơn</strong>
-              <span>Dữ liệu trích xuất có thể chỉnh sửa trước khi lưu giao dịch.</span>
-            </div>
-          </label>
-
-          <div className="row-actions">
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => {
-                setFile(null);
-                setParsed(baseParsedState());
-                setConfidence(baseConfidence);
-                setNotice("");
-                setError("");
-                setWarnings([]);
-                setSelectedTagIds([]);
-                setFundingSourceId("");
-                setTxType("expense");
-                setTagInput("");
-                setReferenceCode("");
-                setAutoCreate(true);
-              }}
-            >
-              Làm mới
-            </button>
-            <button className="primary" type="submit" disabled={!canCreate || loading || !autoCreate}>
-              Tạo giao dịch từ hóa đơn
-            </button>
-          </div>
+           <div className="ocr-footer-actions">
+              <div className="ocr-toggle-create">
+                 <label className="ocr-switch">
+                    <input type="checkbox" checked={autoCreate} onChange={e => setAutoCreate(e.target.checked)} />
+                    <span className="ocr-slider"></span>
+                 </label>
+                 <div>
+                    <strong>Tạo giao dịch từ hóa đơn</strong>
+                    <span>Khi bật, hệ thống sẽ tạo giao dịch mới từ thông tin trên.</span>
+                 </div>
+              </div>
+              <div className="ocr-footer-btns">
+                 <button type="button" className="ocr-btn-secondary" onClick={() => { setFile(null); setParsed(baseParsedState()); setOcrState("idle"); }}>
+                    Làm mới
+                 </button>
+                 <button type="button" className="ocr-btn-secondary">Lưu nháp</button>
+                 <button type="submit" className="ocr-btn-primary" disabled={!canCreate || loading || !autoCreate}>
+                    {loading ? "Đang xử lý..." : "Hoàn tất & Lưu"}
+                 </button>
+              </div>
+           </div>
         </form>
       </div>
     </Shell>

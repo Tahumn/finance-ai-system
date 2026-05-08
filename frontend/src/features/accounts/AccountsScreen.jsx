@@ -31,6 +31,15 @@ const emptyAccount = {
   color: COLOR_PALETTE[2]
 };
 
+const PROVIDERS = {
+  bank: [
+    "Vietcombank", "Techcombank", "BIDV", "Agribank", "Vietinbank", 
+    "MB Bank", "TPBank", "VPBank", "ACB", "OCB", "VIB"
+  ],
+  wallet: ["MoMo", "ZaloPay", "ShopeePay", "Viettel Money", "Moca"],
+  credit: ["Visa", "Mastercard", "JCB", "American Express"]
+};
+
 const mask = (last4) => (last4 ? `**** ${last4}` : "----");
 
 const getTypeIcon = (type) => {
@@ -49,6 +58,7 @@ const typeText = (type) => {
 
 export default function AccountsScreen({
   accounts = [],
+  history = [],
   onCreateAccount,
   onUpdateAccount,
   onDeleteAccount,
@@ -57,6 +67,7 @@ export default function AccountsScreen({
   const [form, setForm] = useState(emptyAccount);
   const [editingId, setEditingId] = useState(null);
   const [activeType, setActiveType] = useState("all");
+  const [showForm, setShowForm] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -78,6 +89,7 @@ export default function AccountsScreen({
 
     setEditingId(null);
     setForm(emptyAccount);
+    setShowForm(false);
   };
 
   const startEdit = (account) => {
@@ -92,6 +104,7 @@ export default function AccountsScreen({
       note: account.note || "",
       color: account.color || COLOR_PALETTE[2]
     });
+    setShowForm(true);
   };
 
   const removeAccount = async (id) => {
@@ -119,9 +132,12 @@ export default function AccountsScreen({
       <header className="acc-header">
         <div className="acc-header-icon"><WalletIcon /></div>
         <div className="acc-header-text">
-          <h1>Thẻ & Tài khoản</h1>
-          <p>Quản lý thủ công các tài khoản thanh toán, ví điện tử và thẻ để theo dõi và ghi nhận giao dịch.</p>
+          <h1>Ví & Tài khoản</h1>
+          <p>Quản lý tài khoản thanh toán và thẻ của bạn.</p>
         </div>
+        <button className="acc-mobile-add-btn" onClick={() => { setForm(emptyAccount); setEditingId(null); setShowForm(true); }}>
+          <PlusIcon />
+        </button>
       </header>
 
       <section className="acc-kpis">
@@ -250,38 +266,42 @@ export default function AccountsScreen({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td><div className="history-action"><div className="history-icon add"><PlusIcon /></div> Thêm tài khoản</div></td>
-                  <td>Tài khoản thanh toán</td>
-                  <td className="history-val pos">+56.250.000 đ</td>
-                  <td>20/05/2026 10:15</td>
-                  <td>Bạn</td>
-                </tr>
-                <tr>
-                  <td><div className="history-action"><div className="history-icon edit"><EditIcon width={12} height={12} /></div> Cập nhật số dư</div></td>
-                  <td>Ví MoMo</td>
-                  <td className="history-val pos">+1.500.000 đ</td>
-                  <td>18/05/2026 14:30</td>
-                  <td>Hệ thống</td>
-                </tr>
-                <tr>
-                  <td><div className="history-action"><div className="history-icon add"><PlusIcon /></div> Thêm thẻ mới</div></td>
-                  <td>Thẻ Visa cá nhân</td>
-                  <td className="history-val pos">+25.000.000 đ</td>
-                  <td>15/05/2026 09:00</td>
-                  <td>Bạn</td>
-                </tr>
+                {!history || history.length === 0 ? (
+                  <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>Chưa có lịch sử hoạt động.</td></tr>
+                ) : (
+                  history.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="history-action">
+                          <div className={`history-icon ${item.action}`}>
+                            {item.action === "create" ? <PlusIcon /> : <EditIcon width={12} height={12} />}
+                          </div> 
+                          {item.action === "create" ? "Thêm tài khoản" : "Cập nhật số dư"}
+                        </div>
+                      </td>
+                      <td>{item.item_name}</td>
+                      <td className={`history-val ${item.change_amount >= 0 ? "pos" : "neg"}`}>
+                        {item.change_amount >= 0 ? "+" : ""}{currency(item.change_amount || 0)}
+                      </td>
+                      <td>{new Date(item.created_at).toLocaleString('vi-VN')}</td>
+                      <td>{item.performer}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
             <a href="#" className="acc-history-more" onClick={(e) => e.preventDefault()}>Xem tất cả hoạt động &rarr;</a>
           </section>
         </div>
 
-        <aside className="acc-form-card">
-          <div className="acc-form-header">
-            <div className="acc-form-header-icon"><PlusIcon /></div>
-            <h3>{editingId ? "Sửa tài khoản / thẻ" : "Thêm tài khoản / thẻ thủ công"}</h3>
-          </div>
+        {/* Form Container: Modal on mobile, Sidebar on desktop */}
+        <div className={`acc-form-container ${showForm ? "show" : ""}`}>
+           <aside className="acc-form-card">
+              <div className="acc-form-header">
+                <div className="acc-form-header-icon"><PlusIcon /></div>
+                <h3>{editingId ? "Sửa tài khoản" : "Thêm tài khoản mới"}</h3>
+                <button type="button" className="acc-modal-close" onClick={() => setShowForm(false)}><PlusIcon style={{transform:'rotate(45deg)'}} /></button>
+              </div>
 
           <form className="acc-form" onSubmit={handleSubmit}>
             <label>
@@ -296,51 +316,69 @@ export default function AccountsScreen({
             </label>
 
             <label>
-              Loại *
-              <div className="acc-type-selector">
-                <div className={`acc-type-btn ${form.type === "cash" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "cash" })}>
-                  <BanknoteIcon /> Tiền mặt
-                </div>
-                <div className={`acc-type-btn ${form.type === "bank" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "bank" })}>
-                  <BuildingIcon /> Ngân hàng
-                </div>
-                <div className={`acc-type-btn ${form.type === "wallet" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "wallet" })}>
-                  <WalletIcon /> Ví điện tử
-                </div>
-                <div className={`acc-type-btn ${form.type === "credit" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "credit" })}>
-                  <CreditCardIcon /> Thẻ tín dụng
-                </div>
-              </div>
-            </label>
+               Loại *
+               <div className="acc-type-selector">
+                 <div className={`acc-type-btn ${form.type === "cash" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "cash", provider: "" })}>
+                   <BanknoteIcon /> Tiền mặt
+                 </div>
+                 <div className={`acc-type-btn ${form.type === "bank" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "bank", provider: "" })}>
+                   <BuildingIcon /> Ngân hàng
+                 </div>
+                 <div className={`acc-type-btn ${form.type === "wallet" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "wallet", provider: "" })}>
+                   <WalletIcon /> Ví điện tử
+                 </div>
+                 <div className={`acc-type-btn ${form.type === "credit" ? "active" : ""}`} onClick={() => setForm({ ...form, type: "credit", provider: "" })}>
+                   <CreditCardIcon /> Thẻ tín dụng
+                 </div>
+               </div>
+             </label>
 
-            <label>
-              Nhà cung cấp
-              <select
-                value={form.provider}
-                onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value }))}
-              >
-                <option value="">Chọn nhà cung cấp</option>
-                <option value="Vietcombank">Vietcombank</option>
-                <option value="Techcombank">Techcombank</option>
-                <option value="MoMo">MoMo</option>
-                <option value="ZaloPay">ZaloPay</option>
-                <option value="Tiền mặt">Tiền mặt</option>
-              </select>
-            </label>
-
-            <div className="acc-row-2">
+            {form.type !== "cash" && (
               <label>
-                4 số cuối
-                <input
-                  type="text"
-                  maxLength="4"
-                  value={form.last4}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, last4: event.target.value.replace(/\D/g, "") }))
-                  }
-                  placeholder="Ví dụ: 1234"
-                />
+                Nhà cung cấp
+                <select
+                  value={form.provider}
+                  onChange={(event) => setForm((current) => ({ ...current, provider: event.target.value }))}
+                >
+                  <option value="">Chọn nhà cung cấp</option>
+                  {(PROVIDERS[form.type] || []).map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </label>
+            )}
+
+            {form.type !== "cash" && (
+              <div className="acc-row-2">
+                <label>
+                  4 số cuối
+                  <input
+                    type="text"
+                    maxLength="4"
+                    value={form.last4}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, last4: event.target.value.replace(/\D/g, "") }))
+                    }
+                    placeholder="Ví dụ: 1234"
+                  />
+                </label>
+                <label>
+                  Số dư hiện tại *
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.balance}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, balance: formatNumberInput(event.target.value) }))
+                    }
+                    placeholder="0 đ"
+                    required
+                  />
+                </label>
+              </div>
+            )}
+
+            {form.type === "cash" && (
               <label>
                 Số dư hiện tại *
                 <input
@@ -354,20 +392,22 @@ export default function AccountsScreen({
                   required
                 />
               </label>
-            </div>
+            )}
 
-            <label>
-              Hạn mức (nếu có)
-              <input
-                type="text"
-                inputMode="numeric"
-                value={form.credit_limit}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, credit_limit: formatNumberInput(event.target.value) }))
-                }
-                placeholder="0 đ"
-              />
-            </label>
+            {form.type !== "cash" && (
+              <label>
+                Hạn mức (nếu có)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.credit_limit}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, credit_limit: formatNumberInput(event.target.value) }))
+                  }
+                  placeholder="0 đ"
+                />
+              </label>
+            )}
 
             <label>
               Màu sắc
@@ -419,7 +459,8 @@ export default function AccountsScreen({
             <InfoIcon />
             <div>Số dư được lưu nội bộ để cập nhật khi tạo giao dịch. Không liên kết ngân hàng tự động.</div>
           </div>
-        </aside>
+           </aside>
+        </div>
       </div>
     </section>
   );

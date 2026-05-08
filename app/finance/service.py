@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.models import User
 from app.finance import schemas
-from app.finance.models import Account, Bill, Budget, Category, Goal, SavingsGoal, Tag, Transaction
+from app.finance.models import Account, AccountUpdateHistory, Bill, Budget, Category, Goal, SavingsGoal, Tag, Transaction, SavingsContribution
 from app.realtime import emit_finance_update
+from app.auth.email import send_notification_email
 
 DEFAULT_INCOME_CATEGORIES = ["Lương", "Freelance", "Đầu tư", "Thưởng", "Hoàn tiền", "Thu nhập khác"]
 DEFAULT_EXPENSE_CATEGORIES = [
@@ -164,6 +165,28 @@ def create_account(db: Session, current_user: User, payload: schemas.AccountCrea
     db.add(item)
     db.commit()
     db.refresh(item)
+    
+    # Log history
+    history = AccountUpdateHistory(
+        user_id=current_user.id,
+        account_id=item.id,
+        action="create",
+        item_name=item.name,
+        change_amount=item.balance
+    )
+    db.add(history)
+    db.commit()
+
+    # Send Gmail Notification
+    try:
+        send_notification_email(
+            to_email=current_user.email,
+            subject=f"Tài khoản mới đã được thêm: {item.name}",
+            message=f"Chào {current_user.full_name or current_user.username},\n\nBạn vừa thêm tài khoản mới '{item.name}' vào hệ thống với số dư {item.balance} {item.currency}.\n\nNếu không phải bạn, vui lòng kiểm tra lại bảo mật tài khoản."
+        )
+    except Exception:
+        pass
+
     emit_finance_update("accounts", current_user.id, item.id)
     return item
 
@@ -209,8 +232,39 @@ def update_account(db: Session, current_user: User, account_id: int, payload: sc
 
     db.commit()
     db.refresh(item)
+
+    # Log history
+    history = AccountUpdateHistory(
+        user_id=current_user.id,
+        account_id=item.id,
+        action="update",
+        item_name=item.name,
+        change_amount=item.balance
+    )
+    db.add(history)
+    db.commit()
+
+    # Send Gmail Notification
+    try:
+        send_notification_email(
+            to_email=current_user.email,
+            subject=f"Cập nhật tài khoản: {item.name}",
+            message=f"Chào {current_user.full_name or current_user.username},\n\nThông tin tài khoản '{item.name}' của bạn vừa được cập nhật.\nSố dư hiện tại: {item.balance} {item.currency}.\n\nNếu không phải bạn thực hiện, vui lòng liên hệ hỗ trợ."
+        )
+    except Exception:
+        pass
+
     emit_finance_update("accounts", current_user.id, item.id)
     return item
+
+def list_account_history(db: Session, current_user: User) -> list[AccountUpdateHistory]:
+    return (
+        db.query(AccountUpdateHistory)
+        .filter(AccountUpdateHistory.user_id == current_user.id)
+        .order_by(AccountUpdateHistory.created_at.desc())
+        .limit(20)
+        .all()
+    )
 
 
 def delete_account(db: Session, current_user: User, account_id: int) -> None:
@@ -1218,4 +1272,42 @@ def delete_bill(db: Session, current_user: User, bill_id: int) -> None:
     db.delete(item)
     db.commit()
     emit_finance_update("bills", current_user.id, bill_id)
+
+def create_savings_contribution(db: Session, current_user: User, goal_id: int, payload: schemas.SavingsContributionCreate) -> SavingsContribution:
+    goal = db.query(SavingsGoal).filter(SavingsGoal.id == goal_id, SavingsGoal.user_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Savings goal not found")
+    
+    amount = float(payload.amount or 0.0)
+    contribution = SavingsContribution(
+        user_id=current_user.id,
+        goal_id=goal_id,
+        amount=amount,
+        date=payload.date or date.today(),
+        description=payload.description or f"Đóng góp cho {goal.name}",
+        source=payload.source or goal.funding_source
+    )
+    
+    # Update goal's saved_amount
+    goal.saved_amount += amount
+    if goal.saved_amount >= goal.target_amount:
+        goal.status = "completed"
+    else:
+        goal.status = "active"
+        
+    db.add(contribution)
+    db.add(goal)
+    db.commit()
+    db.refresh(contribution)
+    
+    emit_finance_update("goals", current_user.id, goal.id)
+    return contribution
+
+def list_savings_contributions(db: Session, current_user: User, goal_id: int) -> list[SavingsContribution]:
+    return (
+        db.query(SavingsContribution)
+        .filter(SavingsContribution.user_id == current_user.id, SavingsContribution.goal_id == goal_id)
+        .order_by(SavingsContribution.date.desc())
+        .all()
+    )
 

@@ -171,6 +171,13 @@ def update_account(
     return service.update_account(db, current_user, account_id, payload)
 
 
+@router.get("/accounts/history", response_model=list[schemas.AccountUpdateHistoryRead])
+def list_account_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_account_history(db, current_user)
+
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_account(
     account_id: int,
@@ -310,6 +317,25 @@ def delete_savings_goal(
 ):
     service.delete_savings_goal(db, current_user, goal_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/savings-goals/{goal_id}/contributions", response_model=schemas.SavingsContributionRead, status_code=status.HTTP_201_CREATED)
+def create_savings_contribution(
+    goal_id: int,
+    payload: schemas.SavingsContributionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_savings_contribution(db, current_user, goal_id, payload)
+
+
+@router.get("/savings-goals/{goal_id}/contributions", response_model=list[schemas.SavingsContributionRead])
+def list_savings_contributions(
+    goal_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_savings_contributions(db, current_user, goal_id)
 
 
 @router.get("/bills", response_model=list[schemas.BillRead])
