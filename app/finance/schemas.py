@@ -31,6 +31,9 @@ class TransactionCreate(BaseModel):
     account_id: int | None = None
     date: DateType | None = None
     tag_ids: list[int] = Field(default_factory=list)
+    ocr_confidence: float | None = None
+    image_path: str | None = None
+    notes: str | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -41,6 +44,9 @@ class TransactionUpdate(BaseModel):
     account_id: int | None = None
     date: DateType | None = None
     tag_ids: list[int] | None = None
+    ocr_confidence: float | None = None
+    image_path: str | None = None
+    notes: str | None = None
 
 
 class TransactionRead(BaseModel):
@@ -52,6 +58,9 @@ class TransactionRead(BaseModel):
     category_id: int | None
     account_id: int | None
     date: DateType
+    ocr_confidence: float | None = None
+    image_path: str | None = None
+    notes: str | None = None
     tags: list[TagRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
@@ -303,6 +312,8 @@ class BillCreate(BaseModel):
     ocr_confidence: float | None = None
     status: str = "pending"
     bill_number: str | None = None
+    image_path: str | None = None
+    notes: str | None = None
     items: list[BillItem] | None = None
 
 class BillUpdate(BaseModel):
@@ -315,6 +326,8 @@ class BillUpdate(BaseModel):
     ocr_confidence: float | None = None
     status: str | None = None
     bill_number: str | None = None
+    image_path: str | None = None
+    notes: str | None = None
     items: list[BillItem] | None = None
 
 class BillRead(BaseModel):
@@ -323,7 +336,7 @@ class BillRead(BaseModel):
     merchant: str | None
     date: DateType | None
     category_id: int | None
-    category: str | None = None
+    category_name: str | None = None
     account_id: int | None
     account_name: str | None = None
     total_amount: float
@@ -331,6 +344,8 @@ class BillRead(BaseModel):
     ocr_confidence: float | None
     status: str
     bill_number: str | None
+    image_path: str | None = None
+    notes: str | None
     items: list[BillItem] | None
     created_at: DateTimeType
 

@@ -9,9 +9,15 @@ from app.database import Base, engine, ensure_schema
 from app.finance import models as finance_models
 from app.finance.router import router as finance_router
 from app.notifications.router import router as notifications_router
+from fastapi.staticfiles import StaticFiles
 from app.realtime import socket_app
 
 app = FastAPI(title="Finance AI Monolith")
+
+# Ensure uploads directory exists
+import os
+os.makedirs("uploads/bills", exist_ok=True)
+
 
 # Dev-friendly CORS so the Vite React app can call the API (including when testing on a phone
 # via LAN IP like http://192.168.x.x:5173).
@@ -59,3 +65,4 @@ app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 
 app.mount("/ws", socket_app)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

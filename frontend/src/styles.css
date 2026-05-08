@@ -8020,3 +8020,13 @@ body.tx-modal-open .mobile-nav-wrapper {
     font-size: 12px !important;
   }
 }
+
+/* New item flash animation */
+@keyframes itemFlash {
+  0% { background-color: #fffbeb; }
+  50% { background-color: #fef3c7; }
+  100% { background-color: transparent; }
+}
+.new-item-flash {
+  animation: itemFlash 2s ease-in-out forwards;
+}

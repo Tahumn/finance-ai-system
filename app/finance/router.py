@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Response, status, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.finance import schemas, service
@@ -321,6 +321,26 @@ def list_bills(
     current_user: User = Depends(get_current_user),
 ):
     return service.list_bills(db, current_user, start_date=start_date, end_date=end_date, status=bill_status)
+
+
+@router.post("/bills/upload-receipt")
+async def upload_receipt(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    import os
+    import uuid
+    
+    os.makedirs("uploads/bills", exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"{current_user.id}_{uuid.uuid4()}{ext}"
+    file_path = os.path.join("uploads/bills", filename)
+    
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+    
+    return {"image_path": f"/uploads/bills/{filename}"}
 
 
 @router.post("/bills", response_model=schemas.BillRead, status_code=status.HTTP_201_CREATED)

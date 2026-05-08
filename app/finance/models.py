@@ -102,6 +102,11 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     transaction_type = Column(String, nullable=False)
     date = Column(Date, nullable=False)
+    ocr_confidence = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
+    image_path = Column(String, nullable=True)
+    category = relationship("Category")
+    account = relationship("Account")
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")
 
 
@@ -216,5 +221,9 @@ class Bill(Base):
     ocr_confidence = Column(Float, nullable=True)
     status = Column(String, nullable=False, default="pending")
     bill_number = Column(String, nullable=True)
+    image_path = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
     items = Column(JSON, nullable=True)
+    category = relationship("Category")
+    account = relationship("Account")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
