@@ -216,12 +216,10 @@ services:
     volumes:
       - .:/app
       - .env:/app/.env
+      - ./uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - .:/app
-      - ./uploads:/app/uploads
 
   seed:
     build:

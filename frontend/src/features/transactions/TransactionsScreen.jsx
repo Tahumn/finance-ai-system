@@ -33,65 +33,65 @@ const SORT_OPTIONS = [
 /* SVG icons */
 const IcOcr = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="3"/>
-    <path d="M7 7h.01M17 7h.01M7 12h10M7 17h10"/>
+    <rect x="3" y="3" width="18" height="18" rx="3" />
+    <path d="M7 7h.01M17 7h.01M7 12h10M7 17h10" />
   </svg>
 );
 const IcAdd = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M12 5v14M5 12h14"/>
+    <path d="M12 5v14M5 12h14" />
   </svg>
 );
 const IcCalendar = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2"/>
-    <path d="M16 2v4M8 2v4M3 10h18"/>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
   </svg>
 );
 const IcChevronDown = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M6 9l6 6 6-6"/>
+    <path d="M6 9l6 6 6-6" />
   </svg>
 );
 const IcChevronUp = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M18 15l-6-6-6 6"/>
+    <path d="M18 15l-6-6-6 6" />
   </svg>
 );
 const IcEye = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-    <circle cx="12" cy="12" r="3"/>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 const IcArrowRight = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M9 6l6 6-6 6"/>
+    <path d="M9 6l6 6-6 6" />
   </svg>
 );
 const IcMore = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+    <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
   </svg>
 );
 const IcClose = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M18 6L6 18M6 6l12 12"/>
+    <path d="M18 6L6 18M6 6l12 12" />
   </svg>
 );
 const IcIncome = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M12 19V5M5 12l7-7 7 7"/>
+    <path d="M12 19V5M5 12l7-7 7 7" />
   </svg>
 );
 const IcExpense = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M12 5v14M19 12l-7 7-7-7"/>
+    <path d="M12 5v14M19 12l-7 7-7-7" />
   </svg>
 );
 const IcTx = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
   </svg>
 );
 
@@ -132,27 +132,27 @@ const formatAnomalyTip = (anomaly) => {
 /* SVG icons for AI */
 const IcSparkle = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z"/>
+    <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
   </svg>
 );
 const IcTrendUp = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>
+    <path d="M23 6l-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" />
   </svg>
 );
 const IcTrendDown = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M23 18l-9.5-9.5-5 5L1 6"/><path d="M17 18h6v-6"/>
+    <path d="M23 18l-9.5-9.5-5 5L1 6" /><path d="M17 18h6v-6" />
   </svg>
 );
 const IcAlert = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
 const IcLightbulb = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2v1"/><path d="M5.22 5.22l.707.707"/><path d="M1 12h1"/><path d="M21 12h1"/><path d="M18.07 5.93l.707-.707"/><path d="M12 2c-3.31 0-6 2.69-6 6 0 1.5.5 3 1.5 4.5.83 1.25 1.5 3 1.5 4.5h6c0-1.5.67-3.25 1.5-4.5 1-1.5 1.5-3 1.5-4.5 0-3.31-2.69-6-6-6z"/>
+    <path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2v1" /><path d="M5.22 5.22l.707.707" /><path d="M1 12h1" /><path d="M21 12h1" /><path d="M18.07 5.93l.707-.707" /><path d="M12 2c-3.31 0-6 2.69-6 6 0 1.5.5 3 1.5 4.5.83 1.25 1.5 3 1.5 4.5h6c0-1.5.67-3.25 1.5-4.5 1-1.5 1.5-3 1.5-4.5 0-3.31-2.69-6-6-6z" />
   </svg>
 );
 
@@ -178,12 +178,12 @@ const TrendSparkline = ({ data = [] }) => {
   );
 };
 
-const AiIntelligencePanel = ({ 
-  monthlySeries, 
-  anomalies, 
-  aiSuggestions, 
-  showAllTips, 
-  setShowAllTips, 
+const AiIntelligencePanel = ({
+  monthlySeries,
+  anomalies,
+  aiSuggestions,
+  showAllTips,
+  setShowAllTips,
   loading,
   formatAnomalyTip,
   IcSparkle,
@@ -198,8 +198,8 @@ const AiIntelligencePanel = ({
   IcEye
 }) => {
   // Find the category with the highest spending to provide a better tip
-  const topCategory = categoryStats.length > 0 
-    ? [...categoryStats].sort((a, b) => Math.abs(b.amt) - Math.abs(a.amt))[0] 
+  const topCategory = categoryStats.length > 0
+    ? [...categoryStats].sort((a, b) => Math.abs(b.amt) - Math.abs(a.amt))[0]
     : null;
 
   return (
@@ -234,7 +234,7 @@ const AiIntelligencePanel = ({
                       </div>
                       <div>
                         <div className="txd-ai-trend-val">
-                          {diff > 0 ? "+" : ""}{Math.round(pct)}%
+                          {diff > 0 ? "+" : ""}{Math.abs(pct) > 999 ? "999%+" : `${Math.round(pct)}%`}
                         </div>
                         <div className="txd-ai-trend-label">Dòng tiền tháng này</div>
                       </div>
@@ -245,11 +245,11 @@ const AiIntelligencePanel = ({
                   </div>
                   <div className="txd-ai-trend-footer">
                     <div className="txd-ai-insight-box mini">
-                       <p className="txd-ai-trend-desc-mini">
-                         {diff > 0 
-                           ? `Cảnh báo: Chi tiêu đang vượt mức kiểm soát, tập trung tại '${topCategory?.name || 'nhóm chính'}'.` 
-                           : "Tối ưu: Bạn đang duy trì kỷ luật ngân sách xuất sắc. Xu hướng giảm chi phí đang ổn định."}
-                       </p>
+                      <p className="txd-ai-trend-desc-mini">
+                        {diff > 0
+                          ? `Cảnh báo: Chi tiêu đang vượt mức kiểm soát, tập trung tại '${topCategory?.name || 'nhóm chính'}'.`
+                          : "Tối ưu: Bạn đang duy trì kỷ luật ngân sách xuất sắc. Xu hướng giảm chi phí đang ổn định."}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -272,41 +272,41 @@ const AiIntelligencePanel = ({
                 return (
                   <div key={idx} className={`txd-ai-anomaly-card-premium ${level} horizontal scanner-effect`}>
                     <div className="txd-ai-anomaly-left">
-                       <div className="txd-ai-anomaly-icon-wrap mini pulse">
-                         <IcAlert />
-                       </div>
+                      <div className="txd-ai-anomaly-icon-wrap mini pulse">
+                        <IcAlert />
+                      </div>
                     </div>
                     <div className="txd-ai-anomaly-right">
-                       <div className="txd-ai-anomaly-meta-row">
-                          <div className="txd-ai-anomaly-status-tag">{level === 'high' ? 'RỦI RO CAO' : 'CẦN XÁC MINH'}</div>
-                          <div className="txd-ai-live-tag"><span className="dot"></span> LIVE</div>
-                       </div>
-                       <div className="txd-ai-anomaly-text-main mini"><strong>Phát hiện:</strong> {formatAnomalyTip(a)}</div>
-                        <button 
-                          className="txd-ai-anomaly-btn-premium" 
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const topHeader = document.querySelector('.txd-header-top') || document.querySelector('.tx-top-header');
-                            if (topHeader) {
-                              topHeader.scrollIntoView({ behavior: 'smooth' });
-                            } else {
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                          <span>Rà soát chi tiết</span>
-                        </button>
+                      <div className="txd-ai-anomaly-meta-row">
+                        <div className="txd-ai-anomaly-status-tag">{level === 'high' ? 'RỦI RO CAO' : 'CẦN XÁC MINH'}</div>
+                        <div className="txd-ai-live-tag"><span className="dot"></span> LIVE</div>
+                      </div>
+                      <div className="txd-ai-anomaly-text-main mini"><strong>Phát hiện:</strong> {formatAnomalyTip(a)}</div>
+                      <button
+                        className="txd-ai-anomaly-btn-premium"
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const topHeader = document.querySelector('.txd-header-top') || document.querySelector('.tx-top-header');
+                          if (topHeader) {
+                            topHeader.scrollIntoView({ behavior: 'smooth' });
+                          } else {
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                        <span>Rà soát chi tiết</span>
+                      </button>
                     </div>
                   </div>
                 );
               })
             ) : (
               <div className="txd-ai-status-safe pro">
-                 <div className="txd-ai-safe-icon">🛡️</div>
-                 <p>Hệ thống đang bảo mật. Không có giao dịch nghi vấn trong chu kỳ này.</p>
+                <div className="txd-ai-safe-icon">🛡️</div>
+                <p>Hệ thống đang bảo mật. Không có giao dịch nghi vấn trong chu kỳ này.</p>
               </div>
             )}
           </div>
@@ -320,15 +320,16 @@ const AiIntelligencePanel = ({
           <div className="txd-ai-tips-list horizontal">
             {(() => {
               const finalTips = (aiSuggestions && aiSuggestions.length > 0) ? aiSuggestions : [
-                  "Chiến lược 50/30/20: Phân bổ 50% cho thiết yếu, 30% linh hoạt và 20% cho đầu tư dài hạn.",
-                  `Tối ưu nhóm '${topCategory?.name || 'chi tiêu'}': Cắt giảm 15% tại đây sẽ tạo ra khoản thặng dư đáng kể sau 12 tháng.`,
-                  "Nguyên tắc 72 giờ: Đợi 3 ngày trước khi quyết định mua sắm các món đồ giá trị lớn để tránh bốc đồng."
-                ];
+                "Chiến lược 50/30/20: Phân bổ 50% cho thiết yếu, 30% linh hoạt và 20% cho đầu tư dài hạn.",
+                `Tối ưu nhóm '${topCategory?.name || 'chi tiêu'}': Cắt giảm 15% tại đây sẽ tạo ra khoản thặng dư đáng kể sau 12 tháng.`,
+                "Nguyên tắc 72 giờ: Đợi 3 ngày trước khi quyết định mua sắm các món đồ giá trị lớn để tránh bốc đồng."
+              ];
+              const tipIcons = ["🚀", "💡", "🛡️", "🎯", "📈"];
               return finalTips.slice(0, 3).map((tip, idx) => (
                 <div key={idx} className="txd-ai-tip-card pro mini expert">
                   <div className="txd-ai-tip-body">
-                     <div className="txd-ai-tip-icon mini">🚀</div>
-                     <div className="txd-ai-tip-text mini"><strong>Chiến lược:</strong> {typeof tip === 'string' ? tip : tip.message}</div>
+                    <div className="txd-ai-tip-icon mini">{tipIcons[idx % tipIcons.length]}</div>
+                    <div className="txd-ai-tip-text mini"><strong>Chiến lược:</strong> {typeof tip === 'string' ? tip : tip.message}</div>
                   </div>
                 </div>
               ));
@@ -465,7 +466,7 @@ export default function TransactionsScreen({
   const filtered = useMemo(() => {
     return transactions.filter((item) => {
       if (typeFilter && item.transaction_type !== typeFilter) return false;
-      
+
       if (categoryFilter) {
         const itemCat = String(item.categoryLabel || "Khác").trim().toLowerCase();
         const filterCat = String(categoryFilter).trim().toLowerCase();
@@ -479,11 +480,11 @@ export default function TransactionsScreen({
 
       if (paymentFilter !== "all") {
         if (paymentFilter === "cash") {
-            return !item.account_id || (accounts.find(a => a.id === item.account_id)?.type === "cash");
+          return !item.account_id || (accounts.find(a => a.id === item.account_id)?.type === "cash");
         }
         return item.account_id === Number(paymentFilter);
       }
-      
+
       return true;
     });
   }, [transactions, typeFilter, categoryFilter, searchText, paymentFilter, accounts]);
@@ -640,635 +641,635 @@ export default function TransactionsScreen({
 
         {/* KPI Cards Row */}
         <div className="txd-kpi-row-top">
-           <div className="txd-kpi-card">
-              <div className="txd-kpi-icon income"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></div>
-              <div className="txd-kpi-text">
-                 <div className="txd-kpi-label">Tổng thu</div>
-                 <div className="txd-kpi-value income">{currency(totalIncome)}</div>
-                 <div className="txd-kpi-meta"><span className="up">↑ {filtered.filter(i => i.transaction_type === "income").length}</span> giao dịch thu nhập</div>
-              </div>
-           </div>
-           <div className="txd-kpi-card">
-              <div className="txd-kpi-icon expense"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-              <div className="txd-kpi-text">
-                 <div className="txd-kpi-label">Tổng chi</div>
-                 <div className="txd-kpi-value expense">{currency(totalExpense)}</div>
-                 <div className="txd-kpi-meta"><span className="down">↓ {filtered.filter(i => i.transaction_type === "expense").length}</span> giao dịch chi tiêu</div>
-              </div>
-           </div>
-           <div className="txd-kpi-card">
-              <div className="txd-kpi-icon count"><IcTx /></div>
-              <div className="txd-kpi-text">
-                 <div className="txd-kpi-label">Số giao dịch</div>
-                 <div className="txd-kpi-value count">{filtered.length} giao dịch</div>
-                 <div className="txd-kpi-meta"><span className="up">↑ {categoryStats.length}</span> danh mục đang phát sinh</div>
-              </div>
-           </div>
+          <div className="txd-kpi-card">
+            <div className="txd-kpi-icon income"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M19 12l-7 7-7-7" /></svg></div>
+            <div className="txd-kpi-text">
+              <div className="txd-kpi-label">Tổng thu</div>
+              <div className="txd-kpi-value income">{currency(totalIncome)}</div>
+              <div className="txd-kpi-meta"><span className="up">↑ {filtered.filter(i => i.transaction_type === "income").length}</span> giao dịch thu nhập</div>
+            </div>
+          </div>
+          <div className="txd-kpi-card">
+            <div className="txd-kpi-icon expense"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg></div>
+            <div className="txd-kpi-text">
+              <div className="txd-kpi-label">Tổng chi</div>
+              <div className="txd-kpi-value expense">{currency(totalExpense)}</div>
+              <div className="txd-kpi-meta"><span className="down">↓ {filtered.filter(i => i.transaction_type === "expense").length}</span> giao dịch chi tiêu</div>
+            </div>
+          </div>
+          <div className="txd-kpi-card">
+            <div className="txd-kpi-icon count"><IcTx /></div>
+            <div className="txd-kpi-text">
+              <div className="txd-kpi-label">Số giao dịch</div>
+              <div className="txd-kpi-value count">{filtered.length} giao dịch</div>
+              <div className="txd-kpi-meta"><span className="up">↑ {categoryStats.length}</span> danh mục đang phát sinh</div>
+            </div>
+          </div>
         </div>
 
         {/* Body Layout (2 Columns) */}
         <div className="txd-body-cols">
-           {/* Left Column (Search + Sidebar) */}
-           <div className="txd-col-left">
-              <div className="txd-searchbox-top">
-                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round">
-                   <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-                 </svg>
-                 <input 
-                   type="text" 
-                   placeholder="Tìm kiếm giao dịch..." 
-                   value={searchText}
-                   onChange={(e) => setSearchText(e.target.value)} 
-                 />
+          {/* Left Column (Search + Sidebar) */}
+          <div className="txd-col-left">
+            <div className="txd-searchbox-top">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Tìm kiếm giao dịch..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+            </div>
+
+            <div className="txd-sidebar-cat">
+              <div className="txd-sb-head">
+                <h3 className="txd-sb-title">Tổng quan theo danh mục</h3>
+                <button
+                  type="button"
+                  className="txd-add-cat-btn"
+                  onClick={() => setShowQuickCategoryForm((s) => !s)}
+                >
+                  + Danh mục
+                </button>
+              </div>
+              {showQuickCategoryForm && (
+                <div className="txd-quick-cat-form">
+                  <input
+                    type="text"
+                    value={quickCategoryName}
+                    onChange={(e) => setQuickCategoryName(e.target.value)}
+                    placeholder="Tên danh mục mới..."
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const val = quickCategoryName.trim();
+                      if (!val || !onCreateCategory) return;
+                      await onCreateCategory(val);
+                      setQuickCategoryName("");
+                      setShowQuickCategoryForm(false);
+                    }}
+                  >
+                    Lưu
+                  </button>
+                </div>
+              )}
+              <div className="txd-cip-scroll">
+                {categoryStats.map(([name, count]) => {
+                  const meta = getCatMeta(name);
+                  const amt = sorted.filter((i) => (i.categoryLabel || "Khác") === name).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0);
+                  const maxAmt = Math.max(...categoryStats.map(([n]) => Math.abs(sorted.filter((i) => (i.categoryLabel || "Khác") === n).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0))));
+                  const pct = maxAmt ? (Math.abs(amt) / maxAmt * 46.7).toFixed(1) : 0;
+
+                  return (
+                    <div key={name} className={`txd-cat-item-pro ${categoryFilter === name ? "active" : ""}`} onClick={() => setCategoryFilter(categoryFilter === name ? "" : name)}>
+                      <div className="txd-cip-icon" style={{ background: meta.light, color: meta.bg }}><meta.SvgIcon size={18} /></div>
+                      <div className="txd-cip-info">
+                        <div className="txd-cip-name">{name}</div>
+                        <div className="txd-cip-amt">{currency(Math.abs(amt))}</div>
+                      </div>
+                      <div className="txd-cip-pct">{pct}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column (List + Filters) */}
+          <div className="txd-col-right">
+            <div className="txd-filters-bar">
+              <div className="txd-pay-tabs">
+                <button
+                  className={`txd-pay-tab ${paymentFilter === "all" ? "active" : ""}`}
+                  onClick={() => setPaymentFilter("all")}
+                >
+                  Tất cả
+                </button>
+                {accounts.map(acc => (
+                  <button
+                    key={acc.id}
+                    className={`txd-pay-tab ${paymentFilter === String(acc.id) ? "active" : ""}`}
+                    onClick={() => setPaymentFilter(String(acc.id))}
+                  >
+                    {acc.name}
+                  </button>
+                ))}
+              </div>
+              <div className="txd-filter-selectors">
+                <div className="txd-fsel">
+                  <span>Loại:</span>
+                  <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                    <option value="">Tất cả</option>
+                    <option value="income">Thu nhập</option>
+                    <option value="expense">Chi tiêu</option>
+                  </select>
+                </div>
+                <div className="txd-fsel">
+                  <span>Danh mục:</span>
+                  <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                    <option value="">Tất cả</option>
+                    {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="txd-fsel">
+                  <span>Sắp xếp:</span>
+                  <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                    {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                </div>
+                <button className="txd-btn-filter-icon"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></button>
+              </div>
+            </div>
+
+            <div className="txd-list-container">
+              <div className="txd-list-header">
+                <div className="lh-col">Giao dịch</div>
+                <div className="lh-col">Ghi chú / Thương nhân</div>
+                <div className="lh-col">Ngày</div>
+                <div className="lh-col">Nguồn tiền</div>
+                <div className="lh-col">Danh mục</div>
+                <div className="lh-col amount">Số tiền</div>
               </div>
 
-              <div className="txd-sidebar-cat">
-                 <div className="txd-sb-head">
-                   <h3 className="txd-sb-title">Tổng quan theo danh mục</h3>
-                   <button
-                     type="button"
-                     className="txd-add-cat-btn"
-                     onClick={() => setShowQuickCategoryForm((s) => !s)}
-                   >
-                     + Danh mục
-                   </button>
-                 </div>
-                 {showQuickCategoryForm && (
-                   <div className="txd-quick-cat-form">
-                     <input
-                       type="text"
-                       value={quickCategoryName}
-                       onChange={(e) => setQuickCategoryName(e.target.value)}
-                       placeholder="Tên danh mục mới..."
-                     />
-                     <button
-                       type="button"
-                       onClick={async () => {
-                         const val = quickCategoryName.trim();
-                         if (!val || !onCreateCategory) return;
-                         await onCreateCategory(val);
-                         setQuickCategoryName("");
-                         setShowQuickCategoryForm(false);
-                       }}
-                     >
-                       Lưu
-                     </button>
-                   </div>
-                 )}
-                 <div className="txd-cip-scroll">
-                    {categoryStats.map(([name, count]) => {
-                       const meta = getCatMeta(name);
-                       const amt = sorted.filter((i) => (i.categoryLabel || "Khác") === name).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0);
-                       const maxAmt = Math.max(...categoryStats.map(([n]) => Math.abs(sorted.filter((i) => (i.categoryLabel || "Khác") === n).reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0))));
-                       const pct = maxAmt ? (Math.abs(amt) / maxAmt * 46.7).toFixed(1) : 0;
-                       
-                       return (
-                         <div key={name} className={`txd-cat-item-pro ${categoryFilter === name ? "active" : ""}`} onClick={() => setCategoryFilter(categoryFilter === name ? "" : name)}>
-                            <div className="txd-cip-icon" style={{background: meta.light, color: meta.bg}}><meta.SvgIcon size={18} /></div>
-                            <div className="txd-cip-info">
-                               <div className="txd-cip-name">{name}</div>
-                               <div className="txd-cip-amt">{currency(Math.abs(amt))}</div>
-                            </div>
-                            <div className="txd-cip-pct">{pct}%</div>
-                         </div>
-                       );
-                    })}
-                 </div>
-              </div>
-	           </div>
-
-           {/* Right Column (List + Filters) */}
-           <div className="txd-col-right">
-              <div className="txd-filters-bar">
-                 <div className="txd-pay-tabs">
-                    <button 
-                      className={`txd-pay-tab ${paymentFilter === "all" ? "active" : ""}`}
-                      onClick={() => setPaymentFilter("all")}
-                    >
-                      Tất cả
-                    </button>
-                    {accounts.map(acc => (
-                      <button 
-                        key={acc.id}
-                        className={`txd-pay-tab ${paymentFilter === String(acc.id) ? "active" : ""}`}
-                        onClick={() => setPaymentFilter(String(acc.id))}
-                      >
-                        {acc.name}
+              <div className="txd-groups">
+                {(() => {
+                  const totalTx = sorted.length;
+                  const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
+                  const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
+                  const safePage = Math.min(currentPage, totalPages);
+                  const pagedGroups = sortedGroups.slice((safePage - 1) * CATS_PER_PAGE, safePage * CATS_PER_PAGE);
+                  return pagedGroups;
+                })().map(([catName, data]) => {
+                  const isExpanded = expandedGroups[catName] !== false; // Default Open
+                  const meta = getCatMeta(catName);
+                  return (
+                    <div key={catName} className="txd-group-pro">
+                      <button className="txd-gp-head" onClick={() => toggleGroup(catName)}>
+                        <div className="txd-gph-icon" style={{ color: meta.bg }}><meta.SvgIcon size={18} /></div>
+                        <div className="txd-gph-title">{catName} <span>({data.count})</span></div>
+                        <div className={`txd-gph-total ${data.total >= 0 ? "income" : "expense"}`}>
+                          {data.total > 0 ? "+" : ""}{currency(data.total)}
+                        </div>
                       </button>
-                    ))}
-                  </div>
-                 <div className="txd-filter-selectors">
-                    <div className="txd-fsel">
-                       <span>Loại:</span>
-                       <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-                         <option value="">Tất cả</option>
-                         <option value="income">Thu nhập</option>
-                         <option value="expense">Chi tiêu</option>
-                       </select>
+
+                      {isExpanded && (
+                        <div className="txd-gp-body">
+                          {data.items.slice(0, showAllGroups[catName] ? data.items.length : 4).map(tx => {
+                            const isIncome = tx.transaction_type === "income";
+                            const txMeta = getCatMeta(tx.categoryLabel || "Khác");
+                            const acc = accounts.find(a => a.id === tx.account_id);
+
+                            let sourceText = acc ? acc.name : "Tiền mặt";
+                            let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
+
+                            return (
+                              <div key={tx.id || tx.description} className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""}`} onClick={() => setSelectedTx(tx)}>
+                                <div className="lr-col main">
+                                  <div className="lr-icon" style={{ background: txMeta.bg, color: "#fff" }}><txMeta.SvgIcon size={14} /></div>
+                                  <span className="lr-title">
+                                    {tx.description || "Giao dịch"}
+                                    {tx.ocr_confidence > 0 && (
+                                      <span className="tx-ocr-badge" title={`Độ tin cậy OCR: ${Math.round(tx.ocr_confidence * 100)}%`}>
+                                        <IcOcr /> {Math.round(tx.ocr_confidence * 100)}%
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="lr-col notes">{tx.notes || "—"}</div>
+                                <div className="lr-col date">{tx.date?.split('-').reverse().join('/')}</div>
+                                <div className="lr-col source"><span className={`src-badge ${sourceClass}`}>{sourceText}</span></div>
+                                <div className="lr-col cat"><span className="cat-badge" style={{ color: txMeta.bg, background: txMeta.light }}>{catName}</span></div>
+                                <div className={`lr-col amount ${isIncome ? "income" : "expense"}`}>
+                                  {isIncome ? "+" : "-"}{currency(Math.abs(tx.amount))}
+                                  <button className="lr-more-btn" onClick={(e) => { e.stopPropagation(); setEditingTx(tx); setEditAmount(tx.amount); setEditTagIds(tx.tagIds || []); setActiveModal("edit"); }}>...</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {data.items.length > 4 && !showAllGroups[catName] && (
+                            <button className="txd-gp-expand" onClick={() => setShowAllGroups(p => ({ ...p, [catName]: true }))}>
+                              <span className="expand-arrow">{'>'}</span> Xem tất cả {data.items.length} giao dịch <IcChevronDown />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <div className="txd-fsel">
-                       <span>Danh mục:</span>
-                       <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                         <option value="">Tất cả</option>
-                         {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                       </select>
-                    </div>
-                    <div className="txd-fsel">
-                       <span>Sắp xếp:</span>
-                       <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-                         {SORT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                       </select>
-                    </div>
-                    <button className="txd-btn-filter-icon"><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg></button>
-                 </div>
+                  )
+                })}
               </div>
+            </div>
 
-              <div className="txd-list-container">
-                 <div className="txd-list-header">
-                    <div className="lh-col">Giao dịch</div>
-                    <div className="lh-col">Ghi chú / Thương nhân</div>
-                    <div className="lh-col">Ngày</div>
-                    <div className="lh-col">Nguồn tiền</div>
-                    <div className="lh-col">Danh mục</div>
-                    <div className="lh-col amount">Số tiền</div>
-                 </div>
-                 
-                 <div className="txd-groups">
-                    {(() => {
-                      const totalTx = sorted.length;
-                      const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
-                      const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
-                      const safePage = Math.min(currentPage, totalPages);
-                      const pagedGroups = sortedGroups.slice((safePage - 1) * CATS_PER_PAGE, safePage * CATS_PER_PAGE);
-                      return pagedGroups;
-                    })().map(([catName, data]) => {
-                       const isExpanded = expandedGroups[catName] !== false; // Default Open
-                       const meta = getCatMeta(catName);
-                       return (
-                          <div key={catName} className="txd-group-pro">
-                             <button className="txd-gp-head" onClick={() => toggleGroup(catName)}>
-                                <div className="txd-gph-icon" style={{color: meta.bg}}><meta.SvgIcon size={18}/></div>
-                                <div className="txd-gph-title">{catName} <span>({data.count})</span></div>
-                                <div className={`txd-gph-total ${data.total >= 0 ? "income" : "expense"}`}>
-                                   {data.total > 0 ? "+" : ""}{currency(data.total)}
-                                </div>
-                             </button>
-                             
-                             {isExpanded && (
-                                <div className="txd-gp-body">
-                                   {data.items.slice(0, showAllGroups[catName] ? data.items.length : 4).map(tx => {
-                                      const isIncome = tx.transaction_type === "income";
-                                      const txMeta = getCatMeta(tx.categoryLabel || "Khác");
-                                      const acc = accounts.find(a => a.id === tx.account_id);
-                                      
-                                      let sourceText = acc ? acc.name : "Tiền mặt";
-                                      let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
-                                      
-                                      return (
-                                        <div key={tx.id || tx.description} className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""}`} onClick={() => setSelectedTx(tx)}>
-                                           <div className="lr-col main">
-                                              <div className="lr-icon" style={{background: txMeta.bg, color: "#fff"}}><txMeta.SvgIcon size={14}/></div>
-                                              <span className="lr-title">
-                                                {tx.description || "Giao dịch"}
-                                                {tx.ocr_confidence > 0 && (
-                                                  <span className="tx-ocr-badge" title={`Độ tin cậy OCR: ${Math.round(tx.ocr_confidence * 100)}%`}>
-                                                    <IcOcr /> {Math.round(tx.ocr_confidence * 100)}%
-                                                  </span>
-                                                )}
-                                              </span>
-                                           </div>
-                                           <div className="lr-col notes">{tx.notes || "—"}</div>
-                                           <div className="lr-col date">{tx.date?.split('-').reverse().join('/')}</div>
-                                           <div className="lr-col source"><span className={`src-badge ${sourceClass}`}>{sourceText}</span></div>
-                                           <div className="lr-col cat"><span className="cat-badge" style={{color: txMeta.bg, background: txMeta.light}}>{catName}</span></div>
-                                           <div className={`lr-col amount ${isIncome ? "income" : "expense"}`}>
-                                              {isIncome ? "+" : "-"}{currency(Math.abs(tx.amount))}
-                                              <button className="lr-more-btn" onClick={(e) => { e.stopPropagation(); setEditingTx(tx); setEditAmount(tx.amount); setEditTagIds(tx.tagIds || []); setActiveModal("edit"); }}>...</button>
-                                           </div>
-                                        </div>
-                                      );
-                                   })}
-                                   
-                                   {data.items.length > 4 && !showAllGroups[catName] && (
-                                      <button className="txd-gp-expand" onClick={() => setShowAllGroups(p => ({...p, [catName]: true}))}>
-                                         <span className="expand-arrow">{'>'}</span> Xem tất cả {data.items.length} giao dịch <IcChevronDown/>
-                                      </button>
-                                   )}
-                                </div>
-                             )}
-                          </div>
-                       )
-                    })}
+            {/* Pagination with real page numbers */}
+            {(() => {
+              const totalTx = sorted.length;
+              const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
+              const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
+              const safePage = Math.min(currentPage, totalPages);
+              if (totalPages <= 1) return (
+                <div className="txd-pagination-bar">
+                  <div className="txd-page-info">{filtered.length} giao dịch</div>
+                </div>
+              );
+              const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1);
+              return (
+                <div className="txd-pagination-bar">
+                  <div className="txd-page-info">Trang {safePage} / {totalPages} &nbsp;·&nbsp; {filtered.length} giao dịch</div>
+                  <div className="txd-page-nums">
+                    <button className="txd-page-btn" disabled={safePage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>‹</button>
+                    {pageNums.map(n => (
+                      <button key={n} className={`txd-page-btn ${n === safePage ? "active" : ""}`} onClick={() => setCurrentPage(n)}>{n}</button>
+                    ))}
+                    <button className="txd-page-btn" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>›</button>
                   </div>
-               </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
 
-               {/* Pagination with real page numbers */}
-               {(() => {
-                 const totalTx = sorted.length;
-                 const CATS_PER_PAGE = totalTx > 30 ? 3 : 5;
-                 const totalPages = Math.max(1, Math.ceil(sortedGroups.length / CATS_PER_PAGE));
-                 const safePage = Math.min(currentPage, totalPages);
-                 if (totalPages <= 1) return (
-                   <div className="txd-pagination-bar">
-                     <div className="txd-page-info">{filtered.length} giao dịch</div>
-                   </div>
-                 );
-                 const pageNums = Array.from({length: totalPages}, (_, i) => i + 1);
-                 return (
-                   <div className="txd-pagination-bar">
-                     <div className="txd-page-info">Trang {safePage} / {totalPages} &nbsp;·&nbsp; {filtered.length} giao dịch</div>
-                     <div className="txd-page-nums">
-                       <button className="txd-page-btn" disabled={safePage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>‹</button>
-                       {pageNums.map(n => (
-                         <button key={n} className={`txd-page-btn ${n === safePage ? "active" : ""}`} onClick={() => setCurrentPage(n)}>{n}</button>
-                       ))}
-                       <button className="txd-page-btn" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>›</button>
-                     </div>
-                   </div>
-                 );
-               })()}
+        {/* AI Intelligence Horizontal Panel (Desktop Bottom) */}
+        <div className="txd-ai-footer-wrap">
+          <AiIntelligencePanel
+            monthlySeries={monthlySeries}
+            anomalies={anomalies}
+            aiSuggestions={aiSuggestions}
+            showAllTips={showAllTips}
+            setShowAllTips={setShowAllTips}
+            loading={loading}
+            formatAnomalyTip={formatAnomalyTip}
+            IcSparkle={IcSparkle}
+            IcTrendUp={IcTrendUp}
+            IcTrendDown={IcTrendDown}
+            IcAlert={IcAlert}
+            IcLightbulb={IcLightbulb}
+            categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
+            transactions={transactions}
+            setSelectedTx={setSelectedTx}
+            setActiveModal={setActiveModal}
+            IcEye={IcEye}
+          />
         </div>
       </div>
-
-      {/* AI Intelligence Horizontal Panel (Desktop Bottom) */}
-      <div className="txd-ai-footer-wrap">
-        <AiIntelligencePanel 
-          monthlySeries={monthlySeries}
-          anomalies={anomalies}
-          aiSuggestions={aiSuggestions}
-          showAllTips={showAllTips}
-          setShowAllTips={setShowAllTips}
-          loading={loading}
-          formatAnomalyTip={formatAnomalyTip}
-          IcSparkle={IcSparkle}
-          IcTrendUp={IcTrendUp}
-          IcTrendDown={IcTrendDown}
-          IcAlert={IcAlert}
-          IcLightbulb={IcLightbulb}
-          categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
-          transactions={transactions}
-          setSelectedTx={setSelectedTx}
-          setActiveModal={setActiveModal}
-          IcEye={IcEye}
-        />
-      </div>
-    </div>
-  );
-};
+    );
+  };
 
   /* ─── RENDER MOBILE ─── */
   const renderMobile = () => {
     const DotsIcon = getCatMeta("Khác").SvgIcon;
     return (
       <section className="tx-page">
-      {/* ===== TOP HEADER ===== */}
-      <div className="tx-top-header">
-        <h1 className="tx-title">Giao dịch</h1>
-        <div className="tx-header-actions">
-          <button
-            className="tx-btn-ocr"
-            type="button"
-            onClick={() => setActiveModal("ocr")}
-          >
-            <IcOcr />
-            OCR
-          </button>
-          <button
-            className="tx-btn-add"
-            type="button"
-            onClick={() => {
-              setCreateType("expense");
-              setCreateCategoryId("");
-              setCreateDate(filters.end || toInputDate(new Date()));
-              setCreateAmount(""); setCreateDesc(""); setCreateTagIds([]);
-              setActiveModal("add");
-            }}
-          >
-            <IcAdd />
-            Thêm
-          </button>
-        </div>
-      </div>
-
-      {/* ===== SEARCH BAR ===== */}
-      <div className="tx-search-wrap">
-        <svg className="tx-search-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round">
-          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-        </svg>
-        <input
-          className="tx-search"
-          type="text"
-          placeholder="Tìm kiếm giao dịch..."
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-        />
-      </div>
-
-      {/* ===== PAYMENT TABS + DATE RANGE ===== */}
-      <div className="tx-tabs-row">
-        <div className="tx-payment-tabs">
-          {[
-            { value: "all", label: "Tất cả" },
-            { value: "cash", label: "Tiền mặt" },
-            { value: "bank", label: "Ngân hàng" },
-          ].map((tab) => (
+        {/* ===== TOP HEADER ===== */}
+        <div className="tx-top-header">
+          <h1 className="tx-title">Giao dịch</h1>
+          <div className="tx-header-actions">
             <button
-              key={tab.value}
-              className={`tx-tab ${paymentFilter === tab.value ? "active" : ""}`}
+              className="tx-btn-ocr"
               type="button"
-              onClick={() => setPaymentFilter(tab.value)}
+              onClick={() => setActiveModal("ocr")}
             >
-              {tab.label}
+              <IcOcr />
+              OCR
             </button>
-          ))}
-        </div>
-
-        <button
-          className="tx-date-btn"
-          type="button"
-          onClick={() => setActiveModal("dateRange")}
-        >
-          <IcCalendar />
-          <span>{dateRangeLabel}</span>
-          <IcChevronDown />
-        </button>
-      </div>
-
-      {/* ===== SUMMARY CARDS ===== */}
-      <div className="tx-summary-cards">
-        <div className="tx-sum-card income">
-          <div className="tx-sum-icon income"><IcIncome /></div>
-          <div>
-            <p className="tx-sum-label">Tổng thu</p>
-            <p className="tx-sum-amount income">{currency(totalIncome)}</p>
-            <p className="tx-sum-meta">
-              <span className="up">↑</span> {filtered.filter(i => i.transaction_type === "income").length} giao dịch
-            </p>
+            <button
+              className="tx-btn-add"
+              type="button"
+              onClick={() => {
+                setCreateType("expense");
+                setCreateCategoryId("");
+                setCreateDate(filters.end || toInputDate(new Date()));
+                setCreateAmount(""); setCreateDesc(""); setCreateTagIds([]);
+                setActiveModal("add");
+              }}
+            >
+              <IcAdd />
+              Thêm
+            </button>
           </div>
         </div>
 
-        <div className="tx-sum-card expense">
-          <div className="tx-sum-icon expense"><IcExpense /></div>
-          <div>
-            <p className="tx-sum-label">Tổng chi</p>
-            <p className="tx-sum-amount expense">{currency(totalExpense)}</p>
-            <p className="tx-sum-meta">
-              <span className="down">↓</span> {filtered.filter(i => i.transaction_type === "expense").length} giao dịch
-            </p>
+        {/* ===== SEARCH BAR ===== */}
+        <div className="tx-search-wrap">
+          <svg className="tx-search-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            className="tx-search"
+            type="text"
+            placeholder="Tìm kiếm giao dịch..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+        </div>
+
+        {/* ===== PAYMENT TABS + DATE RANGE ===== */}
+        <div className="tx-tabs-row">
+          <div className="tx-payment-tabs">
+            {[
+              { value: "all", label: "Tất cả" },
+              { value: "cash", label: "Tiền mặt" },
+              { value: "bank", label: "Ngân hàng" },
+            ].map((tab) => (
+              <button
+                key={tab.value}
+                className={`tx-tab ${paymentFilter === tab.value ? "active" : ""}`}
+                type="button"
+                onClick={() => setPaymentFilter(tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            className="tx-date-btn"
+            type="button"
+            onClick={() => setActiveModal("dateRange")}
+          >
+            <IcCalendar />
+            <span>{dateRangeLabel}</span>
+            <IcChevronDown />
+          </button>
+        </div>
+
+        {/* ===== SUMMARY CARDS ===== */}
+        <div className="tx-summary-cards">
+          <div className="tx-sum-card income">
+            <div className="tx-sum-icon income"><IcIncome /></div>
+            <div>
+              <p className="tx-sum-label">Tổng thu</p>
+              <p className="tx-sum-amount income">{currency(totalIncome)}</p>
+              <p className="tx-sum-meta">
+                <span className="up">↑</span> {filtered.filter(i => i.transaction_type === "income").length} giao dịch
+              </p>
+            </div>
+          </div>
+
+          <div className="tx-sum-card expense">
+            <div className="tx-sum-icon expense"><IcExpense /></div>
+            <div>
+              <p className="tx-sum-label">Tổng chi</p>
+              <p className="tx-sum-amount expense">{currency(totalExpense)}</p>
+              <p className="tx-sum-meta">
+                <span className="down">↓</span> {filtered.filter(i => i.transaction_type === "expense").length} giao dịch
+              </p>
+            </div>
+          </div>
+
+          <div className="tx-sum-card count">
+            <div className="tx-sum-icon count"><IcTx /></div>
+            <div>
+              <p className="tx-sum-label">Số giao dịch</p>
+              <p className="tx-sum-amount count">{filtered.length}</p>
+              <p className="tx-sum-meta">
+                <span className="up">↑</span> {categories.length} danh mục
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="tx-sum-card count">
-          <div className="tx-sum-icon count"><IcTx /></div>
-          <div>
-            <p className="tx-sum-label">Số giao dịch</p>
-            <p className="tx-sum-amount count">{filtered.length}</p>
-            <p className="tx-sum-meta">
-              <span className="up">↑</span> {categories.length} danh mục
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== CATEGORY ICONS ROW ===== */}
-      {categoryStats.length > 0 && (
-        <div className="tx-cats-scroll">
-          <div className="tx-cats-row">
-            {categoryStats.slice(0, 5).map(([name, count]) => {
-              const meta = getCatMeta(name);
-              return (
-                <button
-                  key={name}
-                  className={`tx-cat-icon-btn ${categoryFilter === name ? "selected" : ""}`}
-                  type="button"
-                  onClick={() => setCategoryFilter(categoryFilter === name ? "" : name)}
-                >
-                  <div className="tx-cat-bubble" style={{ background: meta.gradient || meta.bg, color: "#fff" }}>
-                    <meta.SvgIcon size={22} />
-                    <span className="tx-cat-count">{count}</span>
+        {/* ===== CATEGORY ICONS ROW ===== */}
+        {categoryStats.length > 0 && (
+          <div className="tx-cats-scroll">
+            <div className="tx-cats-row">
+              {categoryStats.slice(0, 5).map(([name, count]) => {
+                const meta = getCatMeta(name);
+                return (
+                  <button
+                    key={name}
+                    className={`tx-cat-icon-btn ${categoryFilter === name ? "selected" : ""}`}
+                    type="button"
+                    onClick={() => setCategoryFilter(categoryFilter === name ? "" : name)}
+                  >
+                    <div className="tx-cat-bubble" style={{ background: meta.gradient || meta.bg, color: "#fff" }}>
+                      <meta.SvgIcon size={22} />
+                      <span className="tx-cat-count">{count}</span>
+                    </div>
+                    <p className="tx-cat-name">{name}</p>
+                    <p className="tx-cat-amount" style={{ color: meta.bg }}>
+                      {currency(
+                        sorted
+                          .filter((i) => (i.categoryLabel || "Khác") === name)
+                          .reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0)
+                      )}
+                    </p>
+                  </button>
+                );
+              })}
+              {categoryStats.length > 5 && (
+                <div className="tx-cat-icon-btn">
+                  <div className="tx-cat-bubble" style={{ background: "linear-gradient(135deg,#94a3b8,#475569)", color: "#fff" }}>
+                    <DotsIcon size={22} />
+                    <span className="tx-cat-count">+{categoryStats.length - 5}</span>
                   </div>
-                  <p className="tx-cat-name">{name}</p>
-                  <p className="tx-cat-amount" style={{ color: meta.bg }}>
-                    {currency(
-                      sorted
-                        .filter((i) => (i.categoryLabel || "Khác") === name)
-                        .reduce((s, i) => s + (i.transaction_type === "income" ? i.amount : -i.amount), 0)
-                    )}
-                  </p>
-                </button>
-              );
-            })}
-            {categoryStats.length > 5 && (
-              <div className="tx-cat-icon-btn">
-                <div className="tx-cat-bubble" style={{ background: "linear-gradient(135deg,#94a3b8,#475569)", color: "#fff" }}>
-                  <DotsIcon size={22} />
-                  <span className="tx-cat-count">+{categoryStats.length - 5}</span>
+                  <p className="tx-cat-name">Khác</p>
                 </div>
-                <p className="tx-cat-name">Khác</p>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== FILTER ROW ===== */}
+        <div className="tx-filter-row">
+          <div className="tx-filter-item">
+            <label className="tx-filter-label">Loại</label>
+            <div className="tx-filter-select">
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <option value="">Tất cả</option>
+                <option value="income">Thu nhập</option>
+                <option value="expense">Chi tiêu</option>
+              </select>
+              <IcChevronDown />
+            </div>
+          </div>
+
+          <div className="tx-filter-item">
+            <label className="tx-filter-label">Danh mục</label>
+            <div className="tx-filter-select">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+              >
+                <option value="">Tất cả</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>{cat.name}</option>
+                ))}
+              </select>
+              <IcChevronDown />
+            </div>
+          </div>
+
+          <div className="tx-filter-item">
+            <label className="tx-filter-label">Sắp xếp</label>
+            <div className="tx-filter-select">
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <IcChevronDown />
+            </div>
           </div>
         </div>
-      )}
 
-      {/* ===== FILTER ROW ===== */}
-      <div className="tx-filter-row">
-        <div className="tx-filter-item">
-          <label className="tx-filter-label">Loại</label>
-          <div className="tx-filter-select">
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="income">Thu nhập</option>
-              <option value="expense">Chi tiêu</option>
-            </select>
-            <IcChevronDown />
-          </div>
-        </div>
+        {/* ===== GROUPED TRANSACTION LIST ===== */}
+        <div className="tx-group-list">
+          {!sorted.length ? (
+            <div className="tx-empty">
+              <p>Không có giao dịch nào</p>
+            </div>
+          ) : (
+            grouped.map(({ cat, items, total }) => {
+              const meta = getCatMeta(cat);
+              const isExpanded = expandedGroups[cat] !== false; // default expanded
+              const PREVIEW = 5;
+              const showAll = showAllGroups[cat];
+              const displayItems = showAll ? items : items.slice(0, PREVIEW);
 
-        <div className="tx-filter-item">
-          <label className="tx-filter-label">Danh mục</label>
-          <div className="tx-filter-select">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-            <IcChevronDown />
-          </div>
-        </div>
-
-        <div className="tx-filter-item">
-          <label className="tx-filter-label">Sắp xếp</label>
-          <div className="tx-filter-select">
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <IcChevronDown />
-          </div>
-        </div>
-      </div>
-
-      {/* ===== GROUPED TRANSACTION LIST ===== */}
-      <div className="tx-group-list">
-        {!sorted.length ? (
-          <div className="tx-empty">
-            <p>Không có giao dịch nào</p>
-          </div>
-        ) : (
-          grouped.map(({ cat, items, total }) => {
-            const meta = getCatMeta(cat);
-            const isExpanded = expandedGroups[cat] !== false; // default expanded
-            const PREVIEW = 5;
-            const showAll = showAllGroups[cat];
-            const displayItems = showAll ? items : items.slice(0, PREVIEW);
-
-            return (
-              <div key={cat} className="tx-group">
-                {/* Group header */}
-                <button
-                  className="tx-group-header"
-                  type="button"
-                  onClick={() => toggleGroup(cat)}
-                >
-                  <div className="tx-group-icon" style={{ background: meta.gradient || meta.bg, color: "#fff" }}>
-                    <meta.SvgIcon size={20} />
-                  </div>
-                  <div className="tx-group-info">
-                    <span className="tx-group-name">{cat}</span>
-                    <span
-                      className="tx-group-total"
-                      style={{ color: total >= 0 ? "#10b981" : "#ef4444" }}
-                    >
-                      {total >= 0 ? "+" : ""}{currency(Math.abs(total))}
-                    </span>
-                    <span className="tx-group-dot">·</span>
-                    <span className="tx-group-count">{items.length} giao dịch</span>
-                  </div>
-                  <span className="tx-group-chevron">
-                    {isExpanded ? <IcChevronUp /> : <IcChevronDown />}
-                  </span>
-                </button>
-
-                {/* Group items */}
-                {isExpanded && (
-                  <div className="tx-group-items">
-                    {displayItems.map((item) => {
-                      const payTag = getPaymentTag(item);
-                      const isIncome = item.transaction_type === "income";
-                      const tagColor = payTag?.name === "Tiền mặt" ? { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" } : { bg: "#dbeafe", text: "#2563eb", border: "#bfdbfe" };
-
-                      return (
-                        <div key={item.id} id={`tx-row-${item.id}`} className="tx-item">
-                          <div className="tx-item-icon" style={{ background: meta.light, color: meta.bg }}>
-                            <meta.SvgIcon size={18} />
-                          </div>
-                          <div className="tx-item-body">
-                            <p className="tx-item-desc">{item.description || item.categoryLabel || "Giao dịch"}</p>
-                            <p className="tx-item-sub">{item.categoryLabel || cat}</p>
-                          </div>
-                          <div className="tx-item-meta">
-                            <p className="tx-item-date">
-                              {item.date?.split("-").reverse().join("/")}
-                            </p>
-                            {payTag && (
-                              <span
-                                className="tx-pay-badge"
-                                style={{ background: tagColor.bg, color: tagColor.text, border: `1px solid ${tagColor.border}` }}
-                              >
-                                {payTag.name}
-                              </span>
-                            )}
-                          </div>
-                          <p
-                            className="tx-item-amount"
-                            style={{ color: isIncome ? "#10b981" : "#ef4444" }}
-                          >
-                            {isIncome ? "+" : "-"}{currency(item.amount)}
-                          </p>
-                          <div className="tx-item-actions">
-                            <button
-                              className="tx-item-action"
-                              type="button"
-                              title="Chi tiết"
-                              onClick={() => { setSelectedTx(item); setActiveModal("detail"); }}
-                            >
-                              <IcEye />
-                            </button>
-                            <button
-                              className="tx-item-action"
-                              type="button"
-                              title="Chỉnh sửa"
-                              onClick={() => { setEditingTx(item); setActiveModal("edit"); }}
-                            >
-                              <IcArrowRight />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Show all / collapse */}
-                    {items.length > PREVIEW && (
-                      <button
-                        className="tx-show-more"
-                        type="button"
-                        onClick={() => setShowAllGroups((prev) => ({ ...prev, [cat]: !showAll }))}
+              return (
+                <div key={cat} className="tx-group">
+                  {/* Group header */}
+                  <button
+                    className="tx-group-header"
+                    type="button"
+                    onClick={() => toggleGroup(cat)}
+                  >
+                    <div className="tx-group-icon" style={{ background: meta.gradient || meta.bg, color: "#fff" }}>
+                      <meta.SvgIcon size={20} />
+                    </div>
+                    <div className="tx-group-info">
+                      <span className="tx-group-name">{cat}</span>
+                      <span
+                        className="tx-group-total"
+                        style={{ color: total >= 0 ? "#10b981" : "#ef4444" }}
                       >
-                        {showAll ? "Thu gọn" : `Xem tất cả (${items.length})`}
-                        {showAll ? <IcChevronUp /> : <IcChevronDown />}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
+                        {total >= 0 ? "+" : ""}{currency(Math.abs(total))}
+                      </span>
+                      <span className="tx-group-dot">·</span>
+                      <span className="tx-group-count">{items.length} giao dịch</span>
+                    </div>
+                    <span className="tx-group-chevron">
+                      {isExpanded ? <IcChevronUp /> : <IcChevronDown />}
+                    </span>
+                  </button>
 
-        {hasMore && (
-          <div style={{ textAlign: "center", marginTop: 16 }}>
-            <button className="tx-load-more" type="button" onClick={onLoadMore} disabled={loading}>
-              {loading ? "Đang tải..." : "Tải thêm"}
-            </button>
-          </div>
-        )}
-      </div>
+                  {/* Group items */}
+                  {isExpanded && (
+                    <div className="tx-group-items">
+                      {displayItems.map((item) => {
+                        const payTag = getPaymentTag(item);
+                        const isIncome = item.transaction_type === "income";
+                        const tagColor = payTag?.name === "Tiền mặt" ? { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" } : { bg: "#dbeafe", text: "#2563eb", border: "#bfdbfe" };
 
-      {/* AI Intelligence Horizontal Panel (Mobile Bottom) */}
-      <div className="tx-mobile-ai-footer">
-        <AiIntelligencePanel 
-          monthlySeries={monthlySeries}
-          anomalies={anomalies}
-          aiSuggestions={aiSuggestions}
-          showAllTips={showAllTips}
-          setShowAllTips={setShowAllTips}
-          loading={loading}
-          formatAnomalyTip={formatAnomalyTip}
-          IcSparkle={IcSparkle}
-          IcTrendUp={IcTrendUp}
-          IcTrendDown={IcTrendDown}
-          IcAlert={IcAlert}
-          IcLightbulb={IcLightbulb}
-          categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
-          transactions={transactions}
-          setSelectedTx={setSelectedTx}
-          setActiveModal={setActiveModal}
-          IcEye={IcEye}
-        />
-      </div>
-    </section>
+                        return (
+                          <div key={item.id} id={`tx-row-${item.id}`} className="tx-item">
+                            <div className="tx-item-icon" style={{ background: meta.light, color: meta.bg }}>
+                              <meta.SvgIcon size={18} />
+                            </div>
+                            <div className="tx-item-body">
+                              <p className="tx-item-desc">{item.description || item.categoryLabel || "Giao dịch"}</p>
+                              <p className="tx-item-sub">{item.categoryLabel || cat}</p>
+                            </div>
+                            <div className="tx-item-meta">
+                              <p className="tx-item-date">
+                                {item.date?.split("-").reverse().join("/")}
+                              </p>
+                              {payTag && (
+                                <span
+                                  className="tx-pay-badge"
+                                  style={{ background: tagColor.bg, color: tagColor.text, border: `1px solid ${tagColor.border}` }}
+                                >
+                                  {payTag.name}
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className="tx-item-amount"
+                              style={{ color: isIncome ? "#10b981" : "#ef4444" }}
+                            >
+                              {isIncome ? "+" : "-"}{currency(item.amount)}
+                            </p>
+                            <div className="tx-item-actions">
+                              <button
+                                className="tx-item-action"
+                                type="button"
+                                title="Chi tiết"
+                                onClick={() => { setSelectedTx(item); setActiveModal("detail"); }}
+                              >
+                                <IcEye />
+                              </button>
+                              <button
+                                className="tx-item-action"
+                                type="button"
+                                title="Chỉnh sửa"
+                                onClick={() => { setEditingTx(item); setActiveModal("edit"); }}
+                              >
+                                <IcArrowRight />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Show all / collapse */}
+                      {items.length > PREVIEW && (
+                        <button
+                          className="tx-show-more"
+                          type="button"
+                          onClick={() => setShowAllGroups((prev) => ({ ...prev, [cat]: !showAll }))}
+                        >
+                          {showAll ? "Thu gọn" : `Xem tất cả (${items.length})`}
+                          {showAll ? <IcChevronUp /> : <IcChevronDown />}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+
+          {hasMore && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <button className="tx-load-more" type="button" onClick={onLoadMore} disabled={loading}>
+                {loading ? "Đang tải..." : "Tải thêm"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* AI Intelligence Horizontal Panel (Mobile Bottom) */}
+        <div className="tx-mobile-ai-footer">
+          <AiIntelligencePanel
+            monthlySeries={monthlySeries}
+            anomalies={anomalies}
+            aiSuggestions={aiSuggestions}
+            showAllTips={showAllTips}
+            setShowAllTips={setShowAllTips}
+            loading={loading}
+            formatAnomalyTip={formatAnomalyTip}
+            IcSparkle={IcSparkle}
+            IcTrendUp={IcTrendUp}
+            IcTrendDown={IcTrendDown}
+            IcAlert={IcAlert}
+            IcLightbulb={IcLightbulb}
+            categoryStats={categoryStats.map(([name, amt]) => ({ name, amt }))}
+            transactions={transactions}
+            setSelectedTx={setSelectedTx}
+            setActiveModal={setActiveModal}
+            IcEye={IcEye}
+          />
+        </div>
+      </section>
     );
   };
 
@@ -1579,13 +1580,13 @@ export default function TransactionsScreen({
                       {isIncome ? "+" : "-"}{currency(selectedTx.amount)}
                     </p>
                   </div>
-                  
+
                   {selectedTx.image_path && (
                     <div className="tx-detail-receipt">
                       <div className="tx-receipt-img" onClick={() => setIsImageModalOpen(true)}>
-                        <img 
-                          src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
-                          alt="Hóa đơn" 
+                        <img
+                          src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`}
+                          alt="Hóa đơn"
                         />
                         <div className="tx-img-overlay">
                           <span>Nhấn để phóng to</span>
@@ -1661,9 +1662,9 @@ export default function TransactionsScreen({
         <div className="tx-modal-overlay" onClick={() => setIsImageModalOpen(false)}>
           <div className="tx-modal-content" onClick={e => e.stopPropagation()}>
             <button className="tx-modal-close" onClick={() => setIsImageModalOpen(false)}>&times;</button>
-            <img 
-              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`} 
-              alt="Hóa đơn phóng lớn" 
+            <img
+              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`}
+              alt="Hóa đơn phóng lớn"
             />
           </div>
         </div>

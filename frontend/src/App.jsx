@@ -42,7 +42,8 @@ import {
   listSavingsGoals,
   listBills,
   createBill,
-  updateBill
+  updateBill,
+  deleteBill
 } from "./api/finance.js";
 import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
@@ -724,6 +725,20 @@ export default function App() {
     }
   };
 
+  const handleDeleteBill = async (billId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa hóa đơn này?")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteBill(billId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to delete bill.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateTransaction = async (payload) => {
     setLoading(true);
     setError("");
@@ -1185,6 +1200,7 @@ export default function App() {
         {view === "ocr" && (
           <OcrScreen
             categories={categories}
+            accounts={accounts}
             tags={tags}
             userEmail={authState.user?.email}
             onCreateCategory={handleCreateCategory}
@@ -1224,11 +1240,14 @@ export default function App() {
         {view === "bills" && (
           <BillsScreen
             bills={bills}
+            categories={categories}
+            accounts={accounts}
             newlyCreatedId={newlyCreatedId}
             loading={loading}
             onGoOcr={() => handleChangeView("ocr")}
             onCreateTransaction={handleCreateTransaction}
             onUpdateBill={handleUpdateBill}
+            onDeleteBill={handleDeleteBill}
           />
         )}
       </main>

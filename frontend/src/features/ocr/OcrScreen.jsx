@@ -68,6 +68,7 @@ const getOcrCategoryTheme = (name, fallbackColor) => {
 
 export default function OcrScreen({
   categories,
+  accounts = [],
   tags = [],
   userEmail,
   onCreateCategory,
@@ -79,19 +80,6 @@ export default function OcrScreen({
   embedded = false,
   onClose
 }) {
-  const paymentTagCandidates = useMemo(
-    () =>
-      tags.filter((tag) => {
-        const value = String(tag.name || "").toLowerCase();
-        return (
-          value.includes("tiền mặt") ||
-          value.includes("ngân hàng") ||
-          value.includes("ví") ||
-          value.includes("momo")
-        );
-      }),
-    [tags]
-  );
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsed, setParsed] = useState(baseParsedState);
@@ -200,11 +188,11 @@ export default function OcrScreen({
         }
 
         if (data.payment_source) {
-          const sourceTag = paymentTagCandidates.find(t => 
-            t.name.toLowerCase().includes(data.payment_source.toLowerCase()) ||
-            data.payment_source.toLowerCase().includes(t.name.toLowerCase())
+          const matchedAccount = accounts.find(acc => 
+            acc.name.toLowerCase().includes(data.payment_source.toLowerCase()) ||
+            data.payment_source.toLowerCase().includes(acc.name.toLowerCase())
           );
-          if (sourceTag) setFundingSourceId(sourceTag.id);
+          if (matchedAccount) setFundingSourceId(matchedAccount.id);
         }
 
         setWarnings(result.warnings || []);
@@ -243,7 +231,7 @@ export default function OcrScreen({
         vat_amount: parseNumberInput(parsed.vat),
         date: parsed.date,
         category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
-        account_id: parsed.accountId ? Number(parsed.accountId) : null,
+        account_id: fundingSourceId ? Number(fundingSourceId) : null,
         bill_number: referenceCode,
         ocr_confidence: confidence.total,
         status: autoCreate ? "confirmed" : "pending",
@@ -274,9 +262,9 @@ export default function OcrScreen({
           amount: parseNumberInput(parsed.total),
           transaction_type: txType,
           category_id: parsed.categoryId ? Number(parsed.categoryId) : null,
-          account_id: parsed.accountId ? Number(parsed.accountId) : null,
+          account_id: fundingSourceId ? Number(fundingSourceId) : null,
           date: parsed.date,
-          tag_ids: [...new Set([...(fundingSourceId ? [fundingSourceId] : []), ...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
+          tag_ids: [...new Set([...selectedTagIds, ...(ocrTagId ? [ocrTagId] : [])])],
           notes: parsed.note,
           image_path: parsed.imagePath
         });
@@ -379,16 +367,16 @@ export default function OcrScreen({
               <span>Ảnh JPG/PNG, rõ nét để OCR chính xác hơn</span>
             </div>
           </label>
-
+ 
           <button className="ghost ocr-extract-btn" type="button" onClick={handleExtract}>
             {ocrState === "running" ? "Đang trích xuất OCR..." : "Trích xuất lại OCR"}
           </button>
-
+ 
           <div className="receipt-preview preview-container">
             <div className="scanner-line"></div>
             {previewUrl ? <img src={previewUrl} alt="Receipt preview" /> : <p className="empty">Xem trước hóa đơn</p>}
           </div>
-
+ 
           <div className="ocr-result-card">
             <h4>Kết quả OCR</h4>
             <div className="ocr-result-grid">
@@ -403,7 +391,7 @@ export default function OcrScreen({
             </div>
           </div>
         </div>
-
+ 
         <form className="form ocr-form-panel ocr-form-modern" onSubmit={handleCreate}>
           <h4>1. Thông tin giao dịch</h4>
           <div className="row">
@@ -426,7 +414,7 @@ export default function OcrScreen({
                 />
               </div>
             </label>
-
+ 
             <label className="field-pro">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Merchant *</span>
@@ -447,7 +435,7 @@ export default function OcrScreen({
               </div>
             </label>
           </div>
-
+ 
           <div className="ocr-pill-row">
             <span>Loại giao dịch</span>
             <div className="ocr-inline-pills">
@@ -455,19 +443,19 @@ export default function OcrScreen({
               <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
             </div>
           </div>
-
-          {!!paymentTagCandidates.length && (
+ 
+          {!!accounts.length && (
             <div className="ocr-pill-row">
               <span>Nguồn tiền *</span>
               <div className="ocr-inline-pills wrap">
-                {paymentTagCandidates.map((tag) => (
+                {accounts.map((acc) => (
                   <button
-                    key={tag.id}
+                    key={acc.id}
                     type="button"
-                    className={fundingSourceId === tag.id ? "active" : ""}
-                    onClick={() => setFundingSourceId(tag.id)}
+                    className={fundingSourceId === acc.id ? "active" : ""}
+                    onClick={() => setFundingSourceId(acc.id)}
                   >
-                    {tag.name}
+                    {acc.name}
                   </button>
                 ))}
               </div>
