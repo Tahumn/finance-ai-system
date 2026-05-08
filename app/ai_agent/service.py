@@ -80,6 +80,10 @@ def _extract_json(text: str) -> dict:
 
 
 
+AMOUNT_UNIT_PATTERN = r"million|trieu|nghin|ngan|chai|canh|lit|ty|ti|tr|cu|xi|ca|k|m"
+AMOUNT_HALF_PATTERN = r"ruoi|nua"
+
+# Use normalized ASCII units so "trieu" is not truncated to "tr".
 AMOUNT_REGEX = re.compile(
     r"(?P<num>"
     r"\d{1,3}(?:\.\d{3})+"
@@ -90,6 +94,28 @@ AMOUNT_REGEX = re.compile(
     r"(?P<unit>k|nghin|ngàn|ngan|tr|trieu|triệu|cu|củ)"
     r"(?:\s*(?P<half>ruoi|rưỡi|nua|nửa))?",
     re.IGNORECASE
+)
+
+AMOUNT_REGEX = re.compile(
+    rf"(?P<num>"
+    rf"\d{{1,3}}(?:\.\d{{3}})+"
+    rf"|"
+    rf"\d+(?:[.,]\d+)?"
+    rf")"
+    rf"\s*"
+    rf"(?P<unit>{AMOUNT_UNIT_PATTERN})\b"
+    rf"(?:\s*(?P<half>{AMOUNT_HALF_PATTERN}))?",
+    re.IGNORECASE,
+)
+
+DECIMAL_AMOUNT_WITH_UNIT_REGEX = re.compile(
+    rf"\b\d+\.\d+\s*(?=(?:{AMOUNT_UNIT_PATTERN})\b)",
+    re.IGNORECASE,
+)
+
+AMOUNT_UNIT_REGEX = re.compile(
+    rf"\d+(?:[.,]\d+)?\s*(?:{AMOUNT_UNIT_PATTERN})\b",
+    re.IGNORECASE,
 )
 
 DATE_DDMM_REGEX = re.compile(r"(?P<day>\d{1,2})[./-](?P<month>\d{1,2})(?:[./-](?P<year>\d{2,4}))?")
@@ -161,6 +187,10 @@ EXPENSE_KEYWORDS = [
     "grab", "be", "taxi", "book xe", "đổ xăng", "bơm xăng", "gửi xe",
     "nộp", "học phí", "trả nợ", "trả góp", "bill"
 ]
+
+EXPENSE_KEYWORDS.extend([
+    "tru", "trừ", "phat", "phạt", "tien phat", "tiền phạt",
+])
 
 CORRECTION_KEYWORDS = [
     "nhầm", "ghi sai", "sai rồi", "không phải", "à không", "ý là", "sửa lại", "đổi lại", "đổi thành", 
@@ -547,11 +577,22 @@ def _normalize_text_basic(text: str) -> str:
 
 
 def _strip_date_fragments(text: str) -> str:
+    protected: dict[str, str] = {}
+
+    def _protect_decimal_amount(match: re.Match) -> str:
+        key = f"__amt_decimal_{len(protected)}__"
+        protected[key] = match.group(0)
+        return key
+
+    # Preserve decimal amounts such as "5.5 trieu" before removing date-like fragments.
+    text = DECIMAL_AMOUNT_WITH_UNIT_REGEX.sub(_protect_decimal_amount, text)
     text = DATE_ISO_REGEX.sub(" ", text)
     text = DATE_DDMM_REGEX.sub(" ", text)
     text = DATE_TEXT_REGEX.sub(" ", text)
     text = re.sub(r"thang\s*\d{1,2}", " ", text)
     text = re.sub(r"nam\s*\d{4}", " ", text)
+    for key, value in protected.items():
+        text = text.replace(key, value)
     return text
 
 
@@ -669,7 +710,7 @@ def _split_transaction_segments(text: str) -> list[str]:
         return []
 
     parts = re.split(
-        r",|;|\bvà\b|\brồi\b|\bsau đó\b|\bcùng với\b|&",
+        r",|;|&|\b(?:va|và|nhung|nhưng|roi|rồi|sau do|sau đó|cung voi|cùng với|dong thoi|đồng thời|kem theo|kèm theo|kem|kèm)\b",
         text,
         flags=re.IGNORECASE,
     )
@@ -958,7 +999,7 @@ def _parse_amount(text: str) -> float | None:
         except ValueError:
             continue
 
-        unit = match.group("unit")
+        unit = match.group("unit").lower()
 
         multiplier = 1
 
@@ -986,8 +1027,22 @@ def _amount_has_unit(text: str) -> bool:
     normalized = _normalize_text(text)
     if any(hint in normalized for hint in CURRENCY_HINTS):
         return True
-    unit_match = re.search(r"\d+(?:[.,]\d+)?\s*(k|nghin|ngan|tr|trieu|m|million|ty|ti|cu|lit|xi)\b", normalized)
-    return unit_match is not None
+    return AMOUNT_UNIT_REGEX.search(normalized) is not None
+
+
+def _prefer_explicit_amount(text: str, ai_amount: float | None, heuristic_amount: float | None) -> float | None:
+    if heuristic_amount is None:
+        return ai_amount
+    if ai_amount is None:
+        return heuristic_amount
+
+    normalized = _normalize_text(text)
+    has_explicit_numeric_amount = bool(re.search(r"\d", normalized)) and (
+        _amount_has_unit(text) or any(marker in normalized for marker in ("ruoi", "nua"))
+    )
+    if has_explicit_numeric_amount:
+        return heuristic_amount
+    return ai_amount
 
 
 _OCR_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1", "|": "1"})
@@ -2202,13 +2257,18 @@ def parse_transaction_text(
     category_name = None
 
     explicit_text_date = _parse_date(text)
+    heuristic_amount = _parse_amount(text)
     llm_response = _call_gemini_chat(text) if use_llm else None
     if llm_response:
         intent = llm_response.get("intent")
         data = llm_response.get("data", {})
         
         if intent in ("SAVE_EXPENSE", "SAVE_INCOME", "create_transaction", "update_transaction"):
-            amount = _coerce_amount(data.get("amount"))
+            amount = _prefer_explicit_amount(
+                text,
+                _coerce_amount(data.get("amount")),
+                heuristic_amount,
+            )
             if explicit_text_date:
                 parsed_date = explicit_text_date
             
@@ -2233,7 +2293,7 @@ def parse_transaction_text(
             tag_ids = _resolve_tags(db, current_user, tag_names)
 
     if amount is None:
-        amount = _parse_amount(text)
+        amount = heuristic_amount
         if amount is None:
             warnings.append("amount_not_found")
     if parsed_date is None:
@@ -2589,15 +2649,12 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
 
     # 5. XỬ LÝ ĐA GIAO DỊCH
     multi_data = llm_resp.get("transactions")
-    # Fallback sang heuristic tách câu nếu AI không bóc tách được danh sách
-    if not multi_data and intent == "unknown":
+    # Fallback sang heuristic tách câu nếu AI không bóc tách được danh sách,
+    # kể cả khi AI lỡ gắn câu thành một giao dịch đơn.
+    if not multi_data:
          multi_data = _extract_multi_transactions(db, current_user, text)
 
-    if intent == "create_transactions" or (intent == "unknown" and multi_data):
-
-        print("INTENT:", intent)
-        print("MULTI DATA:", multi_data)
-
+    if intent == "create_transactions" or multi_data:
         txs_created = []
         for item in multi_data:
             amt = _coerce_amount(item.get("amount"))
@@ -2684,7 +2741,11 @@ def answer_chat(db: Session, current_user: User, text: str) -> dict:
     # --- EXPENSE & INCOME ---
     if intent in ("expense", "income"):
         tx_type = "expense" if intent == "expense" else "income"
-        amount = _coerce_amount(data.get("amount")) or heuristic.get("amount")
+        amount = _prefer_explicit_amount(
+            text,
+            _coerce_amount(data.get("amount")),
+            heuristic.get("amount"),
+        )
         if not amount:
             return {
                 "answer": "Bạn vui lòng cho biết số tiền cụ thể để mình ghi chép nhé.",
