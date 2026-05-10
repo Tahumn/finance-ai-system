@@ -40,8 +40,12 @@ import {
   getChartData,
   getReportsOverview,
   listSavingsGoals,
-  listBills
+  listBills,
+  createBill,
+  updateBill,
+  deleteBill
 } from "./api/finance.js";
+
 import { createTransactionFromText, parseTransaction, getAnomalies, getSavingsTips } from "./api/ai.js";
 import SideMenu from "./components/SideMenu.jsx";
 import TopBar from "./components/TopBar.jsx";
@@ -155,7 +159,7 @@ export default function App() {
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState({ items: [], total: 0 });
   const [summary, setSummary] = useState({
     total_balance: 0,
     period_total_income: 0,
@@ -189,6 +193,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [languageVersion, setLanguageVersion] = useState(0);
+  const [newlyCreatedId, setNewlyCreatedId] = useState(null);
   const [notifications, setNotifications] = useState(() => getNotifications());
   const loadFinanceRef = useRef(null);
   const authStatusRef = useRef(authState.status);
@@ -296,7 +301,7 @@ export default function App() {
 
   const transactionsWithLabels = useMemo(
     () =>
-      (transactions.items || []).map((item) => ({
+      (transactions?.items || []).map((item) => ({
         ...item,
         categoryLabel: item.category_id ? categoryMap[item.category_id] || t("transactions.none") : t("transactions.none")
       })),
@@ -551,6 +556,7 @@ export default function App() {
       setSavingsGoals(Array.isArray(goalsData) ? goalsData : []);
       setBills(Array.isArray(billsData) ? billsData : []);
       setAnomalies(anomalyData?.alerts || []);
+      setSavingsTips(tipsData || []);
       setReportsOverview(overviewData || {
         daily_series: [],
         monthly_series: [],
@@ -591,7 +597,7 @@ export default function App() {
     if (loading) return;
     setLoading(true);
     try {
-      const currentCount = transactions.items.length;
+      const currentCount = transactions?.items?.length || 0;
       const params = {
         start_date: filters.start,
         end_date: filters.end,
@@ -602,7 +608,7 @@ export default function App() {
       };
       const moreTxs = await listTransactions(params);
       setTransactions((prev) => ({
-        items: [...prev.items, ...moreTxs.items],
+        items: [...(prev?.items || []), ...moreTxs.items],
         total: moreTxs.total
       }));
     } catch (err) {
@@ -847,6 +853,51 @@ export default function App() {
     }
   };
 
+  const handleCreateBill = async (payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await createBill(payload);
+      if (result?.id) {
+        setNewlyCreatedId(result.id);
+        setTimeout(() => setNewlyCreatedId(null), 3000); // Clear after 3s
+      }
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to save bill.");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateBill = async (billId, payload) => {
+    setLoading(true);
+    setError("");
+    try {
+      await updateBill(billId, payload);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to update bill.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteBill = async (billId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa hóa đơn này?")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await deleteBill(billId);
+      await loadFinanceData();
+    } catch (err) {
+      setError(err.message || "Failed to delete bill.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateSavingsGoal = async (payload) => {
     setLoading(true);
     setError("");
@@ -1069,6 +1120,10 @@ export default function App() {
             onDeleteTag={handleDeleteTag}
             userEmail={authState.user?.email}
             onCreateTransaction={handleCreateTransaction}
+            onCreateBill={handleCreateBill}
+            aiSuggestions={savingsTips}
+            monthlySeries={monthlySeries}
+            newlyCreatedId={newlyCreatedId}
             onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />
@@ -1136,14 +1191,30 @@ export default function App() {
           <RecurringScreen userEmail={authState.user?.email} />
         )}
 
+        {view === "bills" && (
+          <BillsScreen
+            bills={bills}
+            categories={categories}
+            accounts={accounts}
+            newlyCreatedId={newlyCreatedId}
+            loading={loading}
+            onGoOcr={() => handleChangeView("ocr")}
+            onCreateTransaction={handleCreateTransaction}
+            onUpdateBill={handleUpdateBill}
+            onDeleteBill={handleDeleteBill}
+          />
+        )}
+
         {view === "ocr" && (
           <OcrScreen
             categories={categories}
+            accounts={accounts}
             tags={tags}
             userEmail={authState.user?.email}
             onCreateCategory={handleCreateCategory}
             onCreateTag={handleCreateTag}
             onCreateTransaction={handleCreateTransaction}
+            onCreateBill={handleCreateBill}
             loading={loading}
             onClose={() => handleChangeView("dashboard")}
           />

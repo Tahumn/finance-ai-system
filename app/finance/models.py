@@ -91,9 +91,20 @@ class Transaction(Base):
     amount = Column(Float, nullable=False)
     transaction_type = Column(String, nullable=False)
     date = Column(Date, nullable=False)
+    ocr_confidence = Column(Float, nullable=True)
+    notes = Column(String, nullable=True)
+    image_path = Column(String, nullable=True)
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")
     category = relationship("Category")
     account = relationship("Account")
+
+    @property
+    def categoryLabel(self):
+        return self.category.name if self.category else "Khác"
+
+    @property
+    def accountName(self):
+        return self.account.name if self.account else "Tiền mặt"
 
 
 class Transfer(Base):
@@ -205,5 +216,17 @@ class Bill(Base):
     ocr_confidence = Column(Float, nullable=True)
     status = Column(String, nullable=False, default="pending")
     bill_number = Column(String, nullable=True)
+    image_path = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
     items = Column(JSON, nullable=True)
+    category = relationship("Category")
+    account = relationship("Account")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    @property
+    def category_name(self):
+        return self.category.name if self.category else None
+
+    @property
+    def account_name(self):
+        return self.account.name if self.account else None

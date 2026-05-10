@@ -166,6 +166,7 @@ services:
     - FINANCE_SERVICE_URL=http://finance:8000
     - NOTIFICATIONS_SERVICE_URL=http://notifications:8000
     - AI_SERVICE_URL=http://ai:8000
+    - OCR_SERVICE_URL=http://ocr:8000
     command:
     - uvicorn
     - app.gateway_main:app
@@ -190,6 +191,8 @@ services:
         condition: service_started
       recurring:
         condition: service_started
+    volumes:
+    - ./uploads:/app/uploads
     profiles:
     - micro
   auth:
@@ -238,6 +241,8 @@ services:
     depends_on:
       finance-postgres:
         condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
     profiles:
     - micro
   planning:
@@ -359,6 +364,8 @@ services:
     depends_on:
       ai-postgres:
         condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
     profiles:
     - micro
   redis:
@@ -534,6 +541,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance-ocr
+    env_file:
+    - .env
+    environment:
+    - DB_URL=${FINANCE_DB_URL:-postgresql://finance_user:finance_pass@finance-postgres:5432/finance_db}
+    - DB_SCHEMA=finance_service
+    command:
+    - uvicorn
+    - app.services.ocr_main:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    ports:
+    - 8008:8000
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
+    profiles:
+    - micro
+
 volumes:
   n8n_data: null
   dify_db_data: null

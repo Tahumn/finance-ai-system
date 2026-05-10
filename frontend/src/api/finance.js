@@ -177,3 +177,20 @@ export const listBills = async () => {
     throw err;
   }
 };
+
+export const createBill = (payload) =>
+  request("/finance/bills", {
+    method: "POST",
+    body: payload
+  });
+
+export const updateBill = (billId, payload) =>
+  request(`/finance/bills/${billId}`, {
+    method: "PUT",
+    body: payload
+  });
+
+export const deleteBill = (billId) =>
+  request(`/finance/bills/${billId}`, {
+    method: "DELETE"
+  });

@@ -348,6 +348,9 @@ def create_transaction(db: Session, current_user: RequestUser, payload: schemas.
         category_id=payload.category_id,
         account_id=payload.account_id,
         date=payload.date or date.today(),
+        ocr_confidence=payload.ocr_confidence,
+        notes=payload.notes,
+        image_path=payload.image_path,
     )
     if tags:
         db_tx.tags = tags
@@ -1170,6 +1173,8 @@ def create_bill(db: Session, current_user: RequestUser, payload: schemas.BillCre
         ocr_confidence=payload.ocr_confidence,
         status=payload.status,
         bill_number=payload.bill_number,
+        image_path=payload.image_path,
+        notes=payload.notes,
         items=[i.model_dump() for i in payload.items] if payload.items else None
     )
     db.add(item)

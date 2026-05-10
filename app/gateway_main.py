@@ -6,6 +6,7 @@ from typing import Iterable
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from app.realtime import socket_app
@@ -23,6 +24,7 @@ NOTIFICATIONS_SERVICE_URL = _service_url(
 AI_SERVICE_URL = _service_url("AI_SERVICE_URL", "http://ai:8000")
 PLANNING_SERVICE_URL = _service_url("PLANNING_SERVICE_URL", "http://planning:8000")
 RECURRING_SERVICE_URL = _service_url("RECURRING_SERVICE_URL", "http://recurring:8000")
+OCR_SERVICE_URL = _service_url("OCR_SERVICE_URL", "http://ocr:8000")
 
 
 
@@ -39,6 +41,8 @@ def _pick_upstream(path: str) -> str:
         return PLANNING_SERVICE_URL
     if path.startswith("/api/v1/recurring"):
         return RECURRING_SERVICE_URL
+    if path.startswith("/api/v1/ocr"):
+        return OCR_SERVICE_URL
     raise KeyError(path)
 
 
@@ -106,4 +110,5 @@ async def proxy_api_v1(full_path: str, request: Request) -> Response:
 
 # Keep websocket support on the gateway for now (no WS proxy in this MVP gateway).
 app.mount("/ws", socket_app)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

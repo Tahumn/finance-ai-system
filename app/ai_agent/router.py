@@ -78,15 +78,6 @@ def chat_history(
     return {"messages": messages}
 
 
-@router.post("/ocr", response_model=schemas.OcrResponse)
-async def ocr_receipt(
-    file: UploadFile = File(...),
-    current_user: RequestUser = Depends(get_active_request_user),
-):
-    _ = current_user
-    payload = await file.read()
-    return service.extract_ocr(payload)
-
 
 @router.get("/anomalies", response_model=schemas.AnomalyListResponse)
 def get_anomalies(

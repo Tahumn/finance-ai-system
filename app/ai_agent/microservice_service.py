@@ -60,6 +60,23 @@ AMOUNT_REGEX = re.compile(
 DATE_DDMM_REGEX = re.compile(r"(?P<day>\d{1,2})[./-](?P<month>\d{1,2})(?:[./-](?P<year>\d{2,4}))?")
 DATE_ISO_REGEX = re.compile(r"(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})")
 
+OCR_TOTAL_KEYWORDS = (
+    "tong cong", "tong tien", "tong", "cong", "thanh toan", "phai thanh toan",
+    "phai tra", "tong thanh toan", "tong tien thanh toan", "tong gia tri thanh toan",
+    "so tien", "amount due", "grand total", "total", "pay"
+)
+OCR_SUBTOTAL_KEYWORDS = (
+    "tam tinh", "subtotal", "thue", "vat", "tax", "phi", "giam gia",
+    "discount", "chiet khau", "tien thua", "change", "tien khach", "cash"
+)
+OCR_VAT_KEYWORDS = ("vat", "thue gtgt", "tien thue", "thue", "tax", "gtgt")
+OCR_ESTIMATE_KEYWORDS = (
+    "tam tinh", "subtotal", "estimated", "uoc tinh", "du kien",
+    "tong truoc thue", "gia truoc thue", "cong tien hang", "tien hang"
+)
+OCR_PRETAX_KEYWORDS = ("truoc thue", "pre tax", "before tax")
+CURRENCY_HINTS = ("vnd", "dong", "đ", "usd", "$", "eur", "yen", "jpy")
+
 TOTAL_HINTS = ("tong cong", "tong tien", "tong thanh toan", "grand total", "amount due", "total")
 INCOME_KEYWORDS = ("thu", "luong", "nhan", "bonus", "hoan tien", "lai", "lanh", "thuong", "duoc cho")
 EXPENSE_KEYWORDS = ("chi", "mua", "tra", "thanh toan", "an", "uong", "xang", "phi", "mat", "ton")
@@ -387,6 +404,7 @@ def ai_parse_transaction(text: str) -> dict:
         "TRẢ VỀ DUY NHẤT JSON. KHÔNG GIẢI THÍCH."
     )
     return get_gemini_response(text, sys_inst)
+
 
 def parse_transaction_text(
     db: Session,

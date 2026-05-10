@@ -663,9 +663,8 @@ def ensure_many_budgets(
         "Công nghệ": 4_500_000,
     }
 
-    has_period = model_has_column(Budget, "start_date") and model_has_column(
-        Budget, "end_date"
-    )
+    # Force False for Microservices to avoid unique constraint on (user_id, category_id)
+    has_period = False 
 
     if force:
         db.query(Budget).filter(Budget.user_id == user_id).delete(
@@ -776,21 +775,7 @@ def seed_user_recent_transactions(
     )
 
     if existing_recent and not force:
-        categories = ensure_categories(db, user.id)
-        created_budgets = ensure_many_budgets(
-            db,
-            user_id=user.id,
-            categories=categories,
-            start=start,
-            today=today,
-            force=False,
-            rng=rng,
-        )
-        created_goals = ensure_savings_goals(db, user_id=user.id, force=False, today=today)
-        created_goal_plans = ensure_savings_goal_plans(db, user_id=user.id, force=False, today=today)
-        db.commit()
-
-        return 0, existing_recent, created_budgets, created_goals, created_goal_plans
+        return 0, existing_recent, 0, 0, 0
 
     if force and existing_recent:
         (
@@ -814,20 +799,12 @@ def seed_user_recent_transactions(
             return [payment_tag, domain_tag]
         return [payment_tag]
 
-    created_budgets = ensure_many_budgets(
-        db,
-        user_id=user.id,
-        categories=categories,
-        start=start,
-        today=today,
-        force=force,
-        rng=rng,
-    )
-    created_goals = ensure_savings_goals(db, user_id=user.id, force=force, today=today)
-    created_goal_plans = ensure_savings_goal_plans(db, user_id=user.id, force=force, today=today)
-    
     all_accounts = db.query(Account).filter(Account.user_id == user.id).all()
-    ensure_bills(db, user.id, categories, all_accounts, today)
+    if not all_accounts:
+        ensure_account(db, user.id)
+        all_accounts = db.query(Account).filter(Account.user_id == user.id).all()
+    
+    account = all_accounts[0]
 
     rows: list[Transaction] = []
 
@@ -1096,9 +1073,10 @@ def seed_user_recent_transactions(
         current += timedelta(days=1)
 
     db.add_all(rows)
+    db.flush()
     db.commit()
 
-    return len(rows), existing_recent, created_budgets, created_goals, created_goal_plans
+    return len(rows), existing_recent, 0, 0, 0
 
 
 def parse_args():
@@ -1151,6 +1129,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--user-id",
+        type=int,
+        default=1,
+        help="Manual user ID to seed for (for microservices).",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=20260412,
@@ -1162,72 +1146,96 @@ def parse_args():
 
 def main():
     args = parse_args()
-
     months = max(1, int(args.months))
-
     db = SessionLocal()
 
     try:
-        if args.email:
-            users = db.query(User).filter(User.email == args.email).all()
-        else:
-            users = db.query(User).all()
+        from sqlalchemy.exc import ProgrammingError
+        users = []
+        try:
+            if args.email:
+                users = db.query(User).filter(User.email == args.email).all()
+            else:
+                users = db.query(User).all()
+        except ProgrammingError as e:
+            db.rollback()  # Crucial: Reset the transaction after failure
+            if "users" in str(e).lower():
+                print(f"[seed] 'users' table not found (Microservices mode). Seeding for User ID: {args.user_id}")
+                # Create a dummy user object with the provided ID
+                from dataclasses import dataclass
+                @dataclass
+                class DummyUser:
+                    id: int
+                    email: str
+                users = [DummyUser(id=args.user_id, email=args.email or "unknown@example.com")]
+            else:
+                raise e
 
         if not users and args.create_demo_user:
-            demo_email = args.email or args.demo_email
-
-            user = ensure_user(
-                db,
-                email=demo_email,
-                username=args.demo_username,
-                password=args.demo_password,
-            )
-
-            users = [user]
-
-            print(f"[seed] Created demo user: {user.email}")
-            print(f"[seed] Demo password: {args.demo_password}")
-
-        if not users:
-            print("[seed] No user found. Use --email or --create-demo-user.")
-            return
+            # Only try to create if users table exists
+            try:
+                demo_email = args.email or args.demo_email
+                print(f"[seed] Creating demo user: {demo_email}")
+                user = ensure_user(
+                    db,
+                    email=demo_email,
+                    username=args.demo_username,
+                    password=args.demo_password,
+                )
+                users = [user]
+            except Exception:
+                print("[seed] Could not create user (likely missing table). Using default ID.")
+                from dataclasses import dataclass
+                @dataclass
+                class DummyUser:
+                    id: int
+                    email: str
+                users = [DummyUser(id=args.user_id, email=args.email or "unknown@example.com")]
 
         for user in users:
-            created_transactions, existing_recent, created_budgets, created_goals, created_goal_plans = (
-                seed_user_recent_transactions(
-                    db=db,
-                    user=user,
-                    months=months,
-                    force=args.force,
-                    seed_base=args.seed,
+            print(f"[seed] Seeding for user: {user.email} (ID: {user.id})")
+            
+            # Seed transactions
+            try:
+                created_transactions, existing_recent, _, _, _ = seed_user_recent_transactions(
+                    db=db, user=user, months=months, force=args.force, seed_base=args.seed
                 )
-            )
+                print(f"[seed] Created {created_transactions} transactions.")
+            except Exception as e:
+                db.rollback()
+                print(f"[seed] Could not seed transactions: {e}")
 
-            if created_transactions == 0 and existing_recent > 0 and not args.force:
-                print(
-                    f"[seed] Skip transactions for {user.email}: "
-                    f"already has {existing_recent} transaction(s) "
-                    f"in last {months} month(s). "
-                    f"Run again with --force to replace."
+            # Seed budgets
+            try:
+                categories = ensure_categories(db, user.id)
+                created_budgets = ensure_many_budgets(
+                    db, user_id=user.id, categories=categories,
+                    start=month_start_offset(date.today(), months),
+                    today=date.today(), force=args.force, rng=random.Random(args.seed)
                 )
+                print(f"[seed] Created {created_budgets} budgets.")
+            except Exception as e:
+                db.rollback()
+                print(f"[seed] Could not seed budgets: {e}")
 
-                print(
-                    f"[seed] User {user.email}: created {created_budgets} budget(s)."
-                )
-                print(
-                    f"[seed] User {user.email}: created {created_goals} saving goal(s)."
-                )
-                print(
-                    f"[seed] User {user.email}: created {created_goal_plans} savings goal plan row(s)."
-                )
-            else:
-                print(
-                    f"[seed] User {user.email}: "
-                    f"created {created_transactions} transaction(s), "
-                    f"created {created_budgets} budget(s), "
-                    f"created {created_goals} saving goal(s), "
-                    f"created {created_goal_plans} savings goal plan row(s)."
-                )
+            # Seed goals
+            try:
+                created_goals = ensure_savings_goals(db, user_id=user.id, force=args.force, today=date.today())
+                print(f"[seed] Created {created_goals} goals.")
+            except Exception as e:
+                db.rollback()
+                print(f"[seed] Could not seed goals (table likely missing): {e}")
+
+            # Seed savings goal plans
+            try:
+                created_goal_plans = ensure_savings_goal_plans(db, user_id=user.id, force=args.force, today=date.today())
+                print(f"[seed] Created {created_goal_plans} goal plans.")
+            except Exception as e:
+                db.rollback()
+                print(f"[seed] Could not seed goal plans (table likely missing): {e}")
+
+            db.commit()
+            print(f"[seed] Completed seeding for {user.email}")
 
     finally:
         db.close()

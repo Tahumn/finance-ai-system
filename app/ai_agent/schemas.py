@@ -50,18 +50,59 @@ class ChatHistoryResponse(BaseModel):
     messages: list[ChatMessageRead] = []
 
 
-class OcrResponse(BaseModel):
-    merchant: str | None = None
+class OcrLineItem(BaseModel):
+    name: str | None = None
+    quantity: float | None = None
+    unit_price: float | None = None
     total: float | None = None
-    date: DateType | None = None
-    vat: float | None = None
-    estimated: float | None = None
-    note: str | None = None
-    computed_total: float | None = None
-    total_delta: float | None = None
-    is_total_consistent: bool | None = None
+
+
+class OcrConfidence(BaseModel):
+    merchant: float = 0.0
+    transaction_date: float = 0.0
+    payment_source: float = 0.0
+    category: float = 0.0
+    tags: float = 0.0
+    suggested_note: float = 0.0
+    subtotal_before_tax: float = 0.0
+    vat_amount: float = 0.0
+    discount_amount: float = 0.0
+    final_total: float = 0.0
+
+
+class OcrData(BaseModel):
+    merchant: str | None = None
+    transaction_date: DateType | None = None
+    transaction_type: Literal["income", "expense"] = "expense"
+    payment_source: str | None = None
+    category: str | None = None
+    tags: list[str] = []
+    suggested_note: str | None = None
+    raw_ocr_text: str = ""
+    subtotal_before_tax: float | None = None
+    vat_amount: float | None = None
+    discount_amount: float | None = None
+    final_total: float | None = None
+    currency: str = "VND"
+    line_items: list[OcrLineItem] = []
+    image_path: str | None = None
+
+
+class OcrMoneyValidation(BaseModel):
+    formula: str = "subtotal_before_tax + vat_amount - discount_amount = final_total"
+    is_valid: bool = True
+    delta: float = 0.0
+
+
+class OcrDebug(BaseModel):
+    money_validation: OcrMoneyValidation
+
+
+class OcrResponse(BaseModel):
+    data: OcrData
+    confidence: OcrConfidence
     warnings: list[str] = []
-    text: str = ""
+    debug: OcrDebug | None = None
 
 
 class AnomalyAlert(BaseModel):
