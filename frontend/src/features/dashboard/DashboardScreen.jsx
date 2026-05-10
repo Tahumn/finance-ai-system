@@ -214,6 +214,8 @@ export default function DashboardScreen({
   userEmail,
   savingsGoals = [],
   budgets = [],
+  filters = { start: "", end: "" },
+  onFiltersChange
 }) {
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
@@ -236,8 +238,27 @@ export default function DashboardScreen({
       }));
 
   const [showBalance, setShowBalance] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
 
-  // Chỉ hiển thị ngân sách thật từ API.
+  const dateRangeLabel = rangePreset === "thisMonth" ? "Tháng này" : 
+                         rangePreset === "lastMonth" ? "Tháng trước" :
+                         rangePreset === "last7days" ? "7 ngày qua" :
+                         rangePreset === "last30days" ? "30 ngày qua" :
+                         rangePreset === "last90days" ? "90 ngày qua" :
+                         rangePreset === "thisYear" ? "Năm nay" :
+                         rangePreset === "all" ? "Tất cả" :
+                         `${new Date(filters.start).toLocaleDateString('vi-VN')} - ${new Date(filters.end).toLocaleDateString('vi-VN')}`;
+
+  const PRESETS = [
+    { label: "7 ngày qua", value: "last7days" },
+    { label: "30 ngày qua", value: "last30days" },
+    { label: "Tháng này", value: "thisMonth" },
+    { label: "Tháng trước", value: "lastMonth" },
+    { label: "Năm nay", value: "thisYear" },
+    { label: "Tùy chỉnh", value: "custom" },
+    { label: "Tất cả", value: "all" },
+  ];
+
   const budgetRows = (Array.isArray(budgets) ? budgets : []).slice(0, 4).map((item) => {
     const spent = Number(item.spent || 0);
     const total = Number(item.amount || 0) || Math.max(spent, 1);
@@ -254,6 +275,38 @@ export default function DashboardScreen({
 
   return (
     <div className="dashboard-container">
+      {/* Date Filter Bar */}
+      <div className="dashboard-filter-bar">
+        <button className="db-date-btn" onClick={() => setShowDateModal(!showDateModal)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>{dateRangeLabel}</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        {showDateModal && (
+          <div className="db-date-dropdown">
+            {PRESETS.map(p => (
+              <button key={p.value} className={rangePreset === p.value ? "active" : ""} onClick={() => { 
+                if (p.value !== 'custom') {
+                  onSelectPreset(p.value); 
+                  setShowDateModal(false); 
+                } else {
+                  onSelectPreset('custom');
+                }
+              }}>
+                {p.label}
+              </button>
+            ))}
+            {rangePreset === 'custom' && (
+              <div className="db-custom-range">
+                <input type="date" value={filters.start} onChange={e => onFiltersChange({ ...filters, start: e.target.value })} />
+                <input type="date" value={filters.end} onChange={e => onFiltersChange({ ...filters, end: e.target.value })} />
+                <button className="db-apply-btn" onClick={() => setShowDateModal(false)}>Áp dụng</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 1. Full-width Balance Card */}
       <section className="dashboard-balance-card">
         <div className="dbc-content">
@@ -531,7 +584,7 @@ export default function DashboardScreen({
                   <div key={goal.id} className="dp-goal-card">
                     <div className="dp-goal-top">
                       <div className="dp-goal-icon" style={{background: clr.light, color: clr.text}}>
-                        🎯
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                       </div>
                       <div className="dp-goal-info">
                         <span className="dp-goal-name">{goal.name}</span>

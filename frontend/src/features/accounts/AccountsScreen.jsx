@@ -133,7 +133,6 @@ export default function AccountsScreen({
         <div className="acc-header-icon"><WalletIcon /></div>
         <div className="acc-header-text">
           <h1>Ví & Tài khoản</h1>
-          <p>Quản lý tài khoản thanh toán và thẻ của bạn.</p>
         </div>
         <button className="acc-mobile-add-btn" onClick={() => { setForm(emptyAccount); setEditingId(null); setShowForm(true); }}>
           <PlusIcon />

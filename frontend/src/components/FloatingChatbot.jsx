@@ -6,7 +6,7 @@ import "./FloatingChatbot.css";
 const RobotIcon = ({ size = 24 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
-    <path d="M7 11C7 8.23858 9.23858 6 12 6C14.7614 6 17 8.23858 17 11V14C17 16.7614 14.7614 19 12 19C9.23858 19 7 16.7614 7 14V11Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+    <path d="M7 11C7 8.23858 9.23858 6 12 6C14.7614 6 17 8.23858 17 11V14C17 16.7614 14.7614 19 12 19C9.23858 19 7 16.7614 7 14V11Z" fill="currentColor" fillOpacity="0.1" stroke="currentColor" strokeWidth="1.5" />
     <rect x="9" y="10" width="6" height="4" rx="2" fill="currentColor" />
     <circle cx="10.5" cy="12" r="0.8" fill="white" />
     <circle cx="13.5" cy="12" r="0.8" fill="white" />
@@ -201,7 +201,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               <span>{data.date || "---"}</span>
             </div>
           </div>
-          <button 
+          <button
             className="save-tx-btn"
             onClick={() => handleSaveOcr(data)}
             disabled={loading}
@@ -245,11 +245,11 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
     try {
       const response = await chatWithAi(text);
       let content = response.answer;
-      
-      const newMsg = { 
-        role: "assistant", 
+
+      const newMsg = {
+        role: "assistant",
         content,
-        intent: response.intent 
+        intent: response.intent
       };
 
       // Tự động nhận diện ý định để lấy dữ liệu phong phú (Rich Data)
@@ -270,7 +270,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
       setMessages((prev) => [...prev, newMsg]);
 
       const refreshIntents = [
-        "create_transaction", 
+        "create_transaction",
         "create_transactions",
         "create_expense",
         "create_income",
@@ -326,7 +326,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               −
             </button>
           </header>
-          
+
           <div className="chatbot-messages" ref={scrollRef}>
             {messages.map((msg, idx) => (
               <div key={idx} className={`message-row ${msg.role}`}>
@@ -360,8 +360,8 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
               <>
                 <div className="quick-actions-bar">
                   {QUICK_ACTIONS.map((action, i) => (
-                    <button 
-                      key={i} 
+                    <button
+                      key={i}
                       className="action-chip"
                       onClick={() => handleSend(action.query)}
                       disabled={loading}
@@ -399,7 +399,7 @@ export default function FloatingChatbot({ isAuthed, userEmail, onCreateTransacti
           <div className="launcher-icon">
             <RobotIcon size={26} />
           </div>
-          {!isMinimized ? <div className="launcher-label">trợ lý AI -</div> : null}
+          {!isMinimized ? <div className="launcher-label">Chat AI</div> : null}
         </button>
       )}
     </div>

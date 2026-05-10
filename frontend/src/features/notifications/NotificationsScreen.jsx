@@ -81,7 +81,6 @@ export default function NotificationsScreen({
       <div className="notif-header">
         <div className="notif-title-area">
           <h2>{t("notif.page_title", null, "Thông báo")}</h2>
-          <p>{t("notif.subtitle", null, "Cập nhật mới nhất cho bạn")}</p>
         </div>
         <div className="notif-header-actions">
           <button className="notif-btn-ghost" type="button" onClick={onMarkAllRead}>

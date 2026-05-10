@@ -181,7 +181,6 @@ export default function GoalsScreen({
       <header className="goal-header modern">
         <div>
           <h1>Mục tiêu tiết kiệm</h1>
-          <p>Thiết lập lộ trình tài chính và theo dõi tiến độ tích lũy thông minh.</p>
         </div>
         <button
           type="button"

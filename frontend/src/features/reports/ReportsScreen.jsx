@@ -232,7 +232,6 @@ export default function ReportsScreen({
       <div className="rpt-header-top">
         <div className="rpt-title-block">
           <h1 className="rpt-title">Báo cáo & Phân tích</h1>
-          <p className="rpt-subtitle">Nhìn lại hành trình tài chính của bạn</p>
         </div>
         <div className="rpt-header-actions">
           <div className="rpt-tx-date-filter">

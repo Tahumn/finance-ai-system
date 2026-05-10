@@ -73,7 +73,6 @@ export default function SettingsScreen({ user, onLogout }) {
     <div className="stg-container">
       <div className="stg-header-top">
         <h2 className="stg-header-title">Cài đặt</h2>
-        <p className="stg-header-subtitle">Quản lý tài khoản, tùy chỉnh ứng dụng và bảo mật thông tin của bạn.</p>
       </div>
 
       <div className="stg-profile-card">

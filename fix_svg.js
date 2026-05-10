@@ -1,0 +1,1 @@
+const fs = require('fs'); const file = 'frontend/src/features/transactions/TransactionsScreen.jsx'; let content = fs.readFileSync(file, 'utf8'); content = content.replace(/<meta\.SvgIcon\s+size=\{([0-9]+)\}\s*\/>/g, '{(() => { const Icon = meta.SvgIcon; return <Icon size={$1} />; })()}'); fs.writeFileSync(file, content);
