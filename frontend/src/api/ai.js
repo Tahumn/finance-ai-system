@@ -32,7 +32,7 @@ export const getChatHistory = (limit = 50) =>
 export const extractOcr = (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  return requestForm("/ai/ocr", formData);
+  return requestForm("/ocr/scan", formData);
 };
 
 export const getAnomalies = () => request("/ai/anomalies");
