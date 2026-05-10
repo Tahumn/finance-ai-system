@@ -5673,7 +5673,7 @@ body[data-app-mode="web"] .app-shell-topnav {
 
 .chat-bubble.is-bot { align-self: flex-start; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: 4px 22px 22px 22px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04); } 
 
-.chat-bubble.is-user { align-self: flex-end; background: linear-gradient(135deg, #1565c0, #0c418c); color: #fff; border-radius: 22px 22px 4px 22px; box-shadow: 0 8px 25px rgba(21, 101, 192, 0.2); } 
+.chat-bubble.is-user { align-self: flex-end; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; border-radius: 22px 22px 4px 22px; box-shadow: 0 8px 25px rgba(37, 99, 235, 0.15); } 
 
 .bubble-content { padding: 12px 18px; } 
 .chat-bubble p { margin: 0; line-height: 1.6; font-size: 15px; } 
@@ -8020,3 +8020,216 @@ body.tx-modal-open .mobile-nav-wrapper {
     font-size: 12px !important;
   }
 }
+
+/* Dashboard Early Warning & Enhanced Cashflow */
+.dashboard-warning-row {
+  margin-bottom: 24px;
+}
+
+.early-warning-panel {
+  background: linear-gradient(135deg, #fff, #fff5f5) !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.08) !important;
+}
+
+:root[data-theme="dark"] .early-warning-panel {
+  background: linear-gradient(135deg, #1e1b1b, #2d1a1a) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.dp-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.warning-icon-pulse {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 8px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: warning-pulse 2s infinite;
+}
+
+@keyframes warning-pulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.warning-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ef4444;
+  background: #fef2f2;
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.anomaly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.anomaly-card-premium {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--bg);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.anomaly-card-premium:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 20px -8px rgba(0,0,0,0.1);
+}
+
+.anomaly-card-premium::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+.anomaly-card-premium.severity-high::before { background: #ef4444; }
+.anomaly-card-premium.severity-medium::before { background: #f59e0b; }
+.anomaly-card-premium.severity-low::before { background: #3b82f6; }
+
+.acp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.acp-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.acp-badge.high { background: #fee2e2; color: #ef4444; }
+.acp-badge.medium { background: #fef3c7; color: #d97706; }
+.acp-badge.low { background: #dbeafe; color: #2563eb; }
+
+.acp-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.acp-body h4 {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.acp-reason {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.acp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.acp-amount {
+  display: flex;
+  flex-direction: column;
+}
+
+.acp-amount span {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.acp-amount strong {
+  font-size: 16px;
+  color: #ef4444;
+}
+
+.acp-action {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.acp-action:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+/* Detailed Metrics for Cashflow */
+.dp-footer-metrics-detailed {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding-top: 20px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.fmd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fmd-item.highlight {
+  background: var(--card-soft);
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.fmd-label {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.fmd-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.text-green { color: #10b981; }
+.text-red { color: #ef4444; }
+.text-purple { color: #8b5cf6; }
+
+.dp-title-group h3 { margin-bottom: 2px; }
+.dp-subtitle { font-size: 12px; color: #94a3b8; margin: 0; }
+
+.dbc-trend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.trend-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.trend-tag.up { background: #d1fae5; color: #059669; }
+.trend-tag.down { background: #fee2e2; color: #b42318; }

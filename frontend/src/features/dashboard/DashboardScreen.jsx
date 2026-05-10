@@ -219,18 +219,28 @@ export default function DashboardScreen({
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
   const { series: waveSource } = buildWaveSeries(transactions, monthlySeries);
   const trendSeries = buildLineSeries(waveSource);
-  const trendChartDataRaw = waveSource.map((item) => ({
-    label: String(item.month || "").slice(5).replace("-", "/"),
-    income: Number(item.income || 0),
-    expense: Number(item.expense || 0)
-  }));
+  const trendChartDataRaw = waveSource.map((item) => {
+    const income = Number(item.income || 0);
+    const expense = Number(item.expense || 0);
+    return {
+      label: String(item.month || "").slice(5).replace("-", "/"),
+      income,
+      expense,
+      net: income - expense
+    };
+  });
   const trendChartData = trendChartDataRaw.length >= 2
     ? trendChartDataRaw
-    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => ({
-        label: String(item.month || "").slice(5).replace("-", "/"),
-        income: Number(item.income || 0),
-        expense: Number(item.expense || 0)
-      }));
+    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => {
+        const income = Number(item.income || 0);
+        const expense = Number(item.expense || 0);
+        return {
+          label: String(item.month || "").slice(5).replace("-", "/"),
+          income,
+          expense,
+          net: income - expense
+        };
+      });
 
   const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
     const spent = Number(item.spent || 0);
@@ -245,6 +255,10 @@ export default function DashboardScreen({
     };
   });
 
+  const totalIncome = summary?.total_income || 0;
+  const totalExpense = summary?.total_expense || 0;
+  const netFlow = totalIncome - totalExpense;
+
   return (
     <div className="dashboard-container">
       {/* 1. Full-width Balance Card */}
@@ -255,7 +269,12 @@ export default function DashboardScreen({
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </div>
           <h2>{currency(summary?.balance || 0)}</h2>
-          <p className="dbc-update">Cập nhật lúc 16:54</p>
+          <div className="dbc-trend">
+            <span className={`trend-tag ${netFlow >= 0 ? 'up' : 'down'}`}>
+              {netFlow >= 0 ? '↑' : '↓'} {percent(Math.abs(netFlow) / (totalIncome || 1))}
+            </span>
+            <p className="dbc-update">Cập nhật lúc 16:54</p>
+          </div>
         </div>
         <div className="dbc-graphic">
           <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
@@ -271,7 +290,7 @@ export default function DashboardScreen({
             </div>
             <div className="mc-info">
               <p>Tổng thu nhập</p>
-              <h3>{currency(summary?.total_income || 0)}</h3>
+              <h3>{currency(totalIncome)}</h3>
             </div>
           </div>
           <div className="metric-card compact">
@@ -280,7 +299,7 @@ export default function DashboardScreen({
             </div>
             <div className="mc-info">
               <p>Tổng chi tiêu</p>
-              <h3>{currency(summary?.total_expense || 0)}</h3>
+              <h3>{currency(totalExpense)}</h3>
             </div>
           </div>
           <div className="metric-card compact">
@@ -288,70 +307,111 @@ export default function DashboardScreen({
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5"/><path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z"/><circle cx="16" cy="14" r="1"/></svg>
             </div>
             <div className="mc-info">
-              <p>Tiết kiệm ước tính</p>
-              <h3>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</h3>
+              <p>Dòng tiền ròng</p>
+              <h3 className={netFlow >= 0 ? "text-green" : "text-red"}>{currency(netFlow)}</h3>
             </div>
           </div>
         </div>
       </section>
 
+      {/* 2. Early Warning Row (New) */}
+      {anomalies.length > 0 && (
+        <section className="dashboard-warning-row">
+          <div className="dashboard-panel early-warning-panel">
+            <div className="dp-header">
+              <div className="dp-title-with-icon">
+                <div className="warning-icon-pulse">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>
+                </div>
+                <h3>HỆ THỐNG CẢNH BÁO SỚM</h3>
+              </div>
+              <span className="warning-count">{anomalies.length} phát hiện mới</span>
+            </div>
+            <div className="dp-body anomaly-grid">
+              {anomalies.map((alert) => (
+                <div key={alert.id} className={`anomaly-card-premium severity-${alert.severity}`}>
+                  <div className="acp-header">
+                    <span className={`acp-badge ${alert.severity}`}>{alert.severity.toUpperCase()}</span>
+                    <span className="acp-date">{new Date(alert.date).toLocaleDateString('vi-VN')}</span>
+                  </div>
+                  <div className="acp-body">
+                    <h4>{alert.description}</h4>
+                    <p className="acp-reason">{alert.reason}</p>
+                    <div className="acp-footer">
+                      <div className="acp-amount">
+                        <span>Số tiền biến động:</span>
+                        <strong>{currency(alert.amount)}</strong>
+                      </div>
+                      <button className="acp-action">Kiểm tra ngay</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 3. Charts Row */}
       <section className="dashboard-charts-row">
         <div className="dashboard-panel chart-cashflow">
           <div className="dp-header">
-            <h3>Dòng tiền trong tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
+            <div className="dp-title-group">
+               <h3>Dòng tiền & Xu hướng</h3>
+               <p className="dp-subtitle">Phân tích thu chi và hiệu quả dòng tiền ròng</p>
+            </div>
             <div className="dp-legend">
               <span className="legend-dot green"></span> Thu nhập
               <span className="legend-dot pink"></span> Chi tiêu
+              <span className="legend-dot purple"></span> Dòng tiền ròng
             </div>
           </div>
           <div className="dp-body">
             {trendChartData.length ? (
               <div className="line-chart compact wave">
-                <ResponsiveContainer width="100%" height={210}>
+                <ResponsiveContainer width="100%" height={260}>
                   <AreaChart data={trendChartData}>
                     <defs>
                       <linearGradient id="dashIncome" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02}/>
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.01}/>
                       </linearGradient>
                       <linearGradient id="dashExpense" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.02}/>
+                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.01}/>
+                      </linearGradient>
+                      <linearGradient id="dashNet" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.01}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
-                    <XAxis dataKey="label" />
-                    <YAxis />
-                    <Tooltip formatter={(v) => currency(v)} />
-                    <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
-                    <Area type="monotone" dataKey="expense" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', padding: '12px'}}
+                      formatter={(v) => [currency(v), ""]}
+                    />
+                    <Area type="monotone" dataKey="income" name="Thu nhập" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                    <Area type="monotone" dataKey="expense" name="Chi tiêu" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                    <Area type="monotone" dataKey="net" name="Dòng tiền ròng" stroke="#8b5cf6" fill="url(#dashNet)" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : <p className="empty">Chưa có dữ liệu</p>}
           </div>
-          <div className="dp-footer-metrics">
-            <div className="fm-item">
-              <div className="fm-icon green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
-              <div>
-                <p>Tổng thu nhập</p>
-                <strong>{currency(summary?.total_income || 0)}</strong>
-              </div>
+          <div className="dp-footer-metrics-detailed">
+            <div className="fmd-item">
+               <span className="fmd-label">Thu nhập trung bình</span>
+               <span className="fmd-value text-green">{currency(totalIncome / Math.max(1, trendChartData.length))}</span>
             </div>
-            <div className="fm-item">
-              <div className="fm-icon red"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-              <div>
-                <p>Tổng chi tiêu</p>
-                <strong>{currency(summary?.total_expense || 0)}</strong>
-              </div>
+            <div className="fmd-item">
+               <span className="fmd-label">Chi tiêu trung bình</span>
+               <span className="fmd-value text-red">{currency(totalExpense / Math.max(1, trendChartData.length))}</span>
             </div>
-            <div className="fm-item">
-              <div className="fm-icon purple"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg></div>
-              <div>
-                <p>Dòng tiền ròng</p>
-                <strong>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</strong>
-              </div>
+            <div className="fmd-item highlight">
+               <span className="fmd-label">Tỷ lệ tiết kiệm</span>
+               <span className="fmd-value text-purple">{percent(netFlow / (totalIncome || 1))}</span>
             </div>
           </div>
         </div>
