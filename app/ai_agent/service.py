@@ -1,3 +1,12 @@
+# File này xử lý nghiệp vụ:
+# chat AI,
+# OCR,
+# phân tích giao dịch,
+# parse tiếng Việt,
+# classify thu/chi,
+# thống kê,
+# dự đoán tài chính
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +23,7 @@ import urllib.error
 import urllib.request
 import os
 try:
-    import google.generativeai as genai  # type: ignore
+    import google.generativeai as genai  
 except Exception:
     genai = None
 
@@ -42,8 +51,8 @@ from app.finance.models import (
 )
 
 try:
-    import cv2  # type: ignore
-    import numpy as np  # type: ignore
+    import cv2  
+    import numpy as np  
 except Exception:
     cv2 = None
     np = None
@@ -555,9 +564,8 @@ _ACCOUNTS_BY_USER: dict[int, set[str]] = {}
 def _normalize_text(text: str) -> str:
     if not text:
         return ""
-    # Chuyển thành chữ thường
+    # Normalize text
     text = text.lower().strip()
-    # Loại bỏ dấu tiếng Việt (NFKD normalization)
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     # Thay thế teencode phổ biến cho heuristic
     teencode_map = {
@@ -1064,20 +1072,6 @@ def _needs_amount_clarification(text: str, amount: float | None) -> bool:
     return not _amount_has_unit(text)
 
 
-def _extract_json(text: str) -> dict | None:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
 def _coerce_amount(value: object) -> float | None:
     if value is None:
         return None
@@ -1164,50 +1158,6 @@ def _extract_reminder_channel(text: str) -> str | None:
     if "n8n" in normalized:
         return "n8n"
     return None
-
-
-def _call_dify(
-    text: str,
-    user_id: int,
-    json_schema: dict | None = None,
-) -> dict | None:
-    if not settings.dify_api_base or not settings.dify_api_key:
-        return None
-    base = settings.dify_api_base.rstrip("/")
-    url = f"{base}/chat-messages"
-    query = text
-    if settings.dify_force_json and json_schema:
-        query = (
-            "Return JSON only. Use the schema. If missing, use null. "
-            f"Input: {text}"
-        )
-    payload = {
-        "inputs": {},
-        "query": query,
-        "response_mode": "blocking",
-        "user": str(user_id),
-    }
-    if json_schema:
-        payload["response_format"] = {"type": "json_schema", "json_schema": json_schema}
-    data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "Authorization": f"Bearer {settings.dify_api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=settings.dify_timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.URLError:
-        return None
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:
-        return None
 
 
 def _parse_transaction_type(text: str) -> str:
@@ -1591,7 +1541,7 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
     
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         response = model.generate_content(prompt)
         text_val = getattr(response, "text", "{}")
         return _extract_json(text_val) or {}
@@ -1693,7 +1643,7 @@ def get_spending_forecast(
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
                 or settings.gemini_model
-                or "gemini-1.5-flash"
+                or "gemini-1.5-flash-latest"
             )
             model = genai.GenerativeModel(
                 model_name=model_name,
@@ -1781,7 +1731,7 @@ def get_savings_suggestions(
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
                 or settings.gemini_model
-                or "gemini-1.5-flash"
+                or "gemini-1.5-flash-latest"
             )
             model = genai.GenerativeModel(
                 model_name=model_name,
@@ -2338,7 +2288,7 @@ def _call_gemini_chat(text: str, history: list[ChatMessage] | None = None) -> di
         return None
     
     genai.configure(api_key=settings.gemini_api_key)
-    MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash"
+    MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash-latest"
 
     system_instruction = """Bạn là FoodFast AI - Trợ lý tài chính cá nhân thông minh bậc nhất.
 Nhiệm vụ: Phân tích hội thoại và trích xuất dữ liệu tài chính chính xác.
@@ -2472,7 +2422,7 @@ def _call_gemini_freeform(text: str, history: list[ChatMessage] | None = None) -
         os.environ.get("GEMINI_MODEL_NAME")
         or settings.gemini_model_name
         or settings.gemini_model
-        or "gemini-1.5-flash"
+        or "gemini-1.5-flash-latest"
     )
 
     system_instruction = (
@@ -3314,7 +3264,7 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
             os.environ.get("GEMINI_MODEL_NAME")
             or settings.gemini_model_name
             or settings.gemini_model
-            or "gemini-1.5-flash"
+            or "gemini-1.5-flash-latest"
         )
         model = genai.GenerativeModel(
             model_name=model_name,
@@ -3568,6 +3518,8 @@ def _extract_merchant_from_lines(lines: list[str]) -> str | None:
 
 def extract_ocr(image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
+    if image.mode == "RGBA":
+        image = image.convert("RGB")
 
     gemini_result = None
     if settings.ocr_provider.lower() == "gemini" or settings.gemini_api_key:
