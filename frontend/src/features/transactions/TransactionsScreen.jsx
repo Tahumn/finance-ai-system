@@ -1085,8 +1085,7 @@ export default function TransactionsScreen({
           <div className="tx-payment-tabs">
             {[
               { value: "all", label: "Tất cả" },
-              { value: "cash", label: "Tiền mặt" },
-              { value: "bank", label: "Ngân hàng" },
+              ...accounts.map(acc => ({ value: String(acc.id), label: acc.name }))
             ].map((tab) => (
               <button
                 key={tab.value}
@@ -1930,6 +1929,7 @@ export default function TransactionsScreen({
             </div>
             <OcrScreen
               categories={categories}
+              accounts={accounts}
               tags={tags}
               userEmail={userEmail}
               onCreateCategory={onCreateCategory}

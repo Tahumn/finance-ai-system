@@ -8201,3 +8201,170 @@ body.tx-modal-open .mobile-nav-wrapper {
     font-size: 12px !important;
   }
 }
+/* ===== Mobile: Transactions Screen (White Theme) ===== */
+@media (max-width: 768px) {
+  .tx-page.mobile-white-theme {
+    background: #f8fafc;
+    min-height: 100vh;
+    padding-bottom: 100px;
+  }
+  .tx-top-header {
+    padding: 20px 16px 12px;
+    background: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .white-bg-row {
+    background: white;
+    padding: 0 16px 16px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .tx-payment-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .tx-payment-tabs::-webkit-scrollbar { display: none; }
+  .tx-tab {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .tx-tab.active {
+    background: #fdf2f8;
+    color: #db2777;
+    border-color: #fbcfe8;
+  }
+  .tx-date-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  }
+  .white-cards {
+    padding: 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .tx-sum-card.white {
+    background: white;
+    border-radius: 20px;
+    padding: 16px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  }
+  .tx-sum-card.count.white {
+    grid-column: span 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+  .tx-mobile-cat-section, .tx-mobile-tags-section {
+    background: white;
+    margin: 0 16px 16px;
+    padding: 16px;
+    border-radius: 20px;
+    border: 1px solid #f1f5f9;
+  }
+  .tx-m-sec-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0 0 12px 0;
+    color: #1e293b;
+  }
+  .tx-mobile-pills-filter {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 0 16px 20px;
+  }
+  .tx-pill-f {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tx-pill-f span {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .tx-pill-f select {
+    width: 100%;
+    padding: 10px 12px;
+    background: white !important; /* Đảm bảo màu trắng */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #1e293b;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .tx-group-premium {
+    background: white;
+    margin: 0 16px 12px;
+    border-radius: 20px;
+    border: 1px solid #f1f5f9;
+    overflow: hidden;
+  }
+  .tx-group-header-p {
+    width: 100%;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: none;
+    border: none;
+    text-align: left;
+  }
+  .tx-gp-icon-p {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tx-gp-info-p { flex: 1; min-width: 0; }
+  .tx-gp-name-p { display: block; font-size: 14px; font-weight: 700; color: #1e293b; }
+  .tx-gp-count-p { font-size: 11px; color: #94a3b8; }
+  .tx-gp-total-p { font-size: 15px; font-weight: 700; }
+  
+  .tx-item-p {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #f8fafc;
+  }
+  .tx-item-main-p { flex: 1; min-width: 0; }
+  .tx-item-desc-p { font-size: 14px; font-weight: 500; color: #1e293b; margin: 0 0 2px 0; }
+  .tx-item-sub-p { font-size: 12px; color: #94a3b8; }
+  .tx-m-tag-p {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: white;
+    margin-right: 4px;
+    margin-top: 4px;
+  }
+}

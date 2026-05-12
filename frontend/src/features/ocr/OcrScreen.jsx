@@ -163,7 +163,7 @@ export default function OcrScreen({
           discount: toFormattedNumber(data.discount_amount, current.discount),
           note: data.suggested_note || current.note,
           date: data.transaction_date || current.date,
-          categoryId: data.category ? (categories.find(c => c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
+          categoryId: data.category ? (categories.find(c => c.name && data.category && c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
           paymentSource: data.payment_source || current.paymentSource,
           imagePath: data.image_path || ""
         }));
@@ -188,10 +188,11 @@ export default function OcrScreen({
         }
 
         if (data.payment_source) {
-          const matchedAccount = accounts.find(acc => 
-            acc.name.toLowerCase().includes(data.payment_source.toLowerCase()) ||
-            data.payment_source.toLowerCase().includes(acc.name.toLowerCase())
-          );
+          const sourceLower = String(data.payment_source).toLowerCase();
+          const matchedAccount = accounts.find(acc => {
+            const accName = String(acc.name || "").toLowerCase();
+            return accName.includes(sourceLower) || sourceLower.includes(accName);
+          });
           if (matchedAccount) setFundingSourceId(matchedAccount.id);
         }
 
