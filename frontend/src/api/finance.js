@@ -194,3 +194,5 @@ export const deleteBill = (billId) =>
   request(`/finance/bills/${billId}`, {
     method: "DELETE"
   });
+
+export const listAccountHistory = () => request("/finance/accounts/history");

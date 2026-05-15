@@ -83,7 +83,7 @@
 
 .acc-form { display: grid; gap: 16px; }
 .acc-form label { display: grid; gap: 8px; font-size: 13px; font-weight: 600; color: #374151; }
-.acc-form input, .acc-form select, .acc-form textarea { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; font-size: 14px; width: 100%; transition: border-color 0.2s; }
+.acc-form input, .acc-form select, .acc-form textarea { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; font-size: 14px; width: 100%; transition: border-color 0.2s; background-color: #ffffff; }
 .acc-form input:focus, .acc-form select:focus, .acc-form textarea:focus { outline: none; border-color: #f43f5e; box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1); }
 .acc-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
@@ -105,24 +105,44 @@
 .acc-info-box { margin-top: 24px; padding: 16px; background: #f8fafc; border-radius: 12px; display: flex; gap: 12px; color: #475569; font-size: 13px; line-height: 1.5; }
 .acc-info-box i { color: #3b82f6; font-size: 18px; flex-shrink: 0; }
 
+.acc-mobile-add-btn { display: none; width: 44px; height: 44px; border-radius: 12px; background: #f43f5e; color: #fff; border: none; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2); }
+
+@media (max-width: 768px) {
+  .acc-mobile-add-btn { display: flex; }
+  .acc-header { justify-content: space-between; }
+  .acc-form-container { 
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; 
+    display: none; align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(4px);
+  }
+  .acc-form-container.show { display: flex; }
+  .acc-form-card { width: 100%; max-height: 90vh; overflow-y: auto; }
+  .acc-modal-close { display: flex; border: none; background: #f3f4f6; color: #6b7280; width: 32px; height: 32px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; }
+  .acc-form-header { justify-content: space-between; }
+}
+
+@media (min-width: 769px) {
+  .acc-modal-close { display: none; }
+}
+
 @media (max-width: 1280px) {
   .acc-grid { grid-template-columns: 1fr; }
   .acc-kpis { grid-template-columns: repeat(2, 1fr); }
   .acc-item { grid-template-columns: 2fr 1fr 1fr 1fr auto; }
 }
 @media (max-width: 768px) {
+  .acc-page { padding: 16px; gap: 16px; }
   .acc-item { grid-template-columns: 1fr; gap: 12px; padding: 16px 0; }
   .acc-type-selector { grid-template-columns: repeat(2, 1fr); }
-  /* Form card appears above account list on mobile */
-  .acc-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-  .acc-form-card {
-    order: -1;
-  }
-  .acc-kpis { grid-template-columns: 1fr 1fr; }
+  .acc-grid { display: flex; flex-direction: column; gap: 16px; }
+  .acc-kpis { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .acc-kpi-card { padding: 12px; }
+  .acc-kpi-icon { width: 36px; height: 36px; font-size: 16px; }
+  .acc-kpi-content strong { font-size: 16px; }
   .acc-left { display: flex; flex-direction: column; gap: 16px; }
-  .acc-history-table { overflow-x: auto; display: block; }
+  .acc-history-table { overflow-x: auto; display: block; white-space: nowrap; }
+  .acc-list-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .acc-tabs { overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .acc-tabs::-webkit-scrollbar { display: none; }
+  .acc-list-actions { justify-content: flex-end; }
 }

@@ -11,6 +11,7 @@ from app.finance import models as finance_models
 from app.finance.router import router as finance_router
 from app.migrations import run_migrations
 from app.notifications.router import router as notifications_router
+from app.ocr.router import router as ocr_router
 from app.realtime import socket_app
 
 app = FastAPI(title="Finance AI Monolith")
@@ -53,6 +54,11 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
+app.include_router(ocr_router, prefix="/api/v1")
+
+import os
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
 
 app.mount("/ws", socket_app)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

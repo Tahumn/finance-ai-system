@@ -48,8 +48,22 @@ def _pick_upstream(path: str) -> str:
 
 app = FastAPI(title="Finance AI Gateway")
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+]
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS)).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=cors_origins,
     allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):\d+$",
     allow_credentials=False,
     allow_methods=["*"],
@@ -109,6 +123,9 @@ async def proxy_api_v1(full_path: str, request: Request) -> Response:
 
 
 # Keep websocket support on the gateway for now (no WS proxy in this MVP gateway).
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+
 app.mount("/ws", socket_app)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 

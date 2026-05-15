@@ -128,6 +128,8 @@ class AnomalyAlert(BaseModel):
 class BudgetCreate(BaseModel):
     category_id: int
     amount: float = Field(..., gt=0)
+    period_start: DateType | None = None
+    period_end: DateType | None = None
 
 
 class BudgetUpdate(BaseModel):
@@ -140,6 +142,8 @@ class BudgetRead(BaseModel):
     category_id: int
     category: str
     amount: float
+    period_start: DateType
+    period_end: DateType
     spent: float = 0.0
     remaining: float = 0.0
     progress: float = 0.0
@@ -345,6 +349,36 @@ class BillRead(BaseModel):
     category_name: str | None = None
     account_name: str | None = None
     items: list[BillItem] | None
+    created_at: DateTimeType
+
+    model_config = ConfigDict(from_attributes=True)
+    
+class AccountUpdateHistoryRead(BaseModel):
+    id: int
+    user_id: int
+    account_id: int
+    action: str
+    item_name: str
+    change_amount: float | None
+    created_at: DateTimeType
+    performer: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+class SavingsContributionCreate(BaseModel):
+    amount: float = Field(..., gt=0)
+    date: DateType | None = None
+    description: str | None = None
+    source: str | None = None
+
+class SavingsContributionRead(BaseModel):
+    id: int
+    user_id: int
+    goal_id: int
+    amount: float
+    date: DateType
+    description: str | None
+    source: str | None
     created_at: DateTimeType
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,19 +1,19 @@
 {
   "data": {
-    "merchant": "RAU MÁ mix",
-    "transaction_date": "2026-03-29",
-    "final_total": 58000,
-    "subtotal_before_tax": 58000,
-    "vat_amount": 0,
+    "merchant": "DOOKKI",
+    "transaction_date": "2026-04-13",
+    "final_total": 600480,
+    "subtotal_before_tax": 556000,
+    "vat_amount": 44480,
     "discount_amount": 0,
     "category": "Ăn uống",
-    "payment_source": "Ví MoMo",
-    "suggested_note": "Mua rau má mix đậu xanh sữa dừa tại Rau Má Mix",
+    "payment_source": "Grab",
+    "suggested_note": "Thưởng thức Buffet Người Lớn tại DOOKKI",
     "line_items": [
       {
-        "name": "Rau má mix đậu xanh sữa dừa (LỚN)",
-        "quantity": 2,
-        "total": 58000
+        "name": "Buffet Người Lớn",
+        "quantity": 4,
+        "total": 556000
       }
     ]
   },
@@ -22,6 +22,6 @@
     "final_total": 0.99,
     "transaction_date": 0.99,
     "category": 0.99,
-    "payment_source": 0.99
+    "payment_source": 0.95
   }
 }

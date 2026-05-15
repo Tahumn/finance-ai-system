@@ -47,12 +47,26 @@ const SvgReceipt = ({ active }) => (
   </svg>
 );
 
-export default function BottomNav({ active, onChange }) {
+const SvgTarget = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+  </svg>
+);
+
+const SvgBell = ({ active }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+
+export default function BottomNav({ active, onChange, notificationsCount = 0 }) {
   const tabs = useMemo(() => [
     { key: "dashboard", label: "Tổng", Icon: SvgHome },
     { key: "transactions", label: "Giao dịch", Icon: SvgList },
-    { key: "accounts", label: "Tài khoản", Icon: SvgWallet },
     { key: "bills", label: "Hóa đơn", Icon: SvgReceipt },
+    { key: "accounts", label: "Ví", Icon: SvgWallet },
+    { key: "notifications", label: "Thông báo", Icon: SvgBell },
+    { key: "goals", label: "Mục tiêu", Icon: SvgTarget },
     { key: "reports", label: "Báo cáo", Icon: SvgBarChart },
     { key: "settings", label: "Cài đặt", Icon: SvgGear }
   ], []);
@@ -70,6 +84,11 @@ export default function BottomNav({ active, onChange }) {
           >
             <span className="bottom-nav-icon">
               <Icon active={isActive} />
+              {key === "notifications" && notificationsCount > 0 && (
+                <span className="bottom-nav-badge">
+                  {notificationsCount > 9 ? "9+" : notificationsCount}
+                </span>
+              )}
             </span>
             <span className="bottom-nav-label">{label}</span>
           </button>

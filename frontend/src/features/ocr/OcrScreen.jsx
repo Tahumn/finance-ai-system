@@ -163,7 +163,7 @@ export default function OcrScreen({
           discount: toFormattedNumber(data.discount_amount, current.discount),
           note: data.suggested_note || current.note,
           date: data.transaction_date || current.date,
-          categoryId: data.category ? (categories.find(c => c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
+          categoryId: data.category ? (categories.find(c => c.name && data.category && c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
           paymentSource: data.payment_source || current.paymentSource,
           imagePath: data.image_path || ""
         }));
@@ -188,10 +188,11 @@ export default function OcrScreen({
         }
 
         if (data.payment_source) {
-          const matchedAccount = accounts.find(acc => 
-            acc.name.toLowerCase().includes(data.payment_source.toLowerCase()) ||
-            data.payment_source.toLowerCase().includes(acc.name.toLowerCase())
-          );
+          const sourceLower = String(data.payment_source).toLowerCase();
+          const matchedAccount = accounts.find(acc => {
+            const accName = String(acc.name || "").toLowerCase();
+            return accName.includes(sourceLower) || sourceLower.includes(accName);
+          });
           if (matchedAccount) setFundingSourceId(matchedAccount.id);
         }
 
@@ -338,419 +339,311 @@ export default function OcrScreen({
   const Shell = embedded ? "div" : "section";
 
   return (
-    <Shell className={embedded ? "ocr-embedded" : "panel"}>
+    <Shell className={embedded ? "ocr-embedded" : "ocr-layout-wrap"}>
       {!embedded && (
-        <div className="panel-header">
-          <h3>{t("ocr.title", null, "Receipt OCR")}</h3>
-          {onClose && (
-            <button type="button" className="ocr-close-btn" onClick={onClose} aria-label="Đóng">
-              ×
+        <div className="ocr-header-pro">
+          <div className="ocr-title-area">
+            <h2>{t("ocr.title", null, "Nhập hóa đơn (OCR)")}</h2>
+            <p>{t("ocr.subtitle", null, "Tự động trích xuất thông tin từ ảnh hóa đơn và cho phép chỉnh sửa trước khi lưu.")}</p>
+          </div>
+          <div className="ocr-header-actions">
+            <button
+              type="button"
+              className="ocr-btn-outline"
+              onClick={handleCreate}
+              disabled={!canCreate || loading}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              {t("ocr.header_save", null, "Tạo giao dịch từ hóa đơn")}
             </button>
-          )}
+            {onClose && (
+              <button type="button" className="ocr-close-btn-fixed" onClick={onClose} aria-label="Đóng">×</button>
+            )}
+            {onNavigate && !onClose && (
+              <button type="button" className="ocr-close-btn-fixed" onClick={() => onNavigate("transactions")} aria-label="Đóng">×</button>
+            )}
+          </div>
         </div>
       )}
 
-      <div className={`receipt-grid ocr-layout ${ocrState === "running" ? "running" : ""}`}>
-        <div className="receipt-uploader ocr-left-col">
-          <div className="ocr-upload-switch">
-            <button type="button" className="active">Tải ảnh lên</button>
-            <button type="button">Camera</button>
-          </div>
-          <label className="field ocr-dropzone">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
-            <div>
-              <p>Kéo & thả ảnh hóa đơn hoặc chọn tệp</p>
-              <span>Ảnh JPG/PNG, rõ nét để OCR chính xác hơn</span>
+      <div className="ocr-grid-pro">
+        <div className="ocr-col-left">
+          <div className="ocr-card-pro">
+            <div className="ocr-upload-nav">
+              <button type="button" className="active">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                Tải ảnh lên
+              </button>
+              <button type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Camera
+              </button>
             </div>
-          </label>
- 
-          <button className="ghost ocr-extract-btn" type="button" onClick={handleExtract}>
-            {ocrState === "running" ? "Đang trích xuất OCR..." : "Trích xuất lại OCR"}
-          </button>
- 
-          <div className="receipt-preview preview-container">
-            <div className="scanner-line"></div>
-            {previewUrl ? <img src={previewUrl} alt="Receipt preview" /> : <p className="empty">Xem trước hóa đơn</p>}
+
+            <label className="ocr-drop-area">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                style={{ display: 'none' }}
+              />
+              <div className="ocr-drop-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              </div>
+              <div className="ocr-drop-text">
+                <p>Kéo & thả ảnh hóa đơn vào đây</p>
+                <span>Hỗ trợ JPG, PNG tối đa 10MB</span>
+              </div>
+              <button type="button" className="ocr-btn-select" onClick={(e) => e.currentTarget.parentElement.click()}>Chọn ảnh từ máy</button>
+            </label>
           </div>
- 
-          <div className="ocr-result-card">
+
+          <div className="ocr-preview-section">
+            <h4>Xem trước hóa đơn</h4>
+            <div className="ocr-preview-box">
+              {previewUrl ? <img src={previewUrl} alt="Receipt" /> : <p className="empty">Xem trước hóa đơn</p>}
+            </div>
+          </div>
+
+          <div className="ocr-result-box">
             <h4>Kết quả OCR</h4>
-            <div className="ocr-result-grid">
-              <span>Merchant</span>
+            <div className="ocr-res-item">
+              <label>Merchant</label>
               <strong>{parsed.merchant || "--"}</strong>
-              <span>Ngày giao dịch</span>
-              <strong>{parsed.date || "--"}</strong>
-              <span>Tổng tiền</span>
-              <strong>{parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}</strong>
-              <span>Độ tin cậy</span>
-              <strong>{Math.round(confidence.total * 100)}%</strong>
             </div>
+            <div className="ocr-res-item">
+              <label>Ngày giao dịch</label>
+              <strong>{parsed.date || "--"}</strong>
+            </div>
+            <div className="ocr-res-item">
+              <label>Tổng tiền</label>
+              <strong>{parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}</strong>
+            </div>
+            <div className="ocr-res-item">
+              <label>Độ tin cậy</label>
+              <div className="ocr-conf-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                {Math.round(confidence.total * 100)}%
+              </div>
+            </div>
+            <button className="ocr-btn-retry" type="button" onClick={handleExtract} disabled={ocrState === "running"}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              {ocrState === "running" ? "Đang trích xuất..." : "Trích xuất lại OCR"}
+            </button>
           </div>
         </div>
- 
-        <form className="form ocr-form-panel ocr-form-modern" onSubmit={handleCreate}>
-          <h4>1. Thông tin giao dịch</h4>
-          <div className="row">
-            <label className="field-pro">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+        {/* --- RIGHT COLUMN: Form Edit --- */}
+        <div className="ocr-col-right">
+          <div className="ocr-section-pro">
+            <h4 className="ocr-sec-title">1. Thông tin giao dịch</h4>
+            <div className="ocr-field-row">
+              <div className="ocr-input-field">
                 <span>Ngày giao dịch *</span>
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.date)})`, position: 'static' }}>
-                  {Math.round(confidence.date * 100)}% Tin cậy
+                <div className="ocr-input-wrap">
+                  <input type="date" value={parsed.date} onChange={e => setParsed(p => ({...p, date: e.target.value}))} />
+                  <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.date)})` }}>
+                    OCR {Math.round(confidence.date * 100)}%
+                  </div>
                 </div>
               </div>
-              <div className="input-wrapper-pro">
-                <input
-                  type="date"
-                  className="input-pro"
-                  value={parsed.date}
-                  onChange={(event) =>
-                    setParsed((current) => ({ ...current, date: event.target.value }))
-                  }
-                  required
-                />
-              </div>
-            </label>
- 
-            <label className="field-pro">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ocr-input-field">
                 <span>Merchant *</span>
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})`, position: 'static' }}>
-                  {Math.round(confidence.merchant * 100)}% Tin cậy
+                <div className="ocr-input-wrap">
+                  <input type="text" value={parsed.merchant} onChange={e => setParsed(p => ({...p, merchant: e.target.value}))} />
+                  <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})` }}>
+                    OCR {Math.round(confidence.merchant * 100)}%
+                  </div>
                 </div>
               </div>
-              <div className="input-wrapper-pro">
-                <input
-                  type="text"
-                  className="input-pro"
-                  value={parsed.merchant}
-                  onChange={(event) =>
-                    setParsed((current) => ({ ...current, merchant: event.target.value }))
-                  }
-                  placeholder="Ví dụ: Circle K"
-                />
-              </div>
-            </label>
-          </div>
- 
-          <div className="ocr-pill-row">
-            <span>Loại giao dịch</span>
-            <div className="ocr-inline-pills">
-              <button type="button" className={txType === "expense" ? "active" : ""} onClick={() => setTxType("expense")}>Chi tiêu</button>
-              <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
             </div>
-          </div>
- 
-          {!!accounts.length && (
-            <div className="ocr-pill-row">
+
+            <div className="ocr-pill-group">
+              <span>Loại giao dịch</span>
+              <div className="ocr-pill-nav">
+                <button type="button" className={txType === "expense" ? "active" : ""} onClick={() => setTxType("expense")}>Chi tiêu</button>
+                <button type="button" className={txType === "income" ? "active" : ""} onClick={() => setTxType("income")}>Thu nhập</button>
+              </div>
+            </div>
+
+            <div className="ocr-pill-group">
               <span>Nguồn tiền *</span>
-              <div className="ocr-inline-pills wrap">
-                {accounts.map((acc) => (
+              <div className="ocr-pill-nav">
+                {accounts.map(acc => (
                   <button
                     key={acc.id}
                     type="button"
                     className={fundingSourceId === acc.id ? "active" : ""}
                     onClick={() => setFundingSourceId(acc.id)}
-                  >
-                    {acc.name}
-                  </button>
+                  >{acc.name}</button>
                 ))}
               </div>
             </div>
-          )}
 
-          <div className="row">
-            <label className="field-pro">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="ocr-field-row tri">
+              <div className="ocr-input-field">
                 <span>Tổng tiền *</span>
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.total)})`, position: 'static' }}>
-                  {Math.round(confidence.total * 100)}% Tin cậy
+                <div className="ocr-input-wrap">
+                  <input type="text" value={parsed.total} onChange={e => setParsed(p => ({...p, total: formatNumberInput(e.target.value)}))} />
+                  <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.total)})` }}>
+                    OCR {Math.round(confidence.total * 100)}%
+                  </div>
                 </div>
               </div>
-              <div className="input-wrapper-pro">
-                <input
-                  type="text"
-                  className="input-pro"
-                  inputMode="numeric"
-                  value={parsed.total}
-                  onChange={(event) =>
-                    setParsed((current) => ({
-                      ...current,
-                      total: formatNumberInput(event.target.value)
-                    }))
-                  }
-                  placeholder="0"
-                  required
-                />
-              </div>
-              <small style={{ color: 'var(--muted)', textAlign: 'right', display: 'block' }}>
-                {parsed.total ? currency(parseNumberInput(parsed.total)) : "--"}
-              </small>
-            </label>
-
-            <label className="field-pro">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ocr-input-field">
                 <span>VAT</span>
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.vat)})`, position: 'static' }}>
-                  {Math.round(confidence.vat * 100)}% Tin cậy
+                <div className="ocr-input-wrap">
+                  <input type="text" value={parsed.vat} onChange={e => setParsed(p => ({...p, vat: formatNumberInput(e.target.value)}))} />
+                  <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.vat)})` }}>
+                    OCR {Math.round(confidence.vat * 100)}%
+                  </div>
                 </div>
               </div>
-              <div className="input-wrapper-pro">
-                <input
-                  type="text"
-                  className="input-pro"
-                  inputMode="numeric"
-                  value={parsed.vat}
-                  onChange={(event) =>
-                    setParsed((current) => ({
-                      ...current,
-                      vat: formatNumberInput(event.target.value)
-                    }))
-                  }
-                  placeholder="0"
-                />
-              </div>
-            </label>
-            <label className="field-pro">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="ocr-input-field">
                 <span>Giảm giá</span>
-                <div className="confidence-text" style={{ color: `var(--conf-${getConfClass(confidence.discount)})`, position: 'static' }}>
-                  {Math.round(confidence.discount * 100)}% Tin cậy
+                <div className="ocr-input-wrap">
+                  <input type="text" value={parsed.discount} onChange={e => setParsed(p => ({...p, discount: formatNumberInput(e.target.value)}))} />
+                  <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.discount)})` }}>
+                    OCR {Math.round(confidence.discount * 100)}%
+                  </div>
                 </div>
               </div>
-              <div className="input-wrapper-pro">
-                <input
-                  type="text"
-                  className="input-pro"
-                  inputMode="numeric"
-                  value={parsed.discount}
-                  onChange={(event) =>
-                    setParsed((current) => ({
-                      ...current,
-                      discount: formatNumberInput(event.target.value)
-                    }))
-                  }
-                  placeholder="0"
-                />
+            </div>
+            <div className="ocr-input-field" style={{ marginTop: 12 }}>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>Tạm tính</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ fontSize: 18, color: '#475569' }}>{currency(computedSubTotal)}</strong>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>Tự động tính</span>
               </div>
-            </label>
-          </div>
-
-          <div className="confidence-legend">
-            <div className="legend-item">
-              <span className="dot high"></span> &gt;90% Tin cậy cao
-            </div>
-            <div className="legend-item">
-              <span className="dot med"></span> 70-89% Khá tin cậy
-            </div>
-            <div className="legend-item">
-              <span className="dot low"></span> &lt;70% Cần kiểm tra
             </div>
           </div>
 
-          <label className="field">
-            <span>Tiền hàng (trước VAT)</span>
-            <input type="text" value={currency(computedSubTotal)} readOnly />
-          </label>
-
-          <h4 className="ocr-section-title ocr-section-inline">
-            <span>2. Danh mục</span>
-            <button
-              type="button"
-              className="ghost ocr-add-category-btn"
-              onClick={() => setShowAddCategory((s) => !s)}
-            >
-              + Thêm danh mục
-            </button>
-          </h4>
-          {showAddCategory && (
-            <div className="ocr-inline-create">
-              <input
-                type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                placeholder="Nhập tên danh mục mới..."
-              />
-              <button type="button" className="primary" onClick={handleQuickCreateCategory}>
-                Lưu
-              </button>
+          <div className="ocr-section-pro">
+            <h4 className="ocr-sec-title">2. Danh mục</h4>
+            <div className="ocr-ai-suggest">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <span>Gợi ý từ OCR: phù hợp nhất với danh mục <strong>{categories.find(c => String(c.id) === String(parsed.categoryId))?.name || "Ăn uống"}</strong></span>
             </div>
-          )}
-          <label className="field">
-            <span>Chọn danh mục</span>
-            <input
-              type="text"
-              value={categoryQuery}
-              onChange={(e) => setCategoryQuery(e.target.value)}
-              placeholder="Tìm danh mục..."
-            />
-            <div className="category-picker">
-              <button
-                type="button"
-                className={`category-pill ${!parsed.categoryId ? "selected" : ""}`}
-                onClick={() => setParsed((current) => ({ ...current, categoryId: "" }))}
-                aria-pressed={!parsed.categoryId}
-              >
-                {t("transactions.none", null, "Không")}
-              </button>
-              {filteredCategories.map((category) => {
-                const bg = colorFor(category.name, userEmail);
-                const selected = String(parsed.categoryId) === String(category.id);
-                const theme = getOcrCategoryTheme(category.name, bg);
+            <div className="ocr-search-bar">
+              <svg className="ocr-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" placeholder="Tìm danh mục..." value={categoryQuery} onChange={e => setCategoryQuery(e.target.value)} />
+            </div>
+            <div className="ocr-category-grid">
+              {filteredCategories.slice(0, 10).map(cat => {
+                const active = String(parsed.categoryId) === String(cat.id);
+                const meta = getCatMeta(cat.name);
                 return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    className={`category-pill ocr-category-pill ${selected ? "selected" : ""}`}
-                    onClick={() => setParsed((current) => ({ ...current, categoryId: String(category.id) }))}
-                    aria-pressed={selected}
-                    style={{ "--pill-bg": theme.bg, "--pill-fg": theme.fg, "--pill-dot": theme.dot }}
+                  <div
+                    key={cat.id}
+                    className={`ocr-cat-card ${active ? "active" : ""}`}
+                    onClick={() => setParsed(p => ({...p, categoryId: String(cat.id)}))}
+                    style={active ? { background: meta.light, borderColor: meta.bg } : {}}
                   >
-                    <span className="pill-icon" aria-hidden="true">
-                      <theme.meta.SvgIcon size={14} />
-                    </span>
-                    <span className="pill-text">{category.name}</span>
-                  </button>
+                    <div className="ocr-cat-icon" style={{ background: active ? meta.bg : meta.light, color: active ? "white" : meta.bg }}>
+                      <meta.SvgIcon size={16} />
+                    </div>
+                    <span className="ocr-cat-name" style={active ? { color: meta.bg } : {}}>{cat.name}</span>
+                  </div>
                 );
               })}
             </div>
-          </label>
+          </div>
 
-          <h4 className="ocr-section-title">3. Chi tiết bổ sung</h4>
-          <label className="field">
-            <span>Ghi chú</span>
-            <textarea
-              rows="3"
-              value={parsed.note}
-              onChange={(event) =>
-                setParsed((current) => ({ ...current, note: event.target.value }))
-              }
-              placeholder="OCR map fields, bạn có thể chỉnh sửa trước khi lưu."
-            />
-          </label>
-          {/* Removed Invoice Number and Attachments as per user request */}
-
-          <div className="tag-section ocr-tag-section">
-            <label className="field">
-              <span>{t("transactions.field.tags")}</span>
-              <div className="tag-input-row">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(event) => setTagInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === ",") {
-                      event.preventDefault();
-                      addTagByName(tagInput);
-                    }
-                  }}
-                  placeholder={t("transactions.tags.placeholder", null, "Nhập nhãn và nhấn Enter")}
-                />
-                <button className="ghost" type="button" onClick={() => addTagByName(tagInput)}>
-                  {t("transactions.tags.add", null, "Thêm nhãn")}
-                </button>
+          <div className="ocr-section-pro">
+            <h4 className="ocr-sec-title">3. Chi tiết bổ sung</h4>
+            <div className="ocr-field-row">
+              <div className="ocr-input-field" style={{ gridColumn: 'span 2' }}>
+                <span>Ghi chú</span>
+                <div className="ocr-input-wrap">
+                  <textarea rows="2" value={parsed.note} onChange={e => setParsed(p => ({...p, note: e.target.value}))} placeholder="Ghi chú thêm..." />
+                </div>
               </div>
-            </label>
-
-            {tags.length ? (
-              <div className="tag-options">
-                {tags.map((tag) => {
-                  const active = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id || tag.name}
-                      type="button"
-                      className={`tag-option color-pill ${active ? "active" : ""}`}
-                      onClick={() => toggleSuggestedTag(tag.id)}
-                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
-                    >
-                      <span className="pill-text">{tag.name}</span>
-                    </button>
-                  );
-                })}
+            </div>
+            <div className="ocr-field-row">
+              <div className="ocr-input-field">
+                <span>Số hóa đơn / Mã tham chiếu</span>
+                <div className="ocr-input-wrap">
+                  <input type="text" value={referenceCode} onChange={e => setReferenceCode(e.target.value)} placeholder="Ví dụ: CK260426..." />
+                </div>
               </div>
-            ) : null}
-
-            <div className="tag-selected">
-              {selectedTagIds.length ? (
-                selectedTagIds.map((tagId) => {
-                  const tag = tagMap[tagId];
+              <div className="ocr-input-field">
+                <span>Đính kèm khác</span>
+                <div className="ocr-input-wrap">
+                  <button type="button" className="ocr-btn-retry" style={{ margin: 0, padding: '8px 12px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    Thêm tệp
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="ocr-input-field" style={{ marginTop: 12 }}>
+              <span>Thẻ</span>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                {selectedTagIds.map(tid => {
+                  const tag = tagMap[tid];
                   if (!tag) return null;
                   return (
-                    <button
-                      key={tagId}
-                      type="button"
-                      className="tag-chip removable color-pill"
-                      onClick={() => removeTag(tagId)}
-                      style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color) }}
-                    >
-                      <span className="pill-text">{tag.name}</span>
-                      <span className="tag-remove">×</span>
-                    </button>
+                    <span key={tid} className="tag-chip removable color-pill" style={{ "--pill-bg": tag.color, "--pill-fg": onColor(tag.color), display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600 }} onClick={() => removeTag(tid)}>
+                      {tag.name} <span className="tag-remove" style={{ marginLeft: 4, opacity: 0.7 }}>×</span>
+                    </span>
                   );
-                })
-              ) : (
-                <span className="muted">{t("transactions.tags.empty", null, "Chưa có nhãn nào")}</span>
-              )}
+                })}
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type="text" 
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addTagByName(tagInput);
+                      }
+                    }}
+                    placeholder="Thêm thẻ..." 
+                    style={{ fontSize: 13, padding: '4px 12px', borderRadius: 8, border: '1px dashed #cbd5e1', width: 120, background: 'transparent' }} 
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          {warnings.length > 0 && <p className="form-error">{warnings.join(" ")}</p>}
-          {notice && <p className="form-note">{notice}</p>}
-          {error && <p className="form-error">{error}</p>}
-
-          <label className="ocr-auto-create">
-            <input
-              type="checkbox"
-              checked={autoCreate}
-              onChange={(event) => setAutoCreate(event.target.checked)}
-            />
-            <div>
-              <strong>Tạo giao dịch từ hóa đơn</strong>
-              <span>Dữ liệu trích xuất có thể chỉnh sửa trước khi lưu giao dịch.</span>
+          <div className="ocr-footer-actions">
+            <div className="ocr-toggle-create">
+              <label className="ocr-switch">
+                <input type="checkbox" checked={autoCreate} onChange={e => setAutoCreate(e.target.checked)} />
+                <span className="ocr-slider"></span>
+              </label>
+              <div>
+                <strong>Tạo giao dịch từ hóa đơn</strong>
+                <span>Khi bật, hệ thống sẽ tạo giao dịch mới từ thông tin trên.</span>
+              </div>
             </div>
-          </label>
-
-          <div className="row-actions">
-            <button
-              className="ghost"
-              type="button"
-              onClick={() => {
-                setFile(null);
-                setParsed(baseParsedState());
-                setConfidence(baseConfidence);
-                setNotice("");
-                setError("");
-                setWarnings([]);
-                setSelectedTagIds([]);
-                setFundingSourceId("");
-                setTxType("expense");
-                setTagInput("");
-                setReferenceCode("");
-                setAutoCreate(true);
-                setOcrState("idle");
-              }}
-            >
-              Làm lại
-            </button>
-            <button 
-              className="primary" 
-              type="submit" 
-              style={{ flex: 1 }} 
-              disabled={ocrState === "running" || loading}
-              onClick={() => {
-                if (!canCreate) {
-                  setError("Vui lòng nhập đầy đủ Tổng tiền và Ngày hóa đơn.");
-                }
-              }}
-            >
-              {loading ? "Đang xử lý..." : autoCreate ? "Xác nhận & Lưu Giao Dịch" : "Lưu vào Hóa đơn"}
-            </button>
+            <div className="ocr-footer-btns">
+              <button type="button" className="ocr-btn-secondary" onClick={() => {
+                 setParsed(baseParsedState());
+                 setConfidence(baseConfidence);
+                 setFile(null);
+                 setOcrState("idle");
+                 setWarnings([]);
+                 setSelectedTagIds([]);
+                 setFundingSourceId("");
+                 setReferenceCode("");
+                 setPreviewUrl("");
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Làm mới
+              </button>
+              <button type="button" className="ocr-btn-secondary" onClick={handleCreate}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Lưu nháp
+              </button>
+              <button type="button" className="ocr-btn-primary" onClick={handleCreate} disabled={!canCreate || loading}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M12 5v14M5 12h14"/></svg>
+                {autoCreate ? "Tạo giao dịch từ hóa đơn" : "Lưu hóa đơn"}
+              </button>
+            </div>
           </div>
-        </form>
+        </div>
       </div>
     </Shell>
   );

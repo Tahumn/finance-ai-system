@@ -23,11 +23,11 @@ services:
       OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-10}
     ports:
     - 8000:8000
+    volumes:
+    - ./uploads:/app/uploads
     depends_on:
       finance-postgres:
         condition: service_healthy
-    volumes:
-    - ./uploads:/app/uploads
   seed:
     build:
       context: .
@@ -165,7 +165,7 @@ services:
     - .env
     environment:
     - AUTH_SERVICE_URL=http://auth:8000
-    - FINANCE_SERVICE_URL=http://finance:8000
+    - FINANCE_SERVICE_URL=http://finance-finance:8000
     - NOTIFICATIONS_SERVICE_URL=http://notifications:8000
     - AI_SERVICE_URL=http://ai:8000
     - OCR_SERVICE_URL=http://ocr:8000
@@ -188,8 +188,6 @@ services:
       notifications-worker:
         condition: service_started
       ai:
-        condition: service_started
-      ocr:
         condition: service_started
       planning:
         condition: service_started
@@ -585,4 +583,3 @@ volumes:
   ai_postgres_data: null
   planning_postgres_data: null
   recurring_postgres_data: null
-

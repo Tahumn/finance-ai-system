@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { currency, formatNumberInput, parseNumberInput } from "../../utils/format.js";
 import { getCatMeta } from "../../utils/categoryIcons.jsx";
 import "./budgets.css";
+const toD = (d) => d.toISOString().slice(0,10);
 
 const emptyForm = () => ({ categoryId: "", amount: "" });
 
@@ -17,6 +18,10 @@ export default function BudgetsScreen({
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [bdStart, setBdStart] = useState(() => { const d = new Date(); d.setDate(1); return toD(d); });
+  const [bdEnd, setBdEnd] = useState(() => toD(new Date()));
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortMode, setSortMode] = useState("progress");
 
   const plansWithStats = Array.isArray(budgets) ? budgets : [];
   const totalBudget = plansWithStats.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -67,9 +72,9 @@ export default function BudgetsScreen({
           <h1 className="bgd-title">Ngân sách</h1>
         </div>
         <div className="bgd-header-actions">
-          <button className="bgd-btn-add" onClick={() => { setForm(emptyForm()); setEditingId(null); setShowForm(!showForm); }}>
+          <button className="bgd-btn-add" onClick={() => { setForm(emptyForm()); setEditingId(null); setShowForm(true); }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Ngân sách
+            <span className="btn-text">Ngân sách</span>
           </button>
         </div>
       </div>
@@ -101,46 +106,59 @@ export default function BudgetsScreen({
           </div>
         </div>
       </div>
-      {/* FORM (Tạo / Chỉnh sửa) */}
-      {showForm && (
-        <form className="budget-form-card" onSubmit={handleSubmit}>
-          <h3>{editingId ? "Chỉnh sửa ngân sách" : "Tạo / Chỉnh sửa ngân sách"}</h3>
-          
-          <div className="bd-form-row">
-            <div className="bd-field">
-              <label>Danh mục</label>
-              <select
-                value={form.categoryId}
-                onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-                required
-                disabled={Boolean(editingId)}
-              >
-                <option value="">Chọn danh mục</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="bd-field">
-              <label>Ngân sách mục tiêu</label>
-              <input type="text" inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: formatNumberInput(e.target.value) })} placeholder="0 đ" required />
-            </div>
-          </div>
 
-          <div className="bd-form-actions">
-            <button type="button" className="bd-btn-cancel" onClick={() => setShowForm(false)}>Hủy</button>
-            <button type="submit" className="bd-btn-save" disabled={loading}>Lưu ngân sách</button>
-          </div>
-        </form>
-      )}
+      {/* FORM (Tạo / Chỉnh sửa) - Modal Container for Mobile consistency */}
+      <div className={`bgd-modal-overlay ${showForm ? "show" : ""}`}>
+        <div className="bgd-modal-container">
+          <form className="budget-form-card" onSubmit={handleSubmit}>
+            <div className="bd-form-header">
+              <h3>{editingId ? "Chỉnh sửa ngân sách" : "Thiết lập ngân sách"}</h3>
+              <button type="button" className="bd-modal-close" onClick={() => setShowForm(false)}>×</button>
+            </div>
+            
+            <div className="bd-form-row">
+              <div className="bd-field">
+                <label>Danh mục</label>
+                <select
+                  value={form.categoryId}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  required
+                  disabled={Boolean(editingId)}
+                >
+                  <option value="">Chọn danh mục</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="bd-field">
+                <label>Ngân sách mục tiêu</label>
+                <input type="text" inputMode="numeric" value={form.amount} onChange={(e) => setForm({ ...form, amount: formatNumberInput(e.target.value) })} placeholder="0 đ" required />
+              </div>
+            </div>
+
+            <div className="bd-form-actions">
+              <button type="button" className="bd-btn-cancel" onClick={() => setShowForm(false)}>Hủy</button>
+              <button type="submit" className="bd-btn-save" disabled={loading}>Lưu ngân sách</button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       {/* Filters Row */}
       <div className="bgd-filters-row">
          <div className="bgd-filters-left">
-            <div className="bgd-date-dropdown">
-               Tháng <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+            <div className="bgd-date-range">
+               <div className="bgd-date-field">
+                 <span>Từ ngày</span>
+                 <input type="date" value={bdStart} onChange={(e) => setBdStart(e.target.value)} />
+               </div>
+               <div className="bgd-date-field">
+                 <span>Đến ngày</span>
+                 <input type="date" value={bdEnd} onChange={(e) => setBdEnd(e.target.value)} />
+               </div>
             </div>
             <div className="bgd-searchbox">
                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>

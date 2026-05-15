@@ -3,7 +3,7 @@ const inferApiBase = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   // Works for local dev and phone testing on LAN:
   // If frontend is opened at http://192.168.1.10:5173, default API becomes http://192.168.1.10:8005/api/v1
-  const { protocol, hostname, port } = window.location;
+  const { protocol, hostname } = window.location;
   return `${protocol}//${hostname}:8005/api/v1`;
 };
 
@@ -31,6 +31,10 @@ export const clearToken = () => {
   sessionStorage.removeItem(TOKEN_KEY);
 };
 
+function buildFetchHint() {
+  return `Failed to fetch. Khong ket noi duoc API (${API_BASE}). Hay chac chan backend dang chay (vi du: docker compose --profile micro up -d).`;
+}
+
 export async function request(path, options = {}) {
   const token = getToken();
   const headers = {
@@ -47,7 +51,7 @@ export async function request(path, options = {}) {
       body: options.body ? JSON.stringify(options.body) : undefined
     });
   } catch (err) {
-    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const hint = buildFetchHint();
     const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
     error.cause = err;
     throw error;
@@ -89,7 +93,7 @@ export async function requestForm(path, formData) {
       body: formData
     });
   } catch (err) {
-    const hint = `Không kết nối được API (${API_BASE}). Hãy chắc chắn backend đang chạy (ví dụ: docker compose up -d api postgres).`;
+    const hint = buildFetchHint();
     const error = new Error(err?.message ? `${err.message}. ${hint}` : hint);
     error.cause = err;
     throw error;

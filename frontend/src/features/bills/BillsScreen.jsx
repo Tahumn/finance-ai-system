@@ -44,17 +44,15 @@ export default function BillsScreen({
   const [formError, setFormError] = useState("");
 
   const filtered = useMemo(() => {
-    if (!Array.isArray(bills)) return [];
     const q = query.trim().toLowerCase();
     return bills
       .filter((b) => {
-        if (!b) return false;
         const matchesQuery = (b.merchant || "").toLowerCase().includes(q) || (b.bill_number && String(b.bill_number).toLowerCase().includes(q));
         const matchesStatus = statusFilter === "all" || b.status === statusFilter;
         const matchesCat = categoryFilter === "all" || b.category_name === categoryFilter;
         return matchesQuery && matchesStatus && matchesCat;
       })
-      .sort((a, b) => (b.id || 0) - (a.id || 0)); // Newest ID first
+      .sort((a, b) => b.id - a.id); // Newest ID first
   }, [bills, query, statusFilter, categoryFilter]);
 
   const selected = filtered.find((x) => x.id === selectedId) || filtered[0] || null;
@@ -66,14 +64,14 @@ export default function BillsScreen({
     setFormError("");
   }, [selectedId]);
 
-  const confirmed = Array.isArray(bills) ? bills.filter((b) => b && b.status === "confirmed") : [];
-  const pending = Array.isArray(bills) ? bills.filter((b) => b && b.status === "pending") : [];
-  const errors = Array.isArray(bills) ? bills.filter((b) => b && b.status === "error") : [];
+  const confirmed = bills.filter((b) => b.status === "confirmed");
+  const pending = bills.filter((b) => b.status === "pending");
+  const errors = bills.filter((b) => b.status === "error");
 
-  const confirmedSum = confirmed.reduce((acc, b) => acc + (b?.total_amount || 0), 0);
-  const pendingSum = pending.reduce((acc, b) => acc + (b?.total_amount || 0), 0);
-  const errorsSum = errors.reduce((acc, b) => acc + (b?.total_amount || 0), 0);
-  const totalSum = Array.isArray(bills) ? bills.reduce((acc, b) => acc + (b?.total_amount || 0), 0) : 0;
+  const confirmedSum = confirmed.reduce((acc, b) => acc + (b.total_amount || 0), 0);
+  const pendingSum = pending.reduce((acc, b) => acc + (b.total_amount || 0), 0);
+  const errorsSum = errors.reduce((acc, b) => acc + (b.total_amount || 0), 0);
+  const totalSum = bills.reduce((acc, b) => acc + (b.total_amount || 0), 0);
 
   const handleConfirm = async () => {
     if (!selected || !onUpdateBill) return;
@@ -131,7 +129,6 @@ export default function BillsScreen({
         <header className="bill-header">
           <div className="bill-header-text">
             <h1>Hóa đơn</h1>
-            <p>Quản lý các hóa đơn đã nhập từ OCR và theo dõi trạng thái xử lý.</p>
           </div>
           <div className="bill-header-actions">
             <button type="button" className="bill-btn secondary" onClick={onGoOcr}>
@@ -202,7 +199,7 @@ export default function BillsScreen({
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
                 <option value="all">Tất cả danh mục</option>
-                {Array.isArray(bills) && Array.from(new Set(bills.filter(b => b && b.category_name).map(b => b.category_name))).map(cat => (
+                {Array.from(new Set(bills.map(b => b.category_name).filter(Boolean))).map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -283,7 +280,7 @@ export default function BillsScreen({
                     {selected.image_path ? (
                       <>
                         <img
-                          src={`${window.location.protocol}//${window.location.hostname}:8005${selected.image_path}`}
+                          src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`}
                           alt="Hóa đơn"
                         />
                         {!isEditing && (
@@ -316,7 +313,7 @@ export default function BillsScreen({
                             type="text"
                             className="bill-edit-input"
                             placeholder="Nhập tên cửa hàng..."
-                            value={editData?.merchant || ""}
+                            value={editData.merchant}
                             onChange={(e) => {
                               setEditData({ ...editData, merchant: e.target.value });
                               if (formError) setFormError("");
@@ -330,7 +327,7 @@ export default function BillsScreen({
                             <input
                               type="date"
                               className="bill-edit-input"
-                              value={editData?.date || ""}
+                              value={editData.date}
                               onChange={(e) => setEditData({ ...editData, date: e.target.value })}
                             />
                           </div>
@@ -340,7 +337,7 @@ export default function BillsScreen({
                               type="text"
                               className="bill-edit-input"
                               placeholder="VD: HD001"
-                              value={editData?.bill_number || ""}
+                              value={editData.bill_number}
                               onChange={(e) => setEditData({ ...editData, bill_number: e.target.value })}
                             />
                           </div>
@@ -351,7 +348,7 @@ export default function BillsScreen({
                             <label className="bill-edit-label">Danh mục chi tiêu</label>
                             <select
                               className="bill-edit-input"
-                              value={editData?.category_id || ""}
+                              value={editData.category_id || ""}
                               onChange={(e) => setEditData({ ...editData, category_id: e.target.value ? parseInt(e.target.value) : null })}
                             >
                               <option value="">Chọn danh mục</option>
@@ -364,7 +361,7 @@ export default function BillsScreen({
                             <label className="bill-edit-label">Nguồn tiền</label>
                             <select
                               className="bill-edit-input"
-                              value={editData?.account_id || ""}
+                              value={editData.account_id || ""}
                               onChange={(e) => setEditData({ ...editData, account_id: e.target.value ? parseInt(e.target.value) : null })}
                             >
                               <option value="">Chọn tài khoản</option>
@@ -385,7 +382,7 @@ export default function BillsScreen({
                               <input
                                 type="text"
                                 className="bill-edit-input amount"
-                                value={formatNumberInput(editData?.total_amount || 0)}
+                                value={formatNumberInput(editData.total_amount)}
                                 onChange={(e) => setEditData({ ...editData, total_amount: parseNumberInput(e.target.value) })}
                               />
                               <span style={{ fontSize: "20px", fontWeight: "800", color: "#e11d48" }}>₫</span>
@@ -397,7 +394,7 @@ export default function BillsScreen({
                               <input
                                 type="text"
                                 className="bill-edit-input small"
-                                value={formatNumberInput(editData?.vat_amount || 0)}
+                                value={formatNumberInput(editData.vat_amount)}
                                 onChange={(e) => setEditData({ ...editData, vat_amount: parseNumberInput(e.target.value) })}
                               />
                               <span style={{ fontSize: "13px", fontWeight: "600", color: "#64748b" }}>₫</span>
@@ -486,7 +483,7 @@ export default function BillsScreen({
           <div className="bill-modal-content" onClick={e => e.stopPropagation()}>
             <button className="bill-modal-close" onClick={() => setIsModalOpen(false)}>&times;</button>
             <img
-              src={`${window.location.protocol}//${window.location.hostname}:8005${selected.image_path}`}
+              src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`}
               alt="Hóa đơn phóng lớn"
             />
           </div>

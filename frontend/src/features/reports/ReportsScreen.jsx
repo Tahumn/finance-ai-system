@@ -15,26 +15,35 @@ import {
 } from "recharts";
 import { colorFor } from "../../utils/colors.js";
 import { currency, formatDateFull, percent } from "../../utils/format.js";
+import { getCatMeta } from "../../utils/categoryIcons.jsx";
 import "./reports.css";
 
-const buildSmoothPath = (points) => {
-  if (points.length <= 1) return points.length ? `M ${points[0].x} ${points[0].y}` : "";
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const current = points[i];
-    const midX = (prev.x + current.x) / 2;
-    const midY = (prev.y + current.y) / 2;
-    d += ` Q ${prev.x} ${prev.y} ${midX} ${midY}`;
-  }
-  const last = points[points.length - 1];
-  d += ` T ${last.x} ${last.y}`;
-  return d;
+const toD = (d) => d.toISOString().slice(0,10);
+const fmt = (n) => {
+  if (!n && n !== 0) return '';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n/1e9).toFixed(1).replace(/.0$/,'') + 'T';
+  if (abs >= 1e6) return (n/1e6).toFixed(1).replace(/.0$/,'') + 'M';
+  if (abs >= 1e3) return (n/1e3).toFixed(0) + 'K';
+  return String(n);
 };
 
-const buildAreaPath = (points, baseline) => {
-  if (!points?.length) return "";
-  return `${buildSmoothPath(points)} L ${points[points.length - 1].x} ${baseline} L ${points[0].x} ${baseline} Z`;
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rpt-custom-tooltip">
+        <p className="rpt-tooltip-label">{label}</p>
+        {payload.map((entry, index) => (
+          <div key={index} className="rpt-tooltip-entry">
+            <span className="rpt-tooltip-dot" style={{ backgroundColor: entry.color }}></span>
+            <span className="rpt-tooltip-name">{entry.name}:</span>
+            <span className="rpt-tooltip-value">{currency(entry.value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
 };
 
 const calcDelta = (current, previous) => {
@@ -91,9 +100,16 @@ export default function ReportsScreen({
   userEmail,
   onBack,
   savingsGoals = [],
+  filters,
+  onFiltersChange,
 }) {
   const [activeTab, setActiveTab] = useState("30 ngày");
-  const [showAllSources, setShowAllSources] = useState(false);
+  const [paymentPage, setPaymentPage] = useState(0);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedHeatmap, setSelectedHeatmap] = useState(null);
+  const PAYMENT_PER_PAGE = 3;
+
+
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const overview = reportsOverview || {};
@@ -129,23 +145,42 @@ export default function ReportsScreen({
   };
   const { dInc, dExp, dNet, dSav } = getKPI();
 
+  const donutTotal = categorySpending.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const donutItems = useMemo(() => {
-    const total = categorySpending.reduce((sum, item) => sum + Number(item.amount || 0), 0) || 1;
-    return categorySpending.map((item) => ({
-      ...item,
-      share: Number(item.share || 0) || Number(item.amount || 0) / total,
-    }));
-  }, [categorySpending]);
-  const donutTotal = donutItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const sorted = [...categorySpending].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+    const top5 = sorted.slice(0, 5);
+    const others = sorted.slice(5);
+    
+    if (others.length === 0) return top5.map(item => ({ ...item, share: Number(item.share || 0) || Number(item.amount || 0) / (donutTotal || 1) }));
+
+    const othersAmount = others.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const total = (donutTotal || 1);
+    
+    return [
+      ...top5.map(item => ({ ...item, share: Number(item.share || 0) || Number(item.amount || 0) / total })),
+      { category: "Khác", amount: othersAmount, share: othersAmount / total }
+    ];
+  }, [categorySpending, donutTotal]);
+
   const donutChartData = donutItems.map((i) => ({ name: i.category, value: i.amount, share: i.share }));
-  const donutLabel = ({ percent: p }) => `${Math.round((p || 0) * 100)}%`;
+  const donutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent: p, name }) => {
+    if ((p||0) < 0.04) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
+        {Math.round((p||0)*100)}%
+      </text>
+    );
+  };
 
   const trendSeries = dailySeries.slice(-30).map((item) => ({
     label: item.label || "",
     income: Number(item.income || 0),
     expense: Number(item.expense || 0),
   }));
-  const areaMax = Math.max(1, ...trendSeries.flatMap((x) => [x.income, x.expense]));
 
   const fallbackMonthly = (Array.isArray(monthlySeries) ? monthlySeries : []).map((m) => ({
     label: String(m.month || "").slice(-5).replace("-", "/") || "N/A",
@@ -158,7 +193,6 @@ export default function ReportsScreen({
     expense: Number(m.expense || 0),
   }));
   const monthlyBars = monthlyBarsRaw.length >= 3 ? monthlyBarsRaw : fallbackMonthly.slice(-6);
-  const barMax = Math.max(1, ...monthlyBars.flatMap((b) => [b.income, b.expense]));
 
   const heatmapMax = Math.max(1, ...weekdayHeatmap.map((cell) => Number(cell.total || 0)));
   const heatmapValue = (weekIndex, weekDay) =>
@@ -176,16 +210,57 @@ export default function ReportsScreen({
     ? `Danh mục ${topCategory.category} đang chiếm ${percent(topCategory.share)} tổng chi trong kỳ. Bạn có thể giảm 10-15% nhóm này để cải thiện tiết kiệm ròng.`
     : "Chưa đủ dữ liệu để tạo gợi ý AI. Hãy thêm giao dịch để nhận khuyến nghị chính xác hơn.";
 
+  const handleApplyRange = (start, end) => {
+    onFiltersChange(prev => ({ ...prev, start, end }));
+    setShowDatePicker(false);
+  };
+
+  const handlePresetClick = (preset) => {
+    setActiveTab(preset);
+    const d = new Date();
+    const end = toD(d);
+    let start = end;
+    if(preset==="7 ngày") { d.setDate(d.getDate()-7); start = toD(d); }
+    else if(preset==="30 ngày") { d.setDate(d.getDate()-30); start = toD(d); }
+    else if(preset==="3 tháng") { d.setMonth(d.getMonth()-3); start = toD(d); }
+    else if(preset==="6 tháng") { d.setMonth(d.getMonth()-6); start = toD(d); }
+    handleApplyRange(start, end);
+  };
+
   return (
     <div className="rpt-container">
       <div className="rpt-header-top">
         <div className="rpt-title-block">
           <h1 className="rpt-title">Báo cáo & Phân tích</h1>
-          <p className="rpt-subtitle">Nhìn lại hành trình tài chính của bạn</p>
         </div>
         <div className="rpt-header-actions">
-          <div className="rpt-date-dropdown">
-            {activeTab} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+          <div className="rpt-tx-date-filter">
+             <button className="rpt-date-range-btn" onClick={() => setShowDatePicker(!showDatePicker)}>
+                <CalendarIcon />
+                <span>{activeTab === "Tùy chỉnh" ? `${formatDateFull(filters.start)} - ${formatDateFull(filters.end)}` : activeTab}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M6 9l6 6 6-6"/></svg>
+             </button>
+             
+             {showDatePicker && (
+               <div className="rpt-date-picker-dropdown">
+                  <div className="rpt-picker-presets">
+                    {["7 ngày","30 ngày","3 tháng","6 tháng"].map(t => (
+                      <button key={t} className={`rpt-picker-preset ${activeTab===t?"active":""}`} onClick={() => handlePresetClick(t)}>{t}</button>
+                    ))}
+                  </div>
+                  <div className="rpt-picker-custom">
+                     <div className="rpt-picker-field">
+                        <label>Từ ngày</label>
+                        <input type="date" value={filters.start} onChange={e => { onFiltersChange(p=>({...p, start: e.target.value})); setActiveTab("Tùy chỉnh"); }} />
+                     </div>
+                     <div className="rpt-picker-field">
+                        <label>Đến ngày</label>
+                        <input type="date" value={filters.end} onChange={e => { onFiltersChange(p=>({...p, end: e.target.value})); setActiveTab("Tùy chỉnh"); }} />
+                     </div>
+                     <button className="rpt-picker-apply" onClick={() => setShowDatePicker(false)}>Áp dụng</button>
+                  </div>
+               </div>
+             )}
           </div>
           <button className="rpt-btn-export">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -265,24 +340,24 @@ export default function ReportsScreen({
                </div>
                
                <div className="trend-area-chart">
-                 <ResponsiveContainer width="100%" height={250}>
+                 <ResponsiveContainer width="100%" height={280}>
                    <AreaChart data={trendSeries}>
                      <defs>
                        <linearGradient id="repInc" x1="0" y1="0" x2="0" y2="1">
-                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
-                         <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                         <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                        </linearGradient>
                        <linearGradient id="repExp" x1="0" y1="0" x2="0" y2="1">
-                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.26} />
-                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                        </linearGradient>
                      </defs>
-                     <ReCartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                     <ReXAxis dataKey="label" />
-                     <ReYAxis />
-                     <ReTooltip formatter={(value) => currency(value)} />
-                     <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#repInc)" strokeWidth={2.5} />
-                     <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#repExp)" strokeWidth={2.5} />
+                     <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                     <ReXAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                     <ReYAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} tickFormatter={fmt} />
+                     <ReTooltip content={<CustomTooltip />} />
+                     <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#repInc)" strokeWidth={3} animationDuration={1000} />
+                     <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#repExp)" strokeWidth={3} animationDuration={1000} />
                    </AreaChart>
                  </ResponsiveContainer>
                </div>
@@ -301,41 +376,39 @@ export default function ReportsScreen({
                            data={donutChartData}
                            dataKey="value"
                            nameKey="name"
-                           innerRadius={52}
-                           outerRadius={86}
-                           paddingAngle={2}
-                           label={donutLabel}
+                           innerRadius={65}
+                           outerRadius={95}
+                           paddingAngle={4}
                            labelLine={false}
+                           label={donutLabel}
+                           animationDuration={800}
                          >
-                           {donutItems.map((item) => <Cell key={item.category} fill={colorFor(item.category, userEmail)} />)}
+                           {donutItems.map((item) => (
+                             <Cell key={item.category} fill={colorFor(item.category, userEmail)} stroke="none" />
+                           ))}
                          </Pie>
-                         <ReTooltip
-                           formatter={(v) => currency(v)}
-                           labelFormatter={(label) => `Danh mục: ${label}`}
-                         />
+                         <ReTooltip content={<CustomTooltip />} />
                        </PieChart>
                      </ResponsiveContainer>
-                     <div className="donut-center-text">
-                        <span>Tổng chi:
-                          <br/>
-                          {currency(donutTotal)}
-                        </span>
-                     </div>
+                  </div>
+                  <div className="donut-footer-text">
+                     <span>Tổng chi tiêu trong kỳ</span>
+                     <strong>{currency(donutTotal)}</strong>
                   </div>
                </div>
+
               </div>
 
               <div className="rpt-card">
                 <div className="rpt-card-header">
                   <h3>Phân bổ nguồn tiền</h3>
-                  {paymentBreakdown.length > 3 && (
-                    <button className="rpt-toggle-btn" onClick={() => setShowAllSources(!showAllSources)}>
-                      {showAllSources ? "∧ Thu gọn" : "∨ Xem thêm"}
-                    </button>
-                  )}
+                  <div className="rpt-pagination">
+                    <button disabled={paymentPage === 0} onClick={() => setPaymentPage(p => p - 1)}>‹</button>
+                    <button disabled={(paymentPage + 1) * PAYMENT_PER_PAGE >= paymentBreakdown.length} onClick={() => setPaymentPage(p => p + 1)}>›</button>
+                  </div>
                 </div>
                 <div className="rpt-source-bars">
-                  {(showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).length ? (showAllSources ? paymentBreakdown : paymentBreakdown.slice(0, 3)).map((item) => (
+                  {paymentBreakdown.length ? paymentBreakdown.slice(paymentPage * PAYMENT_PER_PAGE, (paymentPage + 1) * PAYMENT_PER_PAGE).map((item) => (
                     <div className="rpt-source-item" key={item.source}>
                       <div className="rpt-source-head">
                         <span>{item.source}</span>
@@ -375,17 +448,29 @@ export default function ReportsScreen({
                 <div className="rpt-card-header">
                   <h3>Giao dịch theo ngày trong tuần</h3>
                 </div>
+                <div className="rpt-heatmap-header">
+                  <p className="rpt-heatmap-tip">{selectedHeatmap ? `Ngày: ${selectedHeatmap.day}, Chi: ${currency(selectedHeatmap.val)}` : "Bấm vào ô để xem chi tiết"}</p>
+                </div>
                 <div className="rpt-heatmap">
                   {[0, 1, 2, 3, 4].map((w) => (
                     <div key={`week-${w}`} className="rpt-heatmap-col">
                       {[0, 1, 2, 3, 4, 5, 6].map((d) => {
                         const val = heatmapValue(w, d);
                         const opacity = val > 0 ? Math.max(0.15, val / heatmapMax) : 0.05;
-                        return <span key={`cell-${w}-${d}`} style={{ opacity }} title={currency(val)} />;
+                        const dayNames = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+                        return (
+                          <span 
+                            key={`cell-${w}-${d}`} 
+                            style={{ opacity, cursor: 'pointer' }} 
+                            title={currency(val)} 
+                            onClick={() => setSelectedHeatmap({ day: `Tuần ${w+1}, ${dayNames[d]}`, val })}
+                          />
+                        );
                       })}
                     </div>
                   ))}
                 </div>
+
               </div>
 
               <div className="rpt-card">
@@ -445,15 +530,15 @@ export default function ReportsScreen({
                <div className="rpt-tx-list">
                   {topTransactions.length > 0 ? topTransactions.map((tx, idx) => {
                      const txCategory = tx.category || tx.categoryLabel || "Khác";
-                     const catBg = colorFor(txCategory, userEmail);
+                     const catMeta = getCatMeta(txCategory);
                      return (
                         <div key={idx} className="rpt-tx-item">
-                           <div className="rpt-tx-icon" style={{background: `${catBg}22`, color: catBg}}>
-                              {txCategory.slice(0,1)}
+                           <div className="rpt-tx-icon" style={{background: `${catMeta.bg}22`, color: catMeta.bg}}>
+                              <catMeta.SvgIcon size={18} />
                            </div>
                            <div className="rpt-tx-info">
                               <span className="rpt-tx-title">{tx.description || txCategory}</span>
-                              <span className="rpt-tx-date">{formatDateFull(tx.date)}</span>
+                              <span className="rpt-tx-cat">{txCategory} · {formatDateFull(tx.date)}</span>
                            </div>
                            <div className="rpt-tx-amount">
                               -{currency(Math.abs(tx.amount))}
@@ -469,14 +554,14 @@ export default function ReportsScreen({
                 <h3>Xu hướng ngân sách</h3>
               </div>
               <div className="trend-area-chart">
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={monthlyBars}>
-                    <ReCartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <ReXAxis dataKey="label" />
-                    <ReYAxis />
-                    <ReTooltip formatter={(value) => currency(value)} />
-                    <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2.4} />
-                    <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2.4} />
+                    <ReCartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <ReXAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+                    <ReYAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} tickFormatter={fmt} />
+                    <ReTooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} dot={{r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
+                    <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} dot={{r: 4, fill: '#ef4444', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

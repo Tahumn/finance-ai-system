@@ -207,11 +207,15 @@ export default function DashboardScreen({
   onGoChat,
   onGoAddTransaction,
   onGoReports,
-  onCheckAnomaly,
+  onGoBudgets,
+  onGoGoals,
   rangePreset,
   onSelectPreset,
   userEmail,
   savingsGoals = [],
+  budgets = [],
+  filters = { start: "", end: "" },
+  onFiltersChange
 }) {
   const safeMonthly = Array.isArray(monthlySeries) ? monthlySeries : [];
   const slicedTransactions = (Array.isArray(transactions) ? transactions : []).slice(0, 5);
@@ -220,62 +224,113 @@ export default function DashboardScreen({
   const donutTotal = donutItems.reduce((sum, item) => sum + item.spent, 0);
   const { series: waveSource } = buildWaveSeries(transactions, monthlySeries);
   const trendSeries = buildLineSeries(waveSource);
-  const trendChartDataRaw = waveSource.map((item) => {
-    const income = Number(item.income || 0);
-    const expense = Number(item.expense || 0);
-    return {
-      label: String(item.month || "").slice(5).replace("-", "/"),
-      income,
-      expense,
-      net: income - expense
-    };
-  });
+  const trendChartDataRaw = waveSource.map((item) => ({
+    label: String(item.month || "").slice(5).replace("-", "/"),
+    income: Number(item.income || 0),
+    expense: Number(item.expense || 0)
+  }));
   const trendChartData = trendChartDataRaw.length >= 2
     ? trendChartDataRaw
-    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => {
-        const income = Number(item.income || 0);
-        const expense = Number(item.expense || 0);
-        return {
-          label: String(item.month || "").slice(5).replace("-", "/"),
-          income,
-          expense,
-          net: income - expense
-        };
-      });
+    : (Array.isArray(monthlySeries) ? monthlySeries : []).map((item) => ({
+        label: String(item.month || "").slice(5).replace("-", "/"),
+        income: Number(item.income || 0),
+        expense: Number(item.expense || 0)
+      }));
 
-  const budgetRows = (Array.isArray(breakdown) ? breakdown : []).slice(0, 4).map((item) => {
+  const [showBalance, setShowBalance] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+
+  const dateRangeLabel = rangePreset === "thisMonth" ? "Tháng này" : 
+                         rangePreset === "lastMonth" ? "Tháng trước" :
+                         rangePreset === "last7days" ? "7 ngày qua" :
+                         rangePreset === "last30days" ? "30 ngày qua" :
+                         rangePreset === "last90days" ? "90 ngày qua" :
+                         rangePreset === "thisYear" ? "Năm nay" :
+                         rangePreset === "all" ? "Tất cả" :
+                         `${new Date(filters.start).toLocaleDateString('vi-VN')} - ${new Date(filters.end).toLocaleDateString('vi-VN')}`;
+
+  const PRESETS = [
+    { label: "7 ngày qua", value: "last7days" },
+    { label: "30 ngày qua", value: "last30days" },
+    { label: "Tháng này", value: "thisMonth" },
+    { label: "Tháng trước", value: "lastMonth" },
+    { label: "Năm nay", value: "thisYear" },
+    { label: "Tùy chỉnh", value: "custom" },
+    { label: "Tất cả", value: "all" },
+  ];
+
+  const budgetRows = (Array.isArray(budgets) ? budgets : []).slice(0, 4).map((item) => {
     const spent = Number(item.spent || 0);
-    const total = Math.max(spent, Math.round(spent * 1.3), 1);
-    const pct = Math.round((spent / total) * 100);
+    const total = Number(item.amount || 0) || Math.max(spent, 1);
+    const pct = total > 0 ? Math.round((spent / total) * 100) : 0;
     return {
       label: item.category,
-      percent: Math.max(1, Math.min(100, pct)),
+      percent: Math.min(100, Math.max(0, pct)),
       spent,
       total,
-      color: colorFor(item.category, userEmail)
+      color: colorFor(item.category, userEmail),
+      status: item.status || (pct >= 100 ? 'exceeded' : pct >= 80 ? 'warning' : 'normal')
     };
   });
-
-  const totalIncome = summary?.total_income || 0;
-  const totalExpense = summary?.total_expense || 0;
-  const netFlow = totalIncome - totalExpense;
 
   return (
     <div className="dashboard-container">
+      {/* Date Filter Bar */}
+      <div className="dashboard-filter-bar">
+        <button className="db-date-btn" onClick={() => setShowDateModal(!showDateModal)}>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>{dateRangeLabel}</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        {showDateModal && (
+          <div className="db-date-dropdown">
+            {PRESETS.map(p => (
+              <button key={p.value} className={rangePreset === p.value ? "active" : ""} onClick={() => { 
+                if (p.value !== 'custom') {
+                  onSelectPreset(p.value); 
+                  setShowDateModal(false); 
+                } else {
+                  onSelectPreset('custom');
+                }
+              }}>
+                {p.label}
+              </button>
+            ))}
+            {rangePreset === 'custom' && (
+              <div className="db-custom-range">
+                <input type="date" value={filters.start} onChange={e => onFiltersChange({ ...filters, start: e.target.value })} />
+                <input type="date" value={filters.end} onChange={e => onFiltersChange({ ...filters, end: e.target.value })} />
+                <button className="db-apply-btn" onClick={() => setShowDateModal(false)}>Áp dụng</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 1. Full-width Balance Card */}
       <section className="dashboard-balance-card">
         <div className="dbc-content">
-          <div className="dbc-header">
+          <div className="dbc-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <p>Số dư hiện tại</p>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <button 
+              className="icon-btn" 
+              onClick={() => setShowBalance(!showBalance)} 
+              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 0, display: 'flex', opacity: 0.8 }}
+              title={showBalance ? "Ẩn số dư" : "Hiện số dư"}
+            >
+              {showBalance ? (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              )}
+            </button>
           </div>
-          <h2>{currency(summary?.balance || 0)}</h2>
-          <div className="dbc-trend">
-            <span className={`trend-tag ${netFlow >= 0 ? 'up' : 'down'}`}>
-              {netFlow >= 0 ? '↑' : '↓'} {percent(Math.abs(netFlow) / (totalIncome || 1))}
-            </span>
-            <p className="dbc-update">Cập nhật lúc 16:54</p>
-          </div>
+          <h2>{showBalance ? currency(summary?.balance || 0) : '****** đ'}</h2>
+          <p className="dbc-update">Cập nhật lúc {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+          <button className="dbc-btn-add" onClick={onGoAddTransaction} style={{ marginTop: '16px', background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', padding: '8px 16px', borderRadius: '12px', cursor: 'pointer', fontWeight: '600', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Thêm giao dịch
+          </button>
         </div>
         <div className="dbc-graphic">
           <svg viewBox="0 0 24 24" width="80" height="80" fill="white" opacity="0.8">
@@ -291,7 +346,7 @@ export default function DashboardScreen({
             </div>
             <div className="mc-info">
               <p>Tổng thu nhập</p>
-              <h3>{currency(totalIncome)}</h3>
+              <h3>{currency(summary?.total_income || 0)}</h3>
             </div>
           </div>
           <div className="metric-card compact">
@@ -300,7 +355,7 @@ export default function DashboardScreen({
             </div>
             <div className="mc-info">
               <p>Tổng chi tiêu</p>
-              <h3>{currency(totalExpense)}</h3>
+              <h3>{currency(summary?.total_expense || 0)}</h3>
             </div>
           </div>
           <div className="metric-card compact">
@@ -308,112 +363,70 @@ export default function DashboardScreen({
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20 12V22H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16v5"/><path d="M20 12a2 2 0 0 0-2 2 2 2 0 0 0 2 2h4v-4z"/><circle cx="16" cy="14" r="1"/></svg>
             </div>
             <div className="mc-info">
-              <p>Dòng tiền ròng</p>
-              <h3 className={netFlow >= 0 ? "text-green" : "text-red"}>{currency(netFlow)}</h3>
+              <p>Tiết kiệm ước tính</p>
+              <h3>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</h3>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 2. Early Warning Row (New) */}
-      {anomalies.length > 0 && (
-        <section className="dashboard-warning-row">
-          <div className="dashboard-panel early-warning-panel">
-            <div className="dp-header">
-              <div className="dp-title-with-icon">
-                <div className="warning-icon-pulse">
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                </div>
-                <h3>HỆ THỐNG CẢNH BÁO SỚM</h3>
-              </div>
-              <span className="warning-count">{anomalies.length} phát hiện mới</span>
-            </div>
-            <div className="dp-body anomaly-grid">
-              {anomalies.map((alert) => (
-                <div key={alert.id} className={`anomaly-card-premium severity-${alert.severity}`}>
-                  <div className="acp-scanner-line"></div>
-                  <div className="acp-header">
-                    <span className={`acp-badge ${alert.severity}`}>{alert.severity.toUpperCase()}</span>
-                    <span className="acp-date">{new Date(alert.date).toLocaleDateString('vi-VN')}</span>
-                  </div>
-                  <div className="acp-body">
-                    <h4>{alert.description}</h4>
-                    <p className="acp-reason">{alert.reason}</p>
-                    <div className="acp-footer">
-                      <div className="acp-amount">
-                        <span>Số tiền biến động:</span>
-                        <strong>{currency(alert.amount)}</strong>
-                      </div>
-                      <button className="acp-action" onClick={() => onCheckAnomaly && onCheckAnomaly(alert)}>Kiểm tra ngay</button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* 3. Charts Row */}
       <section className="dashboard-charts-row">
         <div className="dashboard-panel chart-cashflow">
           <div className="dp-header">
-            <div className="dp-title-group">
-               <h3>Dòng tiền & Xu hướng</h3>
-               <p className="dp-subtitle">Phân tích thu chi và hiệu quả dòng tiền ròng</p>
-            </div>
+            <h3>Dòng tiền trong tháng <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></h3>
             <div className="dp-legend">
               <span className="legend-dot green"></span> Thu nhập
               <span className="legend-dot pink"></span> Chi tiêu
-              <span className="legend-dot purple"></span> Dòng tiền ròng
             </div>
           </div>
           <div className="dp-body">
             {trendChartData.length ? (
               <div className="line-chart compact wave">
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={210}>
                   <AreaChart data={trendChartData}>
                     <defs>
                       <linearGradient id="dashIncome" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.01}/>
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.35}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.02}/>
                       </linearGradient>
                       <linearGradient id="dashExpense" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.01}/>
-                      </linearGradient>
-                      <linearGradient id="dashNet" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.15}/>
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.01}/>
+                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.02}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-                    <Tooltip 
-                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', padding: '12px'}}
-                      formatter={(v) => [currency(v), ""]}
-                    />
-                    <Area type="monotone" dataKey="income" name="Thu nhập" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
-                    <Area type="monotone" dataKey="expense" name="Chi tiêu" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={3} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
-                    <Area type="monotone" dataKey="net" name="Dòng tiền ròng" stroke="#8b5cf6" fill="url(#dashNet)" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
+                    <XAxis dataKey="label" />
+                    <YAxis />
+                    <Tooltip formatter={(v) => currency(v)} />
+                    <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#dashIncome)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
+                    <Area type="monotone" dataKey="expense" stroke="#ec4899" fill="url(#dashExpense)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             ) : <p className="empty">Chưa có dữ liệu</p>}
           </div>
-          <div className="dp-footer-metrics-detailed">
-            <div className="fmd-item">
-               <span className="fmd-label">Thu nhập trung bình</span>
-               <span className="fmd-value text-green">{currency(totalIncome / Math.max(1, trendChartData.length))}</span>
+          <div className="dp-footer-metrics">
+            <div className="fm-item">
+              <div className="fm-icon green"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+              <div>
+                <p>Tổng thu nhập</p>
+                <strong>{currency(summary?.total_income || 0)}</strong>
+              </div>
             </div>
-            <div className="fmd-item">
-               <span className="fmd-label">Chi tiêu trung bình</span>
-               <span className="fmd-value text-red">{currency(totalExpense / Math.max(1, trendChartData.length))}</span>
+            <div className="fm-item">
+              <div className="fm-icon red"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+              <div>
+                <p>Tổng chi tiêu</p>
+                <strong>{currency(summary?.total_expense || 0)}</strong>
+              </div>
             </div>
-            <div className="fmd-item highlight">
-               <span className="fmd-label">Tỷ lệ tiết kiệm</span>
-               <span className="fmd-value text-purple">{percent(netFlow / (totalIncome || 1))}</span>
+            <div className="fm-item">
+              <div className="fm-icon purple"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M4 12h16M4 6h16M4 18h16"/></svg></div>
+              <div>
+                <p>Dòng tiền ròng</p>
+                <strong>{currency((summary?.total_income || 0) - (summary?.total_expense || 0))}</strong>
+              </div>
             </div>
           </div>
         </div>
@@ -473,22 +486,28 @@ export default function DashboardScreen({
             {budgetRows.length ? budgetRows.map(b => (
               <div key={b.label} className="budget-progress-item">
                 <div className="bpi-header">
-                  <div className="bpi-icon" style={{color: b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
+                  <div className="bpi-icon" style={{color: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg></div>
                   <span className="bpi-label">{b.label}</span>
-                  <span className="bpi-pct" style={{color: b.color}}>{b.percent}%</span>
+                  <span className="bpi-pct" style={{color: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}>{b.percent}%</span>
                 </div>
                 <div className="bpi-bar-bg">
-                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.color}}></div>
+                  <div className="bpi-bar-fill" style={{width: `${b.percent}%`, background: b.status === 'exceeded' ? '#ef4444' : b.status === 'warning' ? '#f59e0b' : b.color}}></div>
                 </div>
                 <div className="bpi-amounts">
                   <span className="bpi-spent">{currency(b.spent)}</span>
                   <span className="bpi-total">/ {currency(b.total)}</span>
+                  {b.status === 'exceeded' && <span style={{color:'#ef4444', fontSize:'11px', marginLeft:'4px'}}>⚠ Vượt</span>}
                 </div>
               </div>
-            )) : <p className="empty">Chưa có dữ liệu ngân sách</p>}
+            )) : (
+              <div style={{textAlign:'center', padding:'20px 0'}}>
+                <p className="empty">Chưa có ngân sách nào.</p>
+                <p style={{fontSize:'12px', color:'#94a3b8', marginTop:'4px'}}>Thiết lập ngân sách để theo dõi chi tiêu.</p>
+              </div>
+            )}
           </div>
           <div className="dp-footer-link">
-             <button onClick={() => {}}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
+             <button onClick={onGoBudgets}>Xem tất cả ngân sách <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg></button>
           </div>
         </div>
 
@@ -546,7 +565,7 @@ export default function DashboardScreen({
           <div className="dashboard-panel dp-goals">
             <div className="dp-header">
               <h3>Mục tiêu tiết kiệm</h3>
-              <button className="ghost-link" onClick={() => {}}>Xem tất cả</button>
+              <button className="ghost-link" onClick={onGoGoals}>Xem tất cả</button>
             </div>
             <div className="dp-body dp-goals-body">
               {savingsGoals.length ? savingsGoals.slice(0, 4).map((goal, idx) => {
@@ -565,7 +584,7 @@ export default function DashboardScreen({
                   <div key={goal.id} className="dp-goal-card">
                     <div className="dp-goal-top">
                       <div className="dp-goal-icon" style={{background: clr.light, color: clr.text}}>
-                        🎯
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                       </div>
                       <div className="dp-goal-info">
                         <span className="dp-goal-name">{goal.name}</span>
