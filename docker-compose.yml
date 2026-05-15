@@ -26,6 +26,8 @@ services:
     depends_on:
       finance-postgres:
         condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
   seed:
     build:
       context: .
@@ -186,6 +188,8 @@ services:
       notifications-worker:
         condition: service_started
       ai:
+        condition: service_started
+      ocr:
         condition: service_started
       planning:
         condition: service_started
@@ -581,3 +585,4 @@ volumes:
   ai_postgres_data: null
   planning_postgres_data: null
   recurring_postgres_data: null
+
