@@ -1,0 +1,31 @@
+{
+  "data": {
+    "merchant": "DOOKKI",
+    "transaction_date": "2026-04-13",
+    "final_total": 600480,
+    "subtotal_before_tax": 556000,
+    "vat_amount": 44480,
+    "discount_amount": 0,
+    "category": "Ăn uống",
+    "payment_source": "Grab",
+    "suggested_note": "Thưởng thức Buffet lẩu topokki tại DOOKKI cùng bạn bè",
+    "line_items": [
+      {
+        "name": "Buffet Người Lớn",
+        "quantity": 4,
+        "total": 556000
+      }
+    ]
+  },
+  "confidence": {
+    "merchant": 0.99,
+    "final_total": 0.99,
+    "transaction_date": 0.99,
+    "category": 0.95,
+    "payment_source": 0.9,
+    "subtotal_before_tax": 0.99,
+    "vat_amount": 0.99,
+    "discount_amount": 0.9,
+    "line_items": 0.98
+  }
+}

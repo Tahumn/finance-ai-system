@@ -77,18 +77,31 @@ def _normalize_text(text: str) -> str:
     normalized = re.sub(r"\s+", " ", normalized).strip()
     return normalized
 
-def _clean_merchant_name(name: str | None) -> str | None:
+def _clean_merchant_name(name: str | None, is_from_ai: bool = False) -> str | None:
     if not name: return None
     norm = _normalize_text(name)
     for alias, full_name in MERCHANT_ALIASES.items():
         if alias in norm:
             return full_name
+            
+    if is_from_ai:
+        return name.strip()
+
     cleaned = name.strip()
+    # Remove leading symbols and junk
+    cleaned = re.sub(r"^[|.\-\s]+", "", cleaned)
+    
+    # Remove common prefixes
+    prefixes = ["store:", "shop:", "cua hang:", "nha hang:", "branch:", "chi nhanh:"]
+    for p in prefixes:
+        if cleaned.lower().startswith(p):
+            cleaned = cleaned[len(p):].strip()
+            
     cleaned = re.sub(r"[^\w\s\&\.\-]", "", cleaned)
     words = cleaned.split()
     filtered_words = [w for w in words if _normalize_text(w) not in OCR_MERCHANT_SKIP_KEYWORDS]
     final_name = " ".join(filtered_words).strip().title()
-    return final_name if len(final_name) > 2 else None
+    return final_name if len(final_name) > 1 else None
 
 def _extract_json(text: str) -> dict:
     if not text: return {}
@@ -163,16 +176,42 @@ def _coerce_amount(value: Any) -> float | None:
     except (ValueError, TypeError): return None
 
 def _coerce_date_value(value: Any) -> DateType | None:
-    if value is None: return None
-    if isinstance(value, DateType): return value
+    if not value: return None
+    if isinstance(value, (DateType, datetime)): return value.date() if hasattr(value, "date") else value
     if isinstance(value, str):
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            # Try some common receipt formats
-            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
-                try: return datetime.strptime(value, fmt).date()
-                except ValueError: continue
+        value = value.strip()
+        # Common ISO format
+        try: return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError: pass
+        
+        # English month formats (e.g., 18 Jun 2024)
+        for fmt in ("%d %b %Y", "%d %B %Y", "%b %d, %Y", "%d/%m/%Y", "%d-%m-%Y"):
+            try: return datetime.strptime(value, fmt).date()
+            except ValueError: continue
+            
+        # Vietnamese date format (Ngày 18 Tháng 06 Năm 2024)
+        if "ngay" in value.lower() or "thang" in value.lower():
+            nums = re.findall(r"\d+", value)
+            if len(nums) >= 3:
+                try:
+                    d, m, y = map(int, nums[:3])
+                    if y < 100: y += 2000
+                    return DateType(y, m, d)
+                except ValueError: pass
+
+        # Clean numeric parts if it's like 18.06.2024
+        clean = re.sub(r"[./]", "-", value)
+        match = re.search(r"(\d{1,2}-\d{1,2}-\d{2,4})", clean)
+        if match:
+            d_str = match.group(1)
+            parts = d_str.split("-")
+            if len(parts) == 3:
+                # Try DD-MM-YYYY
+                try:
+                    d, m, y = map(int, parts)
+                    if y < 100: y += 2000
+                    return DateType(y, m, d)
+                except ValueError: pass
     return None
 
 def _map_payment_source(text: str) -> str | None:
@@ -191,31 +230,63 @@ def _call_gemini_ocr(image_bytes: bytes, cat_context: str = "") -> dict | None:
         model_name = "gemini-1.5-pro"
         
         system_instruction = (
-            "Bạn là chuyên gia phân tích hóa đơn tài chính chuyên nghiệp tại Việt Nam.\n"
-            "NHIỆM VỤ: Trích xuất dữ liệu CỰC KỲ CHÍNH XÁC.\n\n"
-            "QUY TẮC CHI TIẾT:\n"
-            "1. MERCHANT: Tên cửa hàng ở trên cùng (ví dụ: 'Hej', 'Xưởng Trà Thủ Công').\n"
-            "2. DATE & TIME: Tìm ngày (DD/MM/YYYY) và giờ (HH:mm) giao dịch. Tuyệt đối KHÔNG lấy ngày hiện tại.\n"
-            "3. TOTAL: Con số tổng cộng cuối cùng. Tránh nhầm với số điện thoại hay số hóa đơn.\n"
-            "4. PAYMENT SOURCE: Tìm từ khóa thanh toán (ví dụ: 'Momo', 'Ví MoMo', 'ZaloPay', 'Thẻ', 'Visa', 'Tiền mặt', 'Chuyển khoản').\n"
-            "5. SUGGESTED NOTE: Tạo ghi chú theo định dạng: '[Giờ] - Mua [Danh sách các món hàng chính]'. \n"
-            "   Ví dụ: '19:51 - Mua Trà Sữa Ô Long, Bạc Xỉu'.\n"
-            "6. CATEGORY: Chọn 1 trong: [" + cat_context + "]. Nếu là đồ uống/đồ ăn chọn 'Ăn uống' (nếu có trong danh sách).\n\n"
-            "TRẢ VỀ DUY NHẤT JSON:\n"
+            "Bạn là chuyên gia OCR tài chính hàng đầu, chuyên trách bóc tách hóa đơn tại Việt Nam.\n"
+            "NHIỆM VỤ: Trích xuất thông tin hóa đơn vào định dạng JSON với độ chính xác tuyệt đối.\n\n"
+            "HƯỚNG DẪN BÓC TÁCH CHI TIẾT:\n"
+            "1. TÊN CỬA HÀNG (MERCHANT):\n"
+            "   - Tìm tên thương hiệu chính (thường ở dòng 1-2, chữ TO NHẤT, hoặc TRONG LOGO).\n"
+            "   - Trả về tên hiển thị ĐÚNG, RÕ RÀNG, viết hoa chữ cái đầu hoặc đúng chuẩn thương hiệu.\n"
+            "   - Ví dụ: 'DOOKKI', 'CIRCLE K', 'HIGHLANDS COFFEE', 'WINMART', 'GS25'.\n"
+            "   - BỎ QUA: Địa chỉ, Số điện thoại, Tên nhân viên, Số bàn (Table), Số hóa đơn (Bill No).\n"
+            "2. NGÀY GIAO DỊCH (TRANSACTION DATE):\n"
+            "   - Tìm ngày thực tế hóa đơn được in (thường sau chữ 'Ngày', 'Date', 'Time').\n"
+            "   - CẢNH BÁO QUAN TRỌNG: TUYỆT ĐỐI KHÔNG LẤY NGÀY HÔM NAY. Phải lấy ngày có trong ảnh. Nếu không thấy, trả về null.\n"
+            "   - Định dạng trả về: YYYY-MM-DD (ví dụ: '2026-04-13').\n"
+            "3. CÁC KHOẢN TIỀN (MONEY):\n"
+            "   - final_total: Giá tiền cuối cùng (Payment Amount, Tổng cộng, Tổng thanh toán).\n"
+            "   - subtotal_before_tax: Tiền hàng trước thuế VAT (SubTotal, Cộng tiền hàng).\n"
+            "   - vat_amount: Số tiền thuế (VAT, Thuế GTGT). Lấy giá trị tiền chính xác (ví dụ: 44480), không lấy %.\n"
+            "   - discount_amount: Tiền giảm giá, chiết khấu (Discount, Giam gia).\n"
+            "4. NGUỒN TIỀN (PAYMENT SOURCE):\n"
+            "   - Xác định rõ nguồn tiền thanh toán dựa vào thông tin trên hóa đơn (ví dụ: 'Tiền mặt', 'Ví MoMo', 'Thẻ Visa', 'Thẻ ATM', 'Chuyển khoản').\n"
+            "   - Nếu hóa đơn có ghi hình thức thanh toán (Payment method), hãy trích xuất chính xác.\n"
+            "5. DANH MỤC (CATEGORY) & NỘI DUNG (NOTE):\n"
+            "   - category: Chọn 1 danh mục phù hợp nhất từ danh sách: [" + cat_context + "].\n"
+            "   - suggested_note: Mô tả tóm tắt LẠI nội dung hóa đơn một cách CHÍNH XÁC và HAY dựa trên 'line_items'. Ví dụ: 'Mua 2 ly trà sữa Ô Long và đồ uống tại Xưởng Trà Thủ Công' hoặc 'Mua nhu yếu phẩm và đồ dùng gia đình tại FamilyMart'. Cần bám sát thực tế các món đã mua, không bịa đặt.\n"
+            "6. ĐỘ TIN CẬY (CONFIDENCE SCORE):\n"
+            "   - Đánh giá CÔNG TÂM chất lượng ảnh và mức độ dễ đọc từ 0.0 đến 1.0 cho các trường: merchant, final_total, transaction_date, category, payment_source.\n"
+            "   - Rõ nét, 100% chắc chắn đúng: 0.9 - 1.0.\n"
+            "   - Mờ, nhòe, bị rách, hoặc phải suy đoán ngữ cảnh: 0.5 - 0.8.\n"
+            "   - Hoàn toàn không có thông tin (trả về null): 0.0.\n\n"
+            "VÍ DỤ TRẢ VỀ:\n"
             "{\n"
             "  \"data\": {\n"
-            "    \"merchant\": \"string\", \"transaction_date\": \"YYYY-MM-DD\", \"final_total\": number,\n"
-            "    \"category\": \"string\", \"payment_source\": \"string\", \"suggested_note\": \"string\",\n"
-            "    \"line_items\": [{\"name\": \"string\", \"quantity\": number, \"total\": number}]\n"
+            "    \"merchant\": \"DOOKKI\",\n"
+            "    \"transaction_date\": \"2026-04-13\",\n"
+            "    \"final_total\": 600480,\n"
+            "    \"subtotal_before_tax\": 556000,\n"
+            "    \"vat_amount\": 44480,\n"
+            "    \"discount_amount\": 0,\n"
+            "    \"category\": \"Ăn uống\",\n"
+            "    \"payment_source\": \"Tiền mặt\",\n"
+            "    \"suggested_note\": \"Thưởng thức Buffet lẩu topokki tại DOOKKI\",\n"
+            "    \"line_items\": [{\"name\": \"Buffet Người Lớn\", \"quantity\": 4, \"total\": 556000}]\n"
             "  },\n"
-            "  \"confidence\": {\"merchant\": number, \"final_total\": number, \"transaction_date\": number}\n"
-            "}"
+            "  \"confidence\": {\"merchant\": 0.95, \"final_total\": 0.99, \"transaction_date\": 0.9, \"category\": 0.9, \"payment_source\": 0.85}\n"
+            "}\n"
         )
         
-        model = genai.GenerativeModel(model_name=model_name, system_instruction=system_instruction)
+        # Use model from settings or fallback to 2.5 flash which is widely available
+        model_name = getattr(settings, "gemini_model_name", "gemini-2.5-flash")
+        
+        model = genai.GenerativeModel(
+            model_name=model_name, 
+            system_instruction=system_instruction,
+            generation_config={"response_mime_type": "application/json"}
+        )
         response = model.generate_content([
             {"mime_type": "image/jpeg", "data": image_bytes},
-            "Hãy trích xuất thông tin hóa đơn này. Lưu ý tìm tên cửa hàng ở trên cùng và tổng tiền ở dưới cùng."
+            "Hãy bóc tách thông tin từ hóa đơn này. Đặc biệt chú ý đến Tên cửa hàng (Merchant) ở trên cùng, Ngày giao dịch chính xác (KHÔNG lấy ngày hiện tại), và các khoản Thuế VAT nếu có."
         ])
         
         text_val = getattr(response, "text", "")
@@ -279,7 +350,7 @@ def extract_ocr(image_bytes: bytes, current_user_id: int, db: Session) -> dict:
 
     if gemini_result and isinstance(gemini_result, dict):
         data = gemini_result.get("data", {})
-        merchant = data.get("merchant")
+        merchant = _clean_merchant_name(data.get("merchant"), is_from_ai=True)
         total = _coerce_amount(data.get("final_total"))
         date_value = _coerce_date_value(data.get("transaction_date"))
         category_name = data.get("category")
