@@ -330,6 +330,8 @@ def extract_ocr(image_bytes: bytes, current_user_id: int, db: Session) -> dict:
     if image.mode in ("RGBA", "P"):
         image = image.convert("RGB")
     image.save(buffer, format="JPEG", quality=95)
+    image_save_path = os.path.join("uploads", "bills", filename)
+    image.save(image_save_path, format="JPEG", quality=95)
     image_bytes_to_send = buffer.getvalue()
 
     # 2. Fetch existing categories

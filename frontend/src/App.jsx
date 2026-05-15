@@ -194,6 +194,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [languageVersion, setLanguageVersion] = useState(0);
   const [newlyCreatedId, setNewlyCreatedId] = useState(null);
+  const [highlightedTxId, setHighlightedTxId] = useState(null);
   const [notifications, setNotifications] = useState(() => getNotifications());
   const loadFinanceRef = useRef(null);
   const authStatusRef = useRef(authState.status);
@@ -1091,6 +1092,15 @@ export default function App() {
             onGoChat={() => handleChangeView("chat")}
             onGoReports={() => handleChangeView("reports")}
             onGoAddTransaction={() => {}}
+            onCheckAnomaly={(alert) => {
+              if (alert.transaction_id) {
+                setFilters(prev => ({ ...prev, start: alert.date, end: alert.date }));
+                setHighlightedTxId(alert.transaction_id);
+                setView("transactions");
+              } else {
+                handleChangeView("transactions");
+              }
+            }}
             rangePreset={rangePreset}
             onSelectPreset={selectRangePreset}
             userEmail={authState.user?.email}
@@ -1124,6 +1134,8 @@ export default function App() {
             aiSuggestions={savingsTips}
             monthlySeries={monthlySeries}
             newlyCreatedId={newlyCreatedId}
+            highlightedTxId={highlightedTxId}
+            onClearHighlight={() => setHighlightedTxId(null)}
             onBack={() => handleChangeView("dashboard")}
             loading={loading}
           />

@@ -2672,7 +2672,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
         anomalies = get_spending_anomalies(db, current_user)
         if not anomalies:
             response = {
-                "answer": "Chi tieu 30 ngay qua on dinh, chua co diem bat thuong.",
+                "answer": "Chi tiêu 30 ngày qua ổn định, chưa có điểm bất thường.",
                 "intent": "anomaly_status",
                 "start_date": None,
                 "end_date": None,
@@ -2682,7 +2682,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
             _persist_chat_messages(db, current_user, text, response)
             return response
 
-        msg = [friendly, f"Phat hien {len(anomalies)} diem can luu y:"]
+        msg = [friendly, f"Phát hiện {len(anomalies)} điểm cần lưu ý:"]
         for item in anomalies:
             msg.append(f"- {item.date}: {item.amount:,.0f} VND ({item.reason})")
         response = {

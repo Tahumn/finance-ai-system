@@ -372,7 +372,9 @@ export default function TransactionsScreen({
   newlyCreatedId,
   onCreateBill,
   aiSuggestions = [],
-  monthlySeries = []
+  monthlySeries = [],
+  highlightedTxId,
+  onClearHighlight
 }) {
   /* modals */
   const [activeModal, setActiveModal] = useState(null); // "add" | "ocr" | "edit" | "detail" | "dateRange"
@@ -444,6 +446,26 @@ export default function TransactionsScreen({
     else document.body.classList.remove("tx-modal-open");
     return () => document.body.classList.remove("tx-modal-open");
   }, [activeModal]);
+
+  /* Handle highlighted transaction from Dashboard Early Warning */
+  useEffect(() => {
+    if (highlightedTxId && transactions.length > 0) {
+      const found = transactions.find(t => t.id === highlightedTxId);
+      if (found) {
+        setSelectedTx(found);
+        const cat = found.categoryLabel || "Khác";
+        setExpandedGroups((prev) => ({ ...prev, [cat]: true }));
+        
+        // Use a small delay to ensure DOM is updated and groups are expanded
+        setTimeout(() => {
+          const el = document.getElementById(`tx-row-${highlightedTxId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 500);
+      }
+    }
+  }, [highlightedTxId, transactions]);
 
   /* tag lookup maps */
   const tagMap = useMemo(() => {
@@ -844,7 +866,15 @@ export default function TransactionsScreen({
                             let sourceClass = acc ? (acc.type === "credit" ? "bank" : "ewallet") : "cash";
 
                             return (
-                              <div key={tx.id || tx.description} className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""}`} onClick={() => setSelectedTx(tx)}>
+                              <div 
+                                id={`tx-row-${tx.id}`}
+                                key={tx.id || tx.description} 
+                                className={`txd-list-row ${newlyCreatedId === tx.id ? "new-item-flash" : ""} ${highlightedTxId === tx.id ? "highlighted-tx" : ""}`} 
+                                onClick={() => {
+                                  setSelectedTx(tx);
+                                  if (highlightedTxId === tx.id && onClearHighlight) onClearHighlight();
+                                }}
+                              >
                                 <div className="lr-col main">
                                   <div className="lr-icon" style={{ background: txMeta.bg, color: "#fff" }}><txMeta.SvgIcon size={14} /></div>
                                   <span className="lr-title">
@@ -1603,7 +1633,7 @@ export default function TransactionsScreen({
                     <div className="tx-detail-receipt">
                       <div className="tx-receipt-img" onClick={() => setIsImageModalOpen(true)}>
                         <img
-                          src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`}
+                          src={`${window.location.protocol}//${window.location.hostname}:8005${selectedTx.image_path}`}
                           alt="Hóa đơn"
                         />
                         <div className="tx-img-overlay">
@@ -1682,7 +1712,7 @@ export default function TransactionsScreen({
           <div className="tx-modal-content" onClick={e => e.stopPropagation()}>
             <button className="tx-modal-close" onClick={() => setIsImageModalOpen(false)}>&times;</button>
             <img
-              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`}
+              src={`${window.location.protocol}//${window.location.hostname}:8005${selectedTx.image_path}`}
               alt="Hóa đơn phóng lớn"
             />
           </div>

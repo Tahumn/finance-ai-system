@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai_agent import models as ai_models
@@ -54,3 +55,4 @@ app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 
 app.mount("/ws", socket_app)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

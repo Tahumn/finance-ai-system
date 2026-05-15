@@ -207,6 +207,7 @@ export default function DashboardScreen({
   onGoChat,
   onGoAddTransaction,
   onGoReports,
+  onCheckAnomaly,
   rangePreset,
   onSelectPreset,
   userEmail,
@@ -321,7 +322,7 @@ export default function DashboardScreen({
             <div className="dp-header">
               <div className="dp-title-with-icon">
                 <div className="warning-icon-pulse">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                 </div>
                 <h3>HỆ THỐNG CẢNH BÁO SỚM</h3>
               </div>
@@ -330,6 +331,7 @@ export default function DashboardScreen({
             <div className="dp-body anomaly-grid">
               {anomalies.map((alert) => (
                 <div key={alert.id} className={`anomaly-card-premium severity-${alert.severity}`}>
+                  <div className="acp-scanner-line"></div>
                   <div className="acp-header">
                     <span className={`acp-badge ${alert.severity}`}>{alert.severity.toUpperCase()}</span>
                     <span className="acp-date">{new Date(alert.date).toLocaleDateString('vi-VN')}</span>
@@ -342,7 +344,7 @@ export default function DashboardScreen({
                         <span>Số tiền biến động:</span>
                         <strong>{currency(alert.amount)}</strong>
                       </div>
-                      <button className="acp-action">Kiểm tra ngay</button>
+                      <button className="acp-action" onClick={() => onCheckAnomaly && onCheckAnomaly(alert)}>Kiểm tra ngay</button>
                     </div>
                   </div>
                 </div>

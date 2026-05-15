@@ -614,9 +614,10 @@ def get_spending_anomalies(
                 "id": f"anomaly-{day.isoformat()}",
                 "date": day,
                 "amount": round(total, 2),
-                "description": sample.get("description") or "Chi tieu bat thuong",
-                "reason": "Chi tieu ngay nay cao hon muc thong thuong",
+                "description": sample.get("description") or "Chi tiêu bất thường",
+                "reason": "Chi tiêu ngày này cao hơn mức thông thường",
                 "severity": severity,
+                "transaction_id": sample.get("id"),
             }
         )
     return alerts
@@ -632,11 +633,11 @@ def get_spending_forecast(
     series = chart.get("series") if isinstance(chart, dict) else []
     if not isinstance(series, list) or not series:
         return {
-            "summary": "Chua du du lieu de du bao chi tieu.",
+            "summary": "Chưa đủ dữ liệu để dự báo chi tiêu.",
             "points": [],
             "top_growing_categories": [],
             "risk_level": "low",
-            "tips": ["Ghi nhan giao dich deu dan de AI du bao chinh xac hon."],
+            "tips": ["Ghi nhận giao dịch đều đặn để AI dự báo chính xác hơn."],
         }
 
     monthly_expense = [float(item.get("expense") or 0.0) for item in series]
@@ -657,7 +658,7 @@ def get_spending_forecast(
                 "month": target_month.strftime("%Y-%m"),
                 "predicted_expense": round(predicted_expense, 2),
                 "predicted_income": None,
-                "note": "Du bao dua tren xu huong 6 thang gan nhat",
+                "note": "Dự báo dựa trên xu hướng 6 tháng gần nhất",
             }
         )
 
@@ -669,14 +670,14 @@ def get_spending_forecast(
         risk_level = "medium"
 
     tips = [
-        "Theo doi cac khoan chi lon trong 7 ngay toi.",
-        "Dat muc canh bao khi chi tieu vuot 85% ngan sach.",
+        "Theo dõi các khoản chi lớn trong 7 ngày tới.",
+        "Đặt mức cảnh báo khi chi tiêu vượt 85% ngân sách.",
     ]
     if risk_level == "high":
-        tips.insert(0, "Can uu tien cat giam nhom chi tieu khong thiet yeu trong thang toi.")
+        tips.insert(0, "Cần ưu tiên cắt giảm nhóm chi tiêu không thiết yếu trong tháng tới.")
 
     return {
-        "summary": f"Du bao chi tieu thang toi khoang {next_expense:,.0f} VND.",
+        "summary": f"Dự báo chi tiêu tháng tới khoảng {next_expense:,.0f} VND.",
         "points": points,
         "top_growing_categories": [],
         "risk_level": risk_level,
@@ -704,10 +705,10 @@ def get_savings_suggestions(
     )
     if not isinstance(breakdown, list) or not breakdown:
         return {
-            "summary": "Chua du du lieu chi tieu de dua ra goi y tiet kiem.",
+            "summary": "Chưa đủ dữ liệu chi tiêu để đưa ra gợi ý tiết kiệm.",
             "tips": [],
             "total_potential_saving": 0.0,
-            "general_advice": ["Bat dau ghi chep giao dich hang ngay de AI dua goi y tot hon."],
+            "general_advice": ["Bắt đầu ghi chép giao dịch hằng ngày để AI đưa gợi ý tốt hơn."],
         }
 
     top_categories = sorted(
@@ -732,17 +733,17 @@ def get_savings_suggestions(
                 "current_spend": round(item["spent"], 2),
                 "suggested_limit": suggested_limit,
                 "potential_saving": potential,
-                "tip": f"Giam 10% chi tieu nhom {item['category']} trong thang toi.",
+                "tip": f"Giảm 10% chi tiêu nhóm {item['category']} trong tháng tới.",
             }
         )
 
     return {
-        "summary": f"Ban co the tiet kiem khoang {total_potential_saving:,.0f} VND neu toi uu 3 nhom chi tieu lon nhat.",
+        "summary": f"Bạn có thể tiết kiệm khoảng {total_potential_saving:,.0f} VND nếu tối ưu 3 nhóm chi tiêu lớn nhất.",
         "tips": tips,
         "total_potential_saving": round(total_potential_saving, 2),
         "general_advice": [
-            "Su dung quy tac 50/30/20 cho thu nhap hang thang.",
-            "Dat tran chi tieu theo tuan de canh bao som.",
+            "Sử dụng quy tắc 50/30/20 cho thu nhập hằng tháng.",
+            "Đặt trần chi tiêu theo tuần để cảnh báo sớm.",
         ],
     }
 
@@ -760,10 +761,10 @@ def _month_summary(text: str, authorization: str | None) -> dict[str, Any]:
     balance = float(summary.get("balance") or summary.get("total_balance") or (total_income - total_expense))
     return {
         "answer": (
-            f"Tu {start_date.isoformat()} den {end_date.isoformat()}:\n"
-            f"- Tong thu: {total_income:,.0f} VND\n"
-            f"- Tong chi: {total_expense:,.0f} VND\n"
-            f"- So du: {balance:,.0f} VND"
+            f"Từ {start_date.isoformat()} đến {end_date.isoformat()}:\n"
+            f"- Tổng thu: {total_income:,.0f} VND\n"
+            f"- Tổng chi: {total_expense:,.0f} VND\n"
+            f"- Số dư: {balance:,.0f} VND"
         ),
         "intent": "summary",
         "start_date": start_date,
@@ -800,7 +801,7 @@ def answer_chat(
         alerts = get_spending_anomalies(db, current_user, authorization)
         if not alerts:
             response = {
-                "answer": "Chi tieu 30 ngay qua on dinh, chua co diem bat thuong.",
+                "answer": "Chi tiêu 30 ngày qua ổn định, chưa có điểm bất thường.",
                 "intent": "anomaly_status",
                 "start_date": None,
                 "end_date": None,
@@ -808,7 +809,7 @@ def answer_chat(
                 "total": None,
             }
         else:
-            lines = ["Phat hien cac diem can luu y:"]
+            lines = ["Phát hiện các điểm cần lưu ý:"]
             for item in alerts:
                 lines.append(f"- {item['date']}: {item['amount']:,.0f} VND ({item['reason']})")
             response = {
