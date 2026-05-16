@@ -211,6 +211,11 @@ docker compose --profile micro up -d --build
 
 Dưới đây là diện mạo thực tế của hệ sinh thái **Finance AI** với ngôn ngữ thiết kế **Midnight Glassmorphism** hiện đại.
 
+### 🎥 Video Demo Sản phẩm
+[![Finance AI Technical Demo](https://img.youtube.com/vi/EojIcG7BPcE/0.jpg)](https://www.youtube.com/watch?v=EojIcG7BPcE)
+
+*Xem video demo chi tiết về hệ thống và các tính năng AI tại đây.*
+
 ### 0. Trải nghiệm Đăng nhập & Bảo mật
 Hệ thống sử dụng cơ chế xác thực đa nhân tố và giao diện đăng nhập tối giản, tinh tế.
 ![Giao diện Đăng nhập](assets/screenshots/DangNhap/login.jpg)

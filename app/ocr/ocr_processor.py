@@ -276,8 +276,8 @@ def _call_gemini_ocr(image_bytes: bytes, cat_context: str = "") -> dict | None:
             "}\n"
         )
         
-        # Use model from settings or fallback to 2.5 flash which is widely available
-        model_name = getattr(settings, "gemini_model_name", "gemini-2.5-flash")
+        # Use model from settings or fallback to 1.5 flash which is widely available
+        model_name = getattr(settings, "gemini_model_name", "gemini-1.5-flash")
         
         model = genai.GenerativeModel(
             model_name=model_name, 
