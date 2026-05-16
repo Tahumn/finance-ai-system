@@ -211,41 +211,55 @@ docker compose --profile micro up -d --build
 
 Dưới đây là diện mạo thực tế của hệ sinh thái **Finance AI** với ngôn ngữ thiết kế **Midnight Glassmorphism** hiện đại.
 
+### 🎥 Video Demo Sản phẩm
+[![Finance AI Demo Video](https://img.shields.io/badge/YouTube-Video_Demo-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID_HERE)
+
+> [!TIP]
+> Bạn hãy thay thế `YOUR_VIDEO_ID_HERE` bằng mã định danh video sau khi upload lên YouTube để link hoạt động chính xác.
+
 ### 0. Trải nghiệm Đăng nhập & Bảo mật
 Hệ thống sử dụng cơ chế xác thực đa nhân tố và giao diện đăng nhập tối giản, tinh tế.
 ![Giao diện Đăng nhập](assets/screenshots/DangNhap/login.jpg)
 
-### 1. Hệ thống Dashboard & Quản lý Tổng quan
+### 1. Hệ thống Dashboard (Tổng quan)
 Giao diện trung tâm cung cấp cái nhìn 360 độ về sức khỏe tài chính với các biểu đồ động và thông số thời gian thực.
 ![Tổng quan hệ thống](assets/screenshots/TongQuan/z7833359348131_a099ed31903aead0649e80b829db80eb.jpg)
 
-### 2. Trình quản lý Giao dịch & Dòng tiền
-Danh sách giao dịch được phân loại thông minh, hỗ trợ lọc đa tầng và hiển thị chi tiết nguồn tiền.
-<p align="center">
-  <img src="assets/screenshots/GiaoDich/z7833421295700_ea70996a9b223f0efac685f4fa280755.jpg" width="49%" alt="Danh sách giao dịch" />
-  <img src="assets/screenshots/The&TaiKhoan/z7833431403981_52c465a69a7713b2aee3deb561799910.jpg" width="49%" alt="Quản lý tài khoản" />
-</p>
+### 2. Quản lý Giao dịch
+Danh sách giao dịch được phân loại thông minh, hỗ trợ lọc đa tầng.
+![Danh sách giao dịch](assets/screenshots/GiaoDich/z7833421295700_ea70996a9b223f0efac685f4fa280755.jpg)
 
-### 3. Công nghệ OCR & Trích xuất Hóa đơn tự động
-Trái tim của hệ thống: Tự động bóc tách dữ liệu từ ảnh chụp với độ chính xác cực cao nhờ kết hợp Tesseract và Gemini 1.5.
-<p align="center">
-  <img src="assets/screenshots/OCR/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg" width="49%" alt="Xử lý OCR" />
-  <img src="assets/screenshots/HoaDon/z7833456418925_a80e9242f898d06a11d99d4df93ebebd.jpg" width="49%" alt="Kết quả trích xuất" />
-</p>
+### 3. Thẻ & Tài khoản thanh toán
+Quản lý linh hoạt các nguồn tiền từ thẻ ngân hàng đến ví điện tử.
+![Quản lý tài khoản](assets/screenshots/The&TaiKhoan/z7833431403981_52c465a69a7713b2aee3deb561799910.jpg)
 
-### 4. Trợ lý ảo AI & Phân tích chuyên sâu
-Tương tác với hệ thống bằng ngôn ngữ tự nhiên và nhận các báo cáo tài chính trực quan.
-<p align="center">
-  <img src="assets/screenshots/ChatAI/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg" width="49%" alt="AI Chatbot" />
-  <img src="assets/screenshots/BaoCao/z7833422554827_1ef0fe3a8fe8758311b5cabafdc36841.jpg" width="49%" alt="Báo cáo phân tích" />
-</p>
+### 4. Công nghệ trích xuất OCR
+Tự động bóc tách dữ liệu từ ảnh chụp hóa đơn bằng AI.
+![Xử lý OCR](assets/screenshots/OCR/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg)
 
-### 5. Thiết lập mục tiêu & Cấu hình hệ thống
-Theo dõi tiến độ tiết kiệm và tùy chỉnh trải nghiệm cá nhân hóa.
-<p align="center">
-  <img src="assets/screenshots/MucTieu/z7833423078638_1985fab13bb1723aa805863882c55d08.jpg" width="49%" alt="Mục tiêu tài chính" />
-  <img src="assets/screenshots/Settings/z7833432078356_78070578395067e6a2bdb17eafa09129.jpg" width="49%" alt="Cài đặt hệ thống" />
-</p>
+### 5. Chi tiết hóa đơn trích xuất
+Kết quả bóc tách dữ liệu cửa hàng, ngày tháng và tổng tiền từ OCR.
+![Kết quả trích xuất](assets/screenshots/HoaDon/z7833456418925_a80e9242f898d06a11d99d4df93ebebd.jpg)
+
+### 6. Trợ lý ảo AI Chatbot
+Tương tác và tạo giao dịch bằng ngôn ngữ tự nhiên.
+![AI Chatbot](assets/screenshots/ChatAI/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg)
+
+### 7. Báo cáo phân tích chuyên sâu
+Phân tích tỷ trọng chi tiêu và sức khỏe tài chính qua biểu đồ.
+![Báo cáo phân tích](assets/screenshots/BaoCao/z7833422554827_1ef0fe3a8fe8758311b5cabafdc36841.jpg)
+
+### 8. Trung tâm thông báo
+Cập nhật biến động số dư và cảnh báo ngân sách thời gian thực.
+![Trung tâm thông báo](assets/screenshots/ThongBao/z7833423864418_fbb03cd4419d4143322da53340c2157d.jpg)
+
+### 9. Thiết lập mục tiêu tài chính
+Theo dõi tiến độ tích lũy cho các mục tiêu dài hạn.
+![Mục tiêu tài chính](assets/screenshots/MucTieu/z7833423078638_1985fab13bb1723aa805863882c55d08.jpg)
+
+### 10. Tùy chỉnh & Cài đặt hệ thống
+Cấu hình giao diện và thông tin cá nhân.
+![Cài đặt hệ thống](assets/screenshots/Settings/z7833432078356_78070578395067e6a2bdb17eafa09129.jpg)
 
 ---
 
