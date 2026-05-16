@@ -1,27 +1,27 @@
 {
   "data": {
-    "merchant": "RAU MÁ mix",
-    "transaction_date": "2026-03-29",
-    "final_total": 58000,
-    "subtotal_before_tax": 58000,
+    "merchant": "TINHOCNGOISAO",
+    "transaction_date": "2025-08-30",
+    "final_total": 2888000,
+    "subtotal_before_tax": 2888000,
     "vat_amount": 0,
-    "discount_amount": 0,
-    "category": "Ăn uống",
-    "payment_source": "Ví MoMo",
-    "suggested_note": "Mua rau má mix đậu xanh sữa dừa tại Rau Má Mix",
+    "discount_amount": 602000,
+    "category": "Công nghệ",
+    "payment_source": null,
+    "suggested_note": "Mua ghế Gaming Warrior Immortal Series",
     "line_items": [
       {
-        "name": "Rau má mix đậu xanh sữa dừa (LỚN)",
-        "quantity": 2,
-        "total": 58000
+        "name": "Ghế Gaming Warrior Immortal Series - WGC225; Màu Đen.",
+        "quantity": 1,
+        "total": 2888000
       }
     ]
   },
   "confidence": {
-    "merchant": 0.99,
+    "merchant": 0.95,
     "final_total": 0.99,
     "transaction_date": 0.99,
-    "category": 0.99,
-    "payment_source": 0.99
+    "category": 0.9,
+    "payment_source": 0.0
   }
 }
