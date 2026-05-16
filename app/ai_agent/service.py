@@ -1,3 +1,12 @@
+# File này xử lý nghiệp vụ:
+# chat AI,
+# OCR,
+# phân tích giao dịch,
+# parse tiếng Việt,
+# classify thu/chi,
+# thống kê,
+# dự đoán tài chính
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +23,7 @@ import urllib.error
 import urllib.request
 import os
 try:
-    import google.generativeai as genai  # type: ignore
+    import google.generativeai as genai  
 except Exception:
     genai = None
 
@@ -42,8 +51,8 @@ from app.finance.models import (
 )
 
 try:
-    import cv2  # type: ignore
-    import numpy as np  # type: ignore
+    import cv2  
+    import numpy as np  
 except Exception:
     cv2 = None
     np = None
@@ -588,9 +597,21 @@ _ACCOUNTS_BY_USER: dict[int, set[str]] = {}
 
 
 def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    # Normalize and remove accents
     normalized = unicodedata.normalize("NFD", text)
     normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
-    return normalized.lower().strip()
+    text = normalized.lower().strip()
+    
+    # Replace common teencode for heuristics
+    teencode_map = {
+        "ko": "khong", "k": "khong", "dc": "duoc", "đc": "duoc", 
+        "nham": "nham", "lộn": "nham", "lon": "nham"
+    }
+    for k, v in teencode_map.items():
+        text = re.sub(rf"\b{k}\b", v, text)
+    return text.strip()
 
 
 def _strip_date_fragments(text: str) -> str:
@@ -600,6 +621,7 @@ def _strip_date_fragments(text: str) -> str:
         key = f"__amt_decimal_{len(protected)}__"
         protected[key] = match.group(0)
         return key
+
 
     # Preserve decimal amounts such as "5.5 trieu" before removing date-like fragments.
     text = DECIMAL_AMOUNT_WITH_UNIT_REGEX.sub(_protect_decimal_amount, text)
@@ -1080,20 +1102,6 @@ def _needs_amount_clarification(text: str, amount: float | None) -> bool:
     return not _amount_has_unit(text)
 
 
-def _extract_json(text: str) -> dict | None:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
 def _coerce_amount(value: object) -> float | None:
     if value is None:
         return None
@@ -1180,50 +1188,6 @@ def _extract_reminder_channel(text: str) -> str | None:
     if "n8n" in normalized:
         return "n8n"
     return None
-
-
-def _call_dify(
-    text: str,
-    user_id: int,
-    json_schema: dict | None = None,
-) -> dict | None:
-    if not settings.dify_api_base or not settings.dify_api_key:
-        return None
-    base = settings.dify_api_base.rstrip("/")
-    url = f"{base}/chat-messages"
-    query = text
-    if settings.dify_force_json and json_schema:
-        query = (
-            "Return JSON only. Use the schema. If missing, use null. "
-            f"Input: {text}"
-        )
-    payload = {
-        "inputs": {},
-        "query": query,
-        "response_mode": "blocking",
-        "user": str(user_id),
-    }
-    if json_schema:
-        payload["response_format"] = {"type": "json_schema", "json_schema": json_schema}
-    data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "Authorization": f"Bearer {settings.dify_api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=settings.dify_timeout_seconds) as response:
-            body = response.read().decode("utf-8")
-    except urllib.error.URLError:
-        return None
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:
-        return None
 
 
 def _parse_transaction_type(text: str) -> str:
@@ -1607,7 +1571,7 @@ def _analyze_anomalies_with_ai(db: Session, current_user: User, candidate_anomal
     
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         response = model.generate_content(prompt)
         text_val = getattr(response, "text", "{}")
         return _extract_json(text_val) or {}
@@ -1709,7 +1673,7 @@ def get_spending_forecast(
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
                 or settings.gemini_model
-                or "gemini-1.5-flash"
+                or "gemini-1.5-flash-latest"
             )
             model = genai.GenerativeModel(
                 model_name=model_name,
@@ -1797,7 +1761,7 @@ def get_savings_suggestions(
                 os.environ.get("GEMINI_MODEL_NAME")
                 or settings.gemini_model_name
                 or settings.gemini_model
-                or "gemini-1.5-flash"
+                or "gemini-1.5-flash-latest"
             )
             model = genai.GenerativeModel(
                 model_name=model_name,
@@ -2228,13 +2192,12 @@ def _call_gemini_chat(text: str) -> dict | None:
     
     # Configure Gemini SDK
     genai.configure(api_key=settings.gemini_api_key)
-    
-    # Get model name from environment variable (as requested)
+    # Get model name from environment variable
     MODEL_NAME = (
         os.environ.get("GEMINI_MODEL_NAME")
         or settings.gemini_model_name
         or settings.gemini_model
-        or "gemini-1.5-flash"
+        or "gemini-1.5-flash-latest"
     )
     
     # Required print for Docker logs
@@ -2373,7 +2336,7 @@ def _call_gemini_freeform(text: str, history: list[ChatMessage] | None = None) -
         os.environ.get("GEMINI_MODEL_NAME")
         or settings.gemini_model_name
         or settings.gemini_model
-        or "gemini-1.5-flash"
+        or "gemini-1.5-flash-latest"
     )
 
     system_instruction = (
@@ -3253,8 +3216,12 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
     
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        
-        primary_model = os.environ.get("GEMINI_MODEL_NAME") or settings.gemini_model_name or "gemini-1.5-flash-latest"
+        primary_model = (
+            os.environ.get("GEMINI_MODEL_NAME") 
+            or settings.gemini_model_name 
+            or settings.gemini_model
+            or "gemini-1.5-flash-latest"
+        )
         models_to_try = [primary_model]
         if "pro" in primary_model.lower():
             models_to_try.extend(["gemini-1.5-flash-latest", "gemini-flash-latest", "gemini-1.5-flash"])
@@ -3263,6 +3230,7 @@ def _call_gemini_ocr(image_bytes: bytes) -> dict | None:
             "You are an AI financial receipt extraction expert. "
             "Extract information from the receipt image and return ONLY JSON. "
             "SCHEMA: {\"data\": {\"merchant\": \"Brand Name from Logo\", \"transaction_date\": \"YYYY-MM-DD\", \"suggested_note\": \"Detailed smart note in Vietnamese\", \"final_total\": 100}, \"confidence\": {\"merchant\": 90, \"final_total\": 90}}"
+        )
         )
 
         for model_name in models_to_try:
@@ -3580,6 +3548,9 @@ def _match_tags(db: Session, user: User, merchant: str | None, text: str, sugges
 
 def extract_ocr(db: Session, current_user: User, image_bytes: bytes) -> dict:
     image = Image.open(io.BytesIO(image_bytes))
+    # Fix mode for Gemini/OCR compatibility
+    if image.mode == "RGBA":
+        image = image.convert("RGB")
     
     # Save image for later display
     import uuid
