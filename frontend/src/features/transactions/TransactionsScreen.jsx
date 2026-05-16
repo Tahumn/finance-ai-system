@@ -8,6 +8,7 @@ import {
 } from "../../utils/format.js";
 import { colorFor, onColor } from "../../utils/colors.js";
 import { getCategoryPrefs } from "../../utils/userPrefs.js";
+import { getBaseUrl } from "../../api/client.js";
 import { t } from "../../utils/i18n.js";
 import { getCatMeta, CAT_ICONS } from "../../utils/categoryIcons.jsx";
 import "./transactions-desktop.css";
@@ -1949,7 +1950,7 @@ export default function TransactionsScreen({
           <div className="tx-modal-content" onClick={e => e.stopPropagation()}>
             <button className="tx-modal-close" onClick={() => setIsImageModalOpen(false)}>&times;</button>
             <img
-              src={`${window.location.protocol}//${window.location.hostname}:8000${selectedTx.image_path}`}
+              src={`${getBaseUrl()}${selectedTx.image_path}`}
               alt="Hóa đơn phóng lớn"
             />
           </div>

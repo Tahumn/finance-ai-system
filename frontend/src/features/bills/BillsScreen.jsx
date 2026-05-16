@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { currency, formatNumberInput, parseNumberInput } from "../../utils/format.js";
 import { colorFor } from "../../utils/colors.js";
+import { getBaseUrl } from "../../api/client.js";
 import "./bills.css";
 
 // Icons
@@ -280,7 +281,7 @@ export default function BillsScreen({
                     {selected.image_path ? (
                       <>
                         <img
-                          src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`}
+                          src={`${getBaseUrl()}${selected.image_path}`}
                           alt="Hóa đơn"
                         />
                         {!isEditing && (
@@ -483,7 +484,7 @@ export default function BillsScreen({
           <div className="bill-modal-content" onClick={e => e.stopPropagation()}>
             <button className="bill-modal-close" onClick={() => setIsModalOpen(false)}>&times;</button>
             <img
-              src={`${window.location.protocol}//${window.location.hostname}:8000${selected.image_path}`}
+              src={`${getBaseUrl()}${selected.image_path}`}
               alt="Hóa đơn phóng lớn"
             />
           </div>

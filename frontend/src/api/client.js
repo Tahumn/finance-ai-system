@@ -9,6 +9,8 @@ const inferApiBase = () => {
 
 const API_BASE = inferApiBase();
 
+export const getBaseUrl = () => API_BASE.replace(/\/api\/v1$/, "");
+
 const TOKEN_KEY = "finance_token";
 
 export const getToken = () => {

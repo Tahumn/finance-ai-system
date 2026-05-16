@@ -26,6 +26,8 @@ services:
     depends_on:
       finance-postgres:
         condition: service_healthy
+    profiles:
+    - monolith
   seed:
     build:
       context: .
@@ -62,9 +64,6 @@ services:
       GENERIC_TIMEZONE: Asia/Ho_Chi_Minh
     volumes:
     - n8n_data:/home/node/.n8n
-    depends_on:
-      api:
-        condition: service_started
   dify-api:
     image: langgenius/dify-api:latest
     container_name: dify-api
@@ -166,6 +165,7 @@ services:
     - FINANCE_SERVICE_URL=http://finance:8000
     - NOTIFICATIONS_SERVICE_URL=http://notifications:8000
     - AI_SERVICE_URL=http://ai:8000
+    - OCR_SERVICE_URL=http://ocr:8000
     command:
     - uvicorn
     - app.gateway_main:app
@@ -190,8 +190,12 @@ services:
         condition: service_started
       recurring:
         condition: service_started
+      ocr:
+        condition: service_started
     profiles:
     - micro
+    volumes:
+    - ./uploads:/app/uploads
   auth:
     build:
       context: .
@@ -359,6 +363,8 @@ services:
     depends_on:
       ai-postgres:
         condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
     profiles:
     - micro
   redis:
@@ -534,6 +540,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: finance-ocr
+    env_file:
+    - .env
+    environment:
+    - DB_URL=${FINANCE_DB_URL:-postgresql://finance_user:finance_pass@finance-postgres:5432/finance_db}
+    - DB_SCHEMA=finance_service
+    command:
+    - uvicorn
+    - app.services.ocr_main:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    ports:
+    - 8008:8000
+    depends_on:
+      finance-postgres:
+        condition: service_healthy
+    volumes:
+    - ./uploads:/app/uploads
+    profiles:
+    - micro
+
 volumes:
   n8n_data: null
   dify_db_data: null

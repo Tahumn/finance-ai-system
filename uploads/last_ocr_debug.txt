@@ -1,37 +1,27 @@
 {
   "data": {
-    "merchant": "GALLERY PHOTO COFFEE",
-    "transaction_date": "2022-04-11",
-    "final_total": 1286000,
-    "subtotal_before_tax": 1286000,
+    "merchant": "TINHOCNGOISAO",
+    "transaction_date": "2025-08-30",
+    "final_total": 2888000,
+    "subtotal_before_tax": 3490000,
     "vat_amount": 0,
-    "discount_amount": 0,
-    "category": "Ăn uống",
-    "payment_source": "Tiền mặt",
-    "suggested_note": "Mua kem thập cẩm, đá xay trà xanh và cà phê tại Gallery Photo Coffee",
+    "discount_amount": 602000,
+    "category": "Công nghệ",
+    "payment_source": null,
+    "suggested_note": "Mua ghế Gaming Warrior Immortal Series - WGC225 màu Đen tại Tin Học Ngôi Sao",
     "line_items": [
       {
-        "name": "Kem thập cẩm",
-        "quantity": 2,
-        "total": 230000
-      },
-      {
-        "name": "Đá xay trà xanh",
+        "name": "Ghế Gaming Warrior Immortal Series - WGC225; Màu Đen",
         "quantity": 1,
-        "total": 60000
-      },
-      {
-        "name": "Cafe PHƯƠNG HOÀNG LƯA",
-        "quantity": 4,
-        "total": 996000
+        "total": 3490000
       }
     ]
   },
   "confidence": {
-    "merchant": 0.85,
-    "final_total": 1.0,
-    "transaction_date": 1.0,
-    "category": 1.0,
-    "payment_source": 0.9
+    "merchant": 0.95,
+    "final_total": 0.99,
+    "transaction_date": 0.95,
+    "category": 0.9,
+    "payment_source": 0.0
   }
 }
