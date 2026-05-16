@@ -78,37 +78,48 @@ SAVINGS_GOAL_PLAN_DEFS = [
         "note": "Tiết kiệm cho chuyến đi Đà Nẵng mùa hè."
     },
     {
-        "name": "Quỹ khẩn cấp",
-        "goal_type": "Quỹ khẩn cấp",
+        "name": "Quỹ dự phòng khẩn cấp",
+        "goal_type": "Dự phòng",
         "funding_source": "Ngân hàng",
         "priority": "high",
-        "target_amount": 30_000_000,
-        "saved_amount": 19_500_000,
-        "monthly_contribution": 1_500_000,
-        "months_to_target": 8,
-        "note": "Dự phòng chi tiêu tối thiểu 3-6 tháng."
+        "target_amount": 100_000_000,
+        "saved_amount": 45_000_000,
+        "monthly_contribution": 5_000_000,
+        "months_to_target": 12,
+        "note": "Duy trì cuộc sống trong 6 tháng nếu có sự cố."
     },
     {
-        "name": "Mua laptop mới",
-        "goal_type": "Mua sắm",
+        "name": "Mua Macbook Pro M3",
+        "goal_type": "Công nghệ",
         "funding_source": "Ví điện tử",
         "priority": "medium",
-        "target_amount": 25_000_000,
-        "saved_amount": 13_500_000,
-        "monthly_contribution": 2_500_000,
-        "months_to_target": 6,
+        "target_amount": 65_000_000,
+        "saved_amount": 25_000_000,
+        "monthly_contribution": 4_000_000,
+        "months_to_target": 10,
         "note": "Nâng cấp máy phục vụ học tập và công việc."
     },
     {
-        "name": "Học tiếng Anh",
+        "name": "Du lịch Nhật Bản",
+        "goal_type": "Du lịch",
+        "funding_source": "Ngân hàng",
+        "priority": "medium",
+        "target_amount": 50_000_000,
+        "saved_amount": 12_000_000,
+        "monthly_contribution": 3_000_000,
+        "months_to_target": 15,
+        "note": "Chuyến đi ngắm hoa anh đào."
+    },
+    {
+        "name": "Học tiếng Anh IELTS",
         "goal_type": "Giáo dục",
         "funding_source": "Tiền mặt",
         "priority": "low",
-        "target_amount": 5_000_000,
-        "saved_amount": 2_000_000,
-        "monthly_contribution": 500_000,
-        "months_to_target": 3,
-        "note": "Lệ phí khoá học và tài liệu."
+        "target_amount": 15_000_000,
+        "saved_amount": 6_000_000,
+        "monthly_contribution": 1_000_000,
+        "months_to_target": 9,
+        "note": "Lệ phí khoá học và thi chứng chỉ."
     },
 ]
 
@@ -236,37 +247,56 @@ def ensure_account(db, user_id: int):
             "type": "bank",
             "provider": "Vietcombank",
             "last4": "1234",
-            "balance": 56250000.0,
+            "balance": 85250000.0,
             "color": "#3b82f6",
-            "note": "Tài khoản nhận lương",
-        },
-        {
-            "name": "Ví tiền mặt",
-            "type": "cash",
-            "provider": "Tiền mặt",
-            "last4": None,
-            "balance": 12800000.0,
-            "color": "#22c55e",
-            "note": "Tiền mặt mang theo người",
+            "note": "Tài khoản nhận lương chính",
         },
         {
             "name": "Ví MoMo",
             "type": "wallet",
             "provider": "MoMo",
             "last4": "5678",
-            "balance": 8600000.0,
+            "balance": 12600000.0,
             "color": "#d946ef",
-            "note": "Dùng thanh toán ăn uống",
+            "note": "Chi tiêu ăn uống & tiện ích",
         },
         {
-            "name": "Thẻ Visa cá nhân",
+            "name": "Thẻ Visa Platinum",
             "type": "credit",
-            "provider": "Vietcombank",
+            "provider": "Techcombank",
             "last4": "4321",
-            "balance": 25000000.0,
+            "balance": 45000000.0,
             "color": "#f59e0b",
-            "note": "Thẻ tín dụng mua sắm",
-            "credit_limit": 50000000.0,
+            "note": "Hạn mức 100tr, dùng mua sắm lớn",
+            "credit_limit": 100000000.0,
+        },
+        {
+            "name": "Ví ZaloPay",
+            "type": "wallet",
+            "provider": "ZaloPay",
+            "last4": "9988",
+            "balance": 5400000.0,
+            "color": "#0ea5e9",
+            "note": "Thanh toán hóa đơn gia đình",
+        },
+        {
+            "name": "Tiền mặt",
+            "type": "cash",
+            "provider": "Tiền mặt",
+            "last4": None,
+            "balance": 8500000.0,
+            "color": "#22c55e",
+            "note": "Tiền mặt trong ví",
+        },
+        {
+            "name": "Thẻ Mastercard",
+            "type": "credit",
+            "provider": "HSBC",
+            "last4": "1122",
+            "balance": 15000000.0,
+            "color": "#ef4444",
+            "note": "Dùng khi đi du lịch nước ngoài",
+            "credit_limit": 80000000.0,
         },
     ]
 
@@ -1038,9 +1068,9 @@ def seed_user_recent_transactions(
 
         if rng.random() < base_rate:
             expense_count = (
-                rng.randint(2, 4)
+                rng.randint(3, 6)
                 if current.weekday() < 5
-                else rng.randint(2, 5)
+                else rng.randint(4, 8)
             )
 
             for _ in range(expense_count):
@@ -1072,11 +1102,63 @@ def seed_user_recent_transactions(
 
         current += timedelta(days=1)
 
+    seed_bills_and_goals(db, user, categories, all_accounts, start, today, rng)
+
     db.add_all(rows)
     db.flush()
     db.commit()
 
     return len(rows), existing_recent, 0, 0, 0
+
+
+def seed_bills_and_goals(db, user, categories, accounts, start, today, rng):
+    # 1. Seed Savings Goals
+    goals_data = [
+        ("Quỹ dự phòng khẩn cấp", 50000000.0, 15000000.0, "Dự phòng", 2000000.0),
+        ("Mua Macbook Pro", 65000000.0, 32500000.0, "Công nghệ", 5000000.0),
+        ("Du lịch Nhật Bản", 40000000.0, 5000000.0, "Du lịch", 1000000.0),
+        ("Quỹ hưu trí", 1000000000.0, 25000000.0, "Đầu tư", 3000000.0),
+    ]
+    
+    for name, target, saved, g_type, monthly in goals_data:
+        exists = db.query(SavingsGoal).filter(SavingsGoal.user_id == user.id, SavingsGoal.name == name).first()
+        if not exists:
+            goal = SavingsGoal(
+                user_id=user.id,
+                name=name,
+                target_amount=target,
+                saved_amount=saved,
+                goal_type=g_type,
+                monthly_contribution=monthly,
+                status="active" if saved < target else "completed",
+                start_date=start,
+                target_date=today + timedelta(days=rng.randint(180, 720))
+            )
+            db.add(goal)
+
+    # 2. Seed Bills
+    merchants = ["EVN", "Viwaico", "Viettel", "FPT Telecom", "Vinhome", "Netflix", "Spotify"]
+    bill_categories = ["Hóa đơn", "Hóa đơn", "Hóa đơn", "Hóa đơn", "Hóa đơn", "Giải trí", "Giải trí"]
+    
+    for i in range(12):
+        bill_date = today - timedelta(days=rng.randint(0, 180))
+        cat_name = rng.choice(bill_categories)
+        merchant = rng.choice(merchants)
+        amount = float(rng.randint(200000, 5000000))
+        
+        bill = Bill(
+            user_id=user.id,
+            merchant=merchant,
+            date=bill_date,
+            category_id=categories[cat_name].id,
+            account_id=rng.choice(accounts).id,
+            total_amount=amount,
+            status=rng.choice(["paid", "pending", "overdue"]),
+            bill_number=f"BILL-{rng.randint(10000, 99999)}",
+            notes=f"Hóa đơn {merchant} tháng {bill_date.month}",
+            created_at=bill_date
+        )
+        db.add(bill)
 
 
 def parse_args():
@@ -1094,7 +1176,7 @@ def parse_args():
     parser.add_argument(
         "--months",
         type=int,
-        default=8,
+        default=6,
         help="How many recent months to seed.",
     )
 

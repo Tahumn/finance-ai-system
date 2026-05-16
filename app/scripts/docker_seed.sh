@@ -28,4 +28,3 @@ esac
 
 echo "[seed] Running: python -m app.scripts.seed_recent_transactions ${args}"
 exec python -m app.scripts.seed_recent_transactions ${args}
-

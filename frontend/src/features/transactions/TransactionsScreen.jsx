@@ -107,7 +107,9 @@ const formatRangeLabel = (start, end) => {
   if (!start && !end) return "Chọn thời gian";
   const fmt = (d) => {
     if (!d) return "";
-    const [y, m, day] = d.split("-");
+    const parts = (d || "").split("-");
+    if (parts.length < 3) return "";
+    const [y, m, day] = parts;
     return `${day}/${m}/${y}`;
   };
   if (start === end || !end) return fmt(start);
@@ -806,7 +808,7 @@ export default function TransactionsScreen({
                 className="txd-add-bottom-btn"
                 onClick={() => { setNewCatName(""); setNewCatColor("#ec4899"); setActiveModal("addCategory"); }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                 Thêm danh mục
               </button>
 
@@ -864,7 +866,7 @@ export default function TransactionsScreen({
                   className="txd-add-bottom-btn"
                   onClick={() => { setNewTagName(""); setNewTagColor("#ec4899"); setActiveModal("addTag"); }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                   Thêm nhãn
                 </button>
               </div>
@@ -1152,7 +1154,7 @@ export default function TransactionsScreen({
             const sortedCats = [...catAmounts].sort((a, b) =>
               catSort === "az" ? a.name.localeCompare(b.name, "vi") : Math.abs(b.amt) - Math.abs(a.amt)
             );
-            
+
             const limit = 5;
             const hasMoreCats = sortedCats.length > limit;
             const displayCats = (showAllCatsMobile || !hasMoreCats) ? sortedCats : sortedCats.slice(0, limit);
@@ -1200,7 +1202,7 @@ export default function TransactionsScreen({
             const limit = 8;
             const hasMoreTags = tags.length > limit;
             const displayTags = (showAllTagsMobile || !hasMoreTags) ? tags : tags.slice(0, limit);
-            
+
             return (
               <div className="tx-m-tags-scroll-container">
                 <div className="tx-m-tags-row-scrollable">
@@ -1322,8 +1324,8 @@ export default function TransactionsScreen({
 
             return (
               <div className="tx-m-list-pagination">
-                <button 
-                  className="tx-pg-btn" 
+                <button
+                  className="tx-pg-btn"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => p - 1)}
                 >
@@ -1333,8 +1335,8 @@ export default function TransactionsScreen({
                   <span className="current">Trang {currentPage}</span>
                   <span className="total">/ {totalPages}</span>
                 </div>
-                <button 
-                  className="tx-pg-btn" 
+                <button
+                  className="tx-pg-btn"
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage(p => p + 1)}
                 >
@@ -1387,7 +1389,7 @@ export default function TransactionsScreen({
             <div className="txm-dialog-header">
               <h3>Thêm danh mục</h3>
               <button className="txm-close-btn" type="button" onClick={() => setActiveModal(null)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
             </div>
 
@@ -1432,7 +1434,7 @@ export default function TransactionsScreen({
               <div className="txm-field">
                 <label>3. Màu biểu tượng</label>
                 <div className="txm-color-row">
-                  {["#ec4899","#10b981","#f97316","#f59e0b","#a855f7","#e879f9","#94a3b8","#6b7280","#22c55e","#84cc16"].map(c => (
+                  {["#ec4899", "#10b981", "#f97316", "#f59e0b", "#a855f7", "#e879f9", "#94a3b8", "#6b7280", "#22c55e", "#84cc16"].map(c => (
                     <button
                       key={c} type="button"
                       className={`txm-color-dot ${newCatColor === c ? "active" : ""}`}
@@ -1484,7 +1486,7 @@ export default function TransactionsScreen({
             <div className="txm-dialog-header">
               <h3>Thêm nhãn</h3>
               <button className="txm-close-btn" type="button" onClick={() => setActiveModal(null)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
             </div>
 
@@ -1503,7 +1505,7 @@ export default function TransactionsScreen({
               <div className="txm-field">
                 <label>Màu nhãn</label>
                 <div className="txm-color-row">
-                  {["#ec4899","#f97316","#f59e0b","#10b981","#06b6d4","#3b82f6","#a855f7","#e879f9","#94a3b8","#6b7280"].map(c => (
+                  {["#ec4899", "#f97316", "#f59e0b", "#10b981", "#06b6d4", "#3b82f6", "#a855f7", "#e879f9", "#94a3b8", "#6b7280"].map(c => (
                     <button
                       key={c} type="button"
                       className={`txm-color-dot ${newTagColor === c ? "active" : ""}`}

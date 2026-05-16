@@ -5,10 +5,10 @@ import {
   saveUserPrefs,
   setOnboardingDone
 } from "../../utils/userPrefs.js";
-import { saveUiPrefs } from "../../utils/uiPrefs.js";
-import { STRINGS, t } from "../../utils/i18n.js";
-import { createCategory, createTransaction, listCategories, createAccount } from "../../api/finance.js";
-import { formatNumberInput, parseNumberInput, toInputDate, currency } from "../../utils/format.js";
+import { saveUiPrefs, UI_COLORS, UI_LAYOUTS } from "../../utils/uiPrefs.js";
+import { t } from "../../utils/i18n.js";
+import { createCategory, createTransaction, createAccount } from "../../api/finance.js";
+import { formatNumberInput, parseNumberInput, currency } from "../../utils/format.js";
 
 const DEFAULT_CATEGORIES = [
   { id: "food", name: "Ăn uống", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>, color: "#ff8b5f" },
@@ -17,13 +17,6 @@ const DEFAULT_CATEGORIES = [
   { id: "saving", name: "Tiết kiệm", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2h0V5z"/><circle cx="7" cy="11" r="1"/></svg>, color: "#06d6a0" },
   { id: "bill", name: "Hóa đơn", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>, color: "#ff7b6b" },
   { id: "income", name: "Thu nhập", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>, color: "#8e7dff" }
-];
-
-const PRIMARY_COLORS = [
-  { id: "blue", label: "Xanh dương", value: "#2563eb" },
-  { id: "green", label: "Xanh lá", value: "#10b981" },
-  { id: "purple", label: "Tím", value: "#7c3aed" },
-  { id: "orange", label: "Cam", value: "#f59e0b" }
 ];
 
 const PROVIDERS = {
@@ -63,8 +56,8 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
   // Step 3: Personalization
   const [language, setLanguage] = useState("vi");
   const [theme, setTheme] = useState("light");
-  const [primaryColor, setPrimaryColor] = useState(PRIMARY_COLORS[0].value);
-  const [customPrimary, setCustomPrimary] = useState("#2563eb");
+  const [primaryColor, setPrimaryColor] = useState(UI_COLORS[0].value);
+  const [layoutTemplate, setLayoutTemplate] = useState(UI_LAYOUTS[0].id);
   const [fontScale, setFontScale] = useState("medium");
   const [textColorMode, setTextColorMode] = useState("auto");
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -143,7 +136,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
         currency: "VND",
         timezone: getDefaultTimezone(),
         theme,
-        primaryColor: primaryColor === "custom" ? customPrimary : primaryColor,
+        primaryColor,
         fontScale,
         textColorMode
       });
@@ -151,7 +144,8 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
       saveUiPrefs(userEmail, {
         ...(currentUiPrefs || {}),
         theme,
-        brandColor: primaryColor === "custom" ? customPrimary : primaryColor
+        brandColor: primaryColor,
+        templateId: layoutTemplate
       });
 
       setOnboardingDone(userEmail, true);
@@ -274,10 +268,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                 {accType !== "cash" && (
                   <div className="ob-field">
                     <label>Hạn mức (nếu có) <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></label>
-                    <div className="input-wrap">
-                      <input type="text" value={accLimit} onChange={e => setAccLimit(formatNumberInput(e.target.value))} placeholder="Ví dụ: 20.000.000 đ" />
-                      <span className="unit">đ</span>
-                    </div>
+                    <input type="text" value={accLimit} onChange={e => setAccLimit(formatNumberInput(e.target.value))} placeholder="Ví dụ: 20.000.000 đ" />
                   </div>
                 )}
 
@@ -491,7 +482,6 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                      )}
                   </div>
 
-                  {/* Màu chữ */}
                   <div className={`ob-setting-item ${activeDropdown === "text" ? "open" : ""}`}
                        onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === "text" ? null : "text"); }}>
                      <div className="osi-left">
@@ -622,15 +612,7 @@ export default function OnboardingScreen({ userEmail, currentUiPrefs, onComplete
                      </div>
                   </div>
 
-                  <div className="ob-confirm-card">
-                     <div className="occ-icon" style={{ backgroundColor: "#fef2f2" }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                     </div>
-                     <div className="occ-main">
-                        <span>Giao dịch import</span>
-                        <strong>0</strong>
-                     </div>
-                  </div>
+
                </div>
 
                <div className="ob-security-card">

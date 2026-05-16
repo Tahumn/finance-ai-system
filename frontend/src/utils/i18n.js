@@ -88,6 +88,8 @@ const STRINGS = {
     "auth.register_otp": "Đăng ký (Gửi OTP)",
     "auth.login_exists": "Đăng nhập nếu đã có tài khoản",
     "auth.otp_sent": "OTP đã gửi đến",
+    "auth.notice.otp_resent": "Mã OTP đã được gửi lại",
+    "auth.error.otp_resend": "Không thể gửi lại mã OTP. Vui lòng thử lại sau.",
     "auth.verify_otp": "Xác thực OTP",
     "auth.resend": "Gửi lại OTP",
     "auth.change_email": "Đổi email",

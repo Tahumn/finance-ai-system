@@ -13,8 +13,8 @@ if (typeof document !== "undefined") {
         : "web"
       : envAppMode;
   document.body.dataset.appMode = resolvedMode;
-  if (resolvedMode === "mobile") document.title = "Finance AI Mobile";
-  if (resolvedMode === "web") document.title = "Finance AI Web";
+  if (resolvedMode === "mobile") document.title = "Finanzy AI Mobile";
+  if (resolvedMode === "web") document.title = "Finanzy AI Web";
 }
 
 createRoot(document.getElementById("root")).render(

@@ -161,7 +161,7 @@ export default function App() {
   const [rangePreset, setRangePreset] = useState("month");
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState({ items: [], total: 0 });
   const [summary, setSummary] = useState({
     total_balance: 0,
     period_total_income: 0,
@@ -337,7 +337,7 @@ export default function App() {
     setNotifications(getNotifications("guest"));
     setCategories([]);
     setTags([]);
-    setTransactions([]);
+    setTransactions({ items: [], total: 0 });
   };
 
   const isAuthed = authState.status === "authed";
@@ -495,9 +495,9 @@ export default function App() {
     setNotice("");
     try {
       await resendOtp(email);
-      setNotice(t("auth.notice.otp_resent"));
+      setNotice(t("auth.notice.otp_resent", null, "Mã OTP đã được gửi lại"));
     } catch (err) {
-      setError(err.message || t("auth.error.otp_resent"));
+      setError(err.message || t("auth.error.otp_resend", null, "Không thể gửi lại mã OTP"));
     } finally {
       setAuthLoading(false);
     }
@@ -557,7 +557,7 @@ export default function App() {
       ]);
       setCategories(cats);
       setTags(tagsList);
-      setTransactions(txs);
+      setTransactions(txs || { items: [], total: 0 });
       setSummary(sum);
       setBreakdown(expenseBreakdown);
       setIncomeBreakdown(incomeBreakdownData);
@@ -590,7 +590,7 @@ export default function App() {
           email,
           summary: sum,
           breakdown: expenseBreakdown,
-          transactions: txs
+          transactions: txs?.items || []
         })
       );
     } catch (err) {
@@ -692,6 +692,13 @@ export default function App() {
     };
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (authState.status === "guest" && view !== "auth") {
+      setView("auth");
+      setAuthMode("login");
+    }
+  }, [authState.status, view]);
 
   useEffect(() => {
     if (authState.status === "authed" && !needsOnboarding) {
@@ -1002,7 +1009,17 @@ export default function App() {
   const showDateFilters = isAuthed && view === "dashboard";
   const notificationCounts = getNotificationCounts(notifications);
 
-  if (!isAuthed && view === "auth") {
+  // --- RENDER LOGIC ---
+  if (authState.status === "checking") {
+    return (
+      <div className="app-loading">
+        <div className="spinner"></div>
+        <p>{t("status.loading", null, "Đang khởi tạo hệ thống...")}</p>
+      </div>
+    );
+  }
+
+  if (authState.status === "guest" || view === "auth") {
     return (
       <div className="app">
         <AuthScreen
@@ -1012,9 +1029,10 @@ export default function App() {
           onVerifyOtp={handleVerifyOtp}
           onResendOtp={handleResendOtp}
           onSetPassword={handleSetPassword}
-          onResetStart={handleResetStart}
-          onResetVerify={handleResetVerify}
-          onResetConfirm={handleResetConfirm}
+          onResetPasswordStart={handleResetStart}
+          onResetPasswordVerify={handleResetVerify}
+          onResetPasswordConfirm={handleResetConfirm}
+          onGoOnboarding={() => setView("onboarding")}
           loading={authLoading}
           error={error}
           notice={notice}
@@ -1023,7 +1041,7 @@ export default function App() {
     );
   }
 
-  if (isAuthed && view === "onboarding") {
+  if (needsOnboarding || view === "onboarding") {
     return (
       <div className="app">
         <OnboardingScreen

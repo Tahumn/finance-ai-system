@@ -186,6 +186,33 @@ export default function SettingsScreen({ user, onLogout }) {
                   onClick={() => updateColor(colorObj.value)}
                 ></div>
               ))}
+              <div className="stg-color-dot custom-picker" style={{ background: uiPrefs.brandColor }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                <input type="color" value={uiPrefs.brandColor} onChange={(e) => updateColor(e.target.value)} />
+              </div>
+            </div>
+
+            <span className="stg-layout-title" style={{ marginTop: '24px' }}>Bố cục hiển thị</span>
+            <div className="stg-layouts-list">
+              {UI_LAYOUTS.map((layout) => (
+                <div 
+                  key={layout.id} 
+                  className={`stg-layout-card ${uiPrefs.templateId === layout.id ? "active" : ""}`}
+                  onClick={() => updateUi("templateId", layout.id)}
+                >
+                  <div className="stg-layout-mini-preview">
+                    <div className={`lp-skeleton lp-${layout.id}`}>
+                      <div className="lp-side"></div>
+                      <div className="lp-body"><div className="lp-box"></div><div className="lp-box long"></div></div>
+                    </div>
+                  </div>
+                  <div className="stg-layout-card-info">
+                    <strong>{layout.name}</strong>
+                    <span>{layout.description}</span>
+                  </div>
+                  {uiPrefs.templateId === layout.id && <div className="active-tick">✓</div>}
+                </div>
+              ))}
             </div>
           </div>
         </div>
