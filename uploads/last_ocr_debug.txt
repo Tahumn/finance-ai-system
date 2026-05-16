@@ -1,27 +1,37 @@
 {
   "data": {
-    "merchant": "DOOKKI",
-    "transaction_date": "2026-04-13",
-    "final_total": 600480,
-    "subtotal_before_tax": 556000,
-    "vat_amount": 44480,
+    "merchant": "GALLERY PHOTO COFFEE",
+    "transaction_date": "2022-04-11",
+    "final_total": 1286000,
+    "subtotal_before_tax": 1286000,
+    "vat_amount": 0,
     "discount_amount": 0,
     "category": "Ăn uống",
-    "payment_source": "Grab",
-    "suggested_note": "Thưởng thức Buffet Người Lớn tại DOOKKI",
+    "payment_source": "Tiền mặt",
+    "suggested_note": "Mua kem thập cẩm, đá xay trà xanh và cà phê tại Gallery Photo Coffee",
     "line_items": [
       {
-        "name": "Buffet Người Lớn",
+        "name": "Kem thập cẩm",
+        "quantity": 2,
+        "total": 230000
+      },
+      {
+        "name": "Đá xay trà xanh",
+        "quantity": 1,
+        "total": 60000
+      },
+      {
+        "name": "Cafe PHƯƠNG HOÀNG LƯA",
         "quantity": 4,
-        "total": 556000
+        "total": 996000
       }
     ]
   },
   "confidence": {
-    "merchant": 0.99,
-    "final_total": 0.99,
-    "transaction_date": 0.99,
-    "category": 0.99,
-    "payment_source": 0.95
+    "merchant": 0.85,
+    "final_total": 1.0,
+    "transaction_date": 1.0,
+    "category": 1.0,
+    "payment_source": 0.9
   }
 }

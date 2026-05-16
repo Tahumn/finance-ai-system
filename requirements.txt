@@ -21,3 +21,6 @@ redis
 rq
 aiokafka
 alembic
+pytest
+pytest-mock
+ruff
