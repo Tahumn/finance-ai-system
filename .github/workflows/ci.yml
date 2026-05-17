@@ -26,7 +26,7 @@ jobs:
       #   run: ruff check app
         
       - name: Run Backend Tests
-        run: pytest app/tests
+        run: python -m pytest app/tests
         env:
           SECRET_KEY: "test-secret-key"
           ALGORITHM: "HS256"
