@@ -1,11 +1,9 @@
 import httpx
 import re
 import json
-from datetime import date as DateType
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.auth_context import RequestUser
-from app.finance import service as finance_service
 from app.finance import schemas as finance_schemas
 
 # --- BỘ LỌC REGEX DỰ PHÒNG (FALLBACK) ---
