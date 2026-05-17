@@ -106,13 +106,16 @@ UNIT_MULTIPLIER = {
 }
 
 CATEGORY_KEYWORDS = {
-    "an": "Ăn uống", "pho": "Ăn uống", "com": "Ăn uống", "bun": "Ăn uống", "mi": "Ăn uống", "sua": "Ăn uống", "cafe": "Ăn uống", "tra": "Ăn uống", "nhau": "Ăn uống",
-    "xang": "Di chuyển", "grab": "Di chuyển", "taxi": "Di chuyển", "xe": "Di chuyển", "gui xe": "Di chuyển", "bus": "Di chuyển",
-    "shopee": "Mua sắm", "tiki": "Mua sắm", "lazada": "Mua sắm", "quan ao": "Mua sắm", "giay": "Mua sắm", "my pham": "Mua sắm", "sieu thi": "Mua sắm", "cho": "Mua sắm",
-    "dien": "Hóa đơn", "nuoc": "Hóa đơn", "internet": "Hóa đơn", "wifi": "Hóa đơn", "4g": "Hóa đơn", "dien thoai": "Hóa đơn", "hoc phi": "Hóa đơn",
+    "an": "Ăn uống", "pho": "Ăn uống", "com": "Ăn uống", "bun": "Ăn uống", "mi": "Ăn uống", "sua": "Ăn uống", "cafe": "Ăn uống", "tra": "Ăn uống", "nhau": "Ăn uống", "an uong": "Ăn uống",
+    "xang": "Di chuyển", "grab": "Di chuyển", "taxi": "Di chuyển", "xe": "Di chuyển", "gui xe": "Di chuyển", "bus": "Di chuyển", "di chuyen": "Di chuyển",
+    "shopee": "Mua sắm", "tiki": "Mua sắm", "lazada": "Mua sắm", "quan ao": "Mua sắm", "giay": "Mua sắm", "my pham": "Mua sắm", "sieu thi": "Mua sắm", "cho": "Mua sắm", "mua sam": "Mua sắm",
+    "dien": "Hóa đơn", "nuoc": "Hóa đơn", "internet": "Hóa đơn", "wifi": "Hóa đơn", "4g": "Hóa đơn", "dien thoai": "Hóa đơn", "hoc phi": "Hóa đơn", "hoa don": "Hóa đơn",
     "luong": "Lương", "thuong": "Thưởng", "nhan": "Thu nhập khác", "duoc cho": "Thu nhập khác", "ban do": "Thu nhập khác",
-    "thuoc": "Sức khỏe", "benh": "Sức khỏe", "kham": "Sức khỏe", "gym": "Sức khỏe",
-    "phim": "Giải trí", "game": "Giải trí", "du lich": "Giải trí", "hat ho": "Giải trí",
+    "me cho": "Thu nhập khác", "bo cho": "Thu nhập khác", "ba cho": "Thu nhập khác", "ong cho": "Thu nhập khác", "anh cho": "Thu nhập khác",
+    "li xi": "Thu nhập khác", "tang": "Thu nhập khác", "duoc tang": "Thu nhập khác", "thu nhap": "Thu nhập khác",
+    "thuoc": "Sức khỏe", "benh": "Sức khỏe", "kham": "Sức khỏe", "gym": "Sức khỏe", "suc khoe": "Sức khỏe",
+    "phim": "Giải trí", "game": "Giải trí", "du lich": "Giải trí", "hat ho": "Giải trí", "giai tri": "Giải trí",
+    "tiet kiem": "Tiết kiệm",
 }
 
 
@@ -246,8 +249,16 @@ def _extract_date(text: str, default_date: DateType | None) -> DateType:
 
 def _detect_transaction_type(text: str) -> str:
     normalized = _normalize_text(text)
-    # Ưu tiên kiểm tra Thu nhập trước để tránh nhầm lẫn (ví dụ: "Lãnh lương" có từ "lương" có thể trùng category)
-    if any(keyword in normalized for keyword in INCOME_KEYWORDS):
+    # Check for strong income patterns first
+    income_patterns = [
+        r"\bduoc\s+\w+\s+cho\b",  # e.g., "duoc me cho", "duoc bo cho"
+        r"\b(?:me|bo|ba|ong|anh|ban|sep|nguoi yeu)\s+cho\b",  # e.g., "me cho", "bo cho"
+        r"\b(?:thu|luong|nhan|bonus|hoan tien|lai|lanh|thuong|duoc cho|li xi|tang|tro cap|cap tien)\b",
+    ]
+    for pattern in income_patterns:
+        if re.search(pattern, normalized):
+            return "income"
+    if False:
         return "income"
     if any(keyword in normalized for keyword in EXPENSE_KEYWORDS):
         return "expense"
@@ -256,10 +267,24 @@ def _detect_transaction_type(text: str) -> str:
 
 def _pick_category_name(text: str) -> str | None:
     normalized = _normalize_text(text)
-    for keyword, category in CATEGORY_KEYWORDS.items():
+    # Sort keywords by length in descending order to match longer/more specific phrases first
+    sorted_keywords = sorted(CATEGORY_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True)
+    for keyword, category in sorted_keywords:
         if re.search(rf"\b{keyword}\b", normalized):
             return category
     return None
+
+
+def _split_transaction_segments(text: str) -> list[str]:
+    if not text or not text.strip():
+        return []
+    parts = re.split(
+        r",|;|&|\b(?:va|và|nhung|nhưng|roi|rồi|sau do|sau đó|cung voi|cùng với|kem theo|kèm theo|kem|kèm)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    parts = [part.strip(" ,.;") for part in parts if part and part.strip(" ,.;")]
+    return parts if parts else [text.strip()]
 
 
 def _require_authorization(authorization: str | None) -> dict[str, str]:
@@ -327,6 +352,36 @@ def _list_categories(authorization: str | None) -> list[dict[str, Any]]:
     return []
 
 
+def _extract_custom_category(text: str) -> str | None:
+    # Lowercase and normalize spaces
+    normalized = text.lower().strip()
+    # Find position of budget keywords
+    budget_kw_match = re.search(r"\b(ngân sách|ngan sach|hạn mức|han muc)\b", normalized)
+    if not budget_kw_match:
+        return None
+    
+    # Extract everything after the budget keyword
+    after_kw = normalized[budget_kw_match.end():].strip()
+    
+    # Find the amount pattern (e.g. 2 triệu, 2tr, 200k, 2.000.000)
+    amount_match = re.search(r"\b\d", after_kw)
+    if not amount_match:
+        return None
+        
+    # The text between the budget keyword and the amount is the category name
+    cat_text = after_kw[:amount_match.start()].strip()
+    
+    # Clean up filler words from the extracted category text
+    cat_text = re.sub(r"^(?:cho|cua|ve|cho\s+muc|khoan|chi|ve\s+muc)\s+", "", cat_text)
+    cat_text = re.sub(r"\s+(?:la|khoang|tam|du tinh)$", "", cat_text)
+    cat_text = cat_text.strip()
+    
+    # Capitalize the first letter for a clean category name in DB (e.g. "Mua sắm")
+    if cat_text:
+        return cat_text.capitalize()
+    return None
+
+
 def _resolve_category(
     text: str,
     category_name: str | None,
@@ -334,6 +389,8 @@ def _resolve_category(
     authorization: str | None,
 ) -> tuple[int | None, str | None]:
     chosen_name = category_name or _pick_category_name(text)
+    if not chosen_name:
+        chosen_name = _extract_custom_category(text)
     if not chosen_name:
         return None, None
 
@@ -389,18 +446,70 @@ def get_gemini_response(prompt: str, system_instruction: str) -> dict:
 
 def ai_parse_transaction(text: str) -> dict:
     sys_inst = (
-        "Bạn là chuyên gia AI phân tích tài chính cá nhân toàn diện.\n"
+        "Bạn là chuyên gia AI phân tích tài chính cá nhân toàn diện dành cho người Việt.\n"
         "Nhiệm vụ: Phân tích câu nói và trích xuất thông tin phù hợp với một trong các ý định (intent) sau:\n\n"
-        "1. 'create_transaction': Ghi chép thu/chi ĐÃ XẢY RA (ví dụ: 'vừa ăn phở', 'mới nhận lương').\n"
+        "1. 'create_transaction': Ghi chép thu/chi ĐÃ XẢY RA (ví dụ: 'vừa ăn phở', 'mới nhận lương', 'được mẹ cho 500k').\n"
         "2. 'create_budget': Thiết lập kế hoạch chi tiêu TƯƠNG LAI, hạn mức (ví dụ: 'Đặt ngân sách', 'Hạn mức tháng này là...'). Tuyệt đối không nhầm sang create_transaction nếu người dùng nói về 'ngân sách' hoặc 'hạn mức'.\n"
         "3. 'create_debt': Ghi chép nợ/vay.\n"
         "4. 'create_subscription': Đăng ký dịch vụ lặp lại hàng tháng.\n\n"
         "QUY TẮC BẮT BUỘC:\n"
-        "1. SỐ TIỀN (amount): Nếu người dùng nhập phép tính (ví dụ: '30k + 25k') hoặc liệt kê nhiều khoản (ví dụ: 'phở 30k cafe 25k'), bạn phải TỰ CỘNG TẤT CẢ lại và chỉ trả về con số TỔNG CUỐI CÙNG (55000).\n"
-        "2. Nếu câu nói có từ 'ngân sách' hoặc 'hạn mức', intent PHẢI LÀ 'create_budget'.\n"
-        "3. DANH MỤC (category_name): Gán vào các nhóm phù hợp (Ăn uống, Di chuyển, Mua sắm, Lương, Sức khỏe, Giải trí...). Nếu là phép tính nhiều mục, hãy chọn danh mục của mục CHÍNH.\n"
-        "4. NGÀY (date): Định dạng 'YYYY-MM-DD'.\n"
-        "5. MÔ TẢ (description): Nội dung giao dịch ngắn gọn (ví dụ: 'Ăn sáng và cafe').\n\n"
+        "1. PHÂN TÁCH GIAO DỊCH (SPLIT TRANSACTIONS):\n"
+        "   - Nếu câu nói chứa NHIỀU giao dịch khác nhau hoặc các khoản thu và chi khác nhau (ví dụ: 'được mẹ cho 500k, ăn hết 100k, đổ xăng 50k' hoặc 'chi 50k ăn sáng và 30k cafe'), bạn PHẢI tự tách chúng thành các giao dịch riêng biệt trong mảng `transactions` và đặt `is_multiple` là true.\n"
+        "   - Mỗi giao dịch trong mảng `transactions` phải có đầy đủ các trường: `intent` (thường là 'create_transaction'), `amount` (number, ví dụ: 500000, 100000, 50000), `transaction_type` ('income' hoặc 'expense'), `category_name`, `date` (định dạng 'YYYY-MM-DD'), và `description` (nội dung giao dịch ngắn gọn, ví dụ: 'Được mẹ cho', 'Ăn uống', 'Đổ xăng').\n"
+        "   - Nếu người dùng chỉ nhập một phép tính đơn giản của cùng một giao dịch (ví dụ: '30k + 25k' cho cùng một mục phở) hoặc chỉ có duy nhất một giao dịch, hãy trả về `is_multiple` là false và điền trực tiếp các trường ở ngoài cùng (không dùng mảng `transactions`).\n"
+        "2. SỐ TIỀN (amount): Trích xuất chính xác số tiền. Nếu là giao dịch đơn lẻ và người dùng nhập phép tính (ví dụ: '30k + 25k'), bạn phải TỰ CỘNG lại và trả về con số TỔNG CUỐI CÙNG (55000).\n"
+        "3. PHÂN LOẠI THU/CHI (transaction_type): BẮT BUỘC xác định rõ 'income' (nếu là khoản thu như nhận lương, thưởng, được cho tiền, đòi nợ...) hoặc 'expense' (nếu là khoản chi như mua sắm, ăn uống, đi lại, trả nợ...). Phải luôn có trường này.\n"
+        "4. DANH MỤC (category_name): Gán vào các nhóm phù hợp (Ăn uống, Di chuyển, Mua sắm, Lương, Sức khỏe, Giải trí, Thu nhập khác...). 'mẹ cho' -> 'Thu nhập khác'; 'ăn uống/ăn phở/cafe' -> 'Ăn uống'; 'đổ xăng/grab' -> 'Di chuyển'.\n"
+        "5. NGÀY (date): Định dạng 'YYYY-MM-DD'.\n"
+        "6. MÔ TẢ (description): Nội dung giao dịch ngắn gọn.\n\n"
+        "ĐỊNH DẠNG JSON TRẢ VỀ:\n"
+        "- Nếu `is_multiple` là false:\n"
+        "{\n"
+        "  \"is_multiple\": false,\n"
+        "  \"intent\": \"create_transaction\",\n"
+        "  \"amount\": 500000,\n"
+        "  \"transaction_type\": \"income\",\n"
+        "  \"category_name\": \"Thu nhập khác\",\n"
+        "  \"date\": \"2026-05-17\",\n"
+        "  \"description\": \"Mới được mẹ cho\"\n"
+        "}\n"
+        "- Nếu `is_multiple` là true:\n"
+        "{\n"
+        "  \"is_multiple\": true,\n"
+        "  \"transactions\": [\n"
+        "    {\n"
+        "      \"intent\": \"create_transaction\",\n"
+        "      \"amount\": 500000,\n"
+        "      \"transaction_type\": \"income\",\n"
+        "      \"category_name\": \"Thu nhập khác\",\n"
+        "      \"date\": \"2026-05-17\",\n"
+        "      \"description\": \"Mới được mẹ cho\"\n"
+        "    },\n"
+        "    ...\n"
+        "  ]\n"
+        "}\n\n"
+        "TRẢ VỀ DUY NHẤT JSON. KHÔNG GIẢI THÍCH THÊM."
+    )
+    return get_gemini_response(text, sys_inst)
+
+def ai_parse_transaction_old_obsolete(text: str) -> dict:
+    sys_inst = (
+        "Bạn là chuyên gia AI phân tích tài chính cá nhân toàn diện dành cho người Việt.\n"
+        "Nhiệm vụ: Phân tích câu nói và trích xuất thông tin phù hợp với một trong các ý định (intent) sau:\n\n"
+        "1. 'create_transaction': Ghi chép thu/chi ĐÃ XẢY RA (ví dụ: 'vừa ăn phở', 'mới nhận lương', 'được mẹ cho 500k').\n"
+        "2. 'create_budget': Thiết lập kế hoạch chi tiêu TƯƠNG LAI, hạn mức (ví dụ: 'Đặt ngân sách', 'Hạn mức tháng này là...'). Tuyệt đối không nhầm sang create_transaction nếu người dùng nói về 'ngân sách' hoặc 'hạn mức'.\n"
+        "3. 'create_debt': Ghi chép nợ/vay.\n"
+        "4. 'create_subscription': Đăng ký dịch vụ lặp lại hàng tháng.\n\n"
+        "QUY TẮC BẮT BUỘC:\n"
+        "1. PHÂN TÁCH GIAO DỊCH (SPLIT TRANSACTIONS):\n"
+        "   - Nếu câu nói chứa NHIỀU giao dịch khác nhau hoặc các khoản thu và chi khác nhau (ví dụ: 'được mẹ cho 500k, ăn hết 100k, đổ xăng 50k' hoặc 'chi 50k ăn sáng và 30k cafe'), bạn PHẢI tự tách chúng thành các giao dịch riêng biệt trong mảng `transactions` và đặt `is_multiple` là true.\n"
+        "   - Mỗi giao dịch trong mảng `transactions` phải có đầy đủ các trường: `intent` (thường là 'create_transaction'), `amount` (number, ví dụ: 500000, 100000, 50000), `transaction_type` ('income' hoặc 'expense'), `category_name`, `date` (định dạng 'YYYY-MM-DD'), và `description` (nội dung giao dịch ngắn gọn, ví dụ: 'Được mẹ cho', 'Ăn uống', 'Đổ xăng').\n"
+        "   - Nếu người dùng chỉ nhập một phép tính đơn giản của cùng một giao dịch (ví dụ: '30k + 25k' cho cùng một mục phở) hoặc chỉ có duy nhất một giao dịch, hãy trả về `is_multiple` là false và điền trực tiếp các trường ở ngoài cùng (không dùng mảng `transactions`).\n"
+        "2. SỐ TIỀN (amount): Trích xuất chính xác số tiền. Nếu là giao dịch đơn lẻ và người dùng nhập phép tính (ví dụ: '30k + 25k'), bạn phải TỰ CỘNG lại và trả về con số TỔNG CUỐI CÙNG (55000).\n"
+        "3. Nếu câu nói có từ 'ngân sách' hoặc 'hạn mức', intent PHẢI LÀ 'create_budget'.\n"
+        "4. DANH MỤC (category_name): Gán vào các nhóm phù hợp (Ăn uống, Di chuyển, Mua sắm, Lương, Sức khỏe, Giải trí, Thu nhập khác...). 'mẹ cho' -> 'Thu nhập khác'; 'ăn uống/ăn phở/cafe' -> 'Ăn uống'; 'đổ xăng/grab' -> 'Di chuyển'.\n"
+        "5. NGÀY (date): Định dạng 'YYYY-MM-DD'.\n"
+        "6. MÔ TẢ (description): Nội dung giao dịch ngắn gọn.\n\n"
         "TRẢ VỀ DUY NHẤT JSON. KHÔNG GIẢI THÍCH."
     )
     return get_gemini_response(text, sys_inst)
@@ -424,6 +533,40 @@ def parse_transaction_text(
     # AI Fallback: Attempt Gemini extraction first
     ai_data = ai_parse_transaction(cleaned_text)
     
+    if ai_data and not ai_data.get("error") and ai_data.get("is_multiple"):
+        resolved_transactions = []
+        for tx in ai_data.get("transactions", []):
+            tx_amount = tx.get("amount")
+            tx_type = tx.get("transaction_type") or "expense"
+            tx_category_name = tx.get("category_name")
+            tx_desc = tx.get("description") or cleaned_text
+            tx_date = _coerce_date(tx.get("date")) or default_date or DateType.today()
+            
+            cat_id, resolved_cat_name = _resolve_category(
+                tx_desc,
+                tx_category_name,
+                auto_create_category,
+                authorization,
+            )
+            
+            resolved_transactions.append({
+                "description": tx_desc,
+                "amount": tx_amount,
+                "transaction_type": tx_type,
+                "category_id": cat_id,
+                "category_name": resolved_cat_name,
+                "date": tx_date,
+                "intent": tx.get("intent") or "create_transaction",
+            })
+        
+        if resolved_transactions:
+            first_parsed = resolved_transactions[0].copy()
+            first_parsed["warnings"] = warnings
+            first_parsed["confidence"] = 0.8
+            first_parsed["is_multiple"] = True
+            first_parsed["transactions"] = resolved_transactions
+            return first_parsed
+
     if ai_data and not ai_data.get("error"):
         amount = ai_data.get("amount")
         transaction_type = ai_data.get("transaction_type") or "expense"
@@ -462,6 +605,7 @@ def parse_transaction_text(
         "intent": ai_data.get("intent") if ai_data else "create_transaction",
         "period": ai_data.get("period") if ai_data else None,
         "frequency": ai_data.get("frequency") if ai_data else None,
+        "is_multiple": False,
     }
 
 
@@ -854,6 +998,64 @@ def answer_chat(
         _persist_chat_messages(db, current_user, text, response)
         return response
 
+    # Heuristic multi-transaction split:
+    # Handle cases like: "Duoc me cho 500k, an het 100k, do xang 50k"
+    # even when Gemini fails to return `is_multiple=true`.
+    segments = _split_transaction_segments(text)
+    if len(segments) >= 2:
+        parsed_items: list[dict[str, Any]] = []
+        for segment in segments:
+            parsed_seg = parse_transaction_text(
+                db,
+                current_user,
+                segment,
+                auto_create_category=True,
+                authorization=authorization,
+            )
+            if parsed_seg.get("amount") is None:
+                continue
+            parsed_items.append(parsed_seg)
+
+        if len(parsed_items) >= 2:
+            created_txs = []
+            for tx in parsed_items:
+                created = create_transaction_from_parsed(
+                    tx,
+                    fallback_text=tx.get("description") or text,
+                    authorization=authorization,
+                )
+                if "category_name" not in created:
+                    created["category_name"] = tx.get("category_name")
+                created_txs.append(created)
+
+            lines = ["Đã ghi nhận các giao dịch sau:"]
+            total_income = 0.0
+            total_expense = 0.0
+            for tx in created_txs:
+                tx_type = tx.get("transaction_type") or "expense"
+                amt = float(tx.get("amount") or 0.0)
+                cat_name = tx.get("category_name")
+                cat_str = f" ({cat_name})" if cat_name else ""
+                desc_str = f" - {tx.get('description')}" if tx.get("description") else ""
+
+                if tx_type == "income":
+                    lines.append(f"- Thu {amt:,.0f} VND{cat_str}{desc_str}")
+                    total_income += amt
+                else:
+                    lines.append(f"- Chi {amt:,.0f} VND{cat_str}{desc_str}")
+                    total_expense += amt
+
+            response = {
+                "answer": "\n".join(lines),
+                "intent": "create_transaction",
+                "start_date": _coerce_date(created_txs[0].get("date")) if created_txs else DateType.today(),
+                "end_date": _coerce_date(created_txs[-1].get("date")) if created_txs else DateType.today(),
+                "category_name": None,
+                "total": total_income - total_expense,
+            }
+            _persist_chat_messages(db, current_user, text, response)
+            return response
+
     if any(keyword in normalized for keyword in DELETE_KEYWORDS):
         latest = _latest_transaction(authorization)
         if not latest:
@@ -939,6 +1141,42 @@ def answer_chat(
         authorization=authorization,
     )
     
+    if parsed.get("is_multiple") and parsed.get("transactions"):
+        created_txs = []
+        for tx in parsed["transactions"]:
+            created = create_transaction_from_parsed(tx, fallback_text=text, authorization=authorization)
+            if "category_name" not in created:
+                created["category_name"] = tx.get("category_name")
+            created_txs.append(created)
+        
+        lines = ["Đã ghi nhận các giao dịch sau:"]
+        total_income = 0.0
+        total_expense = 0.0
+        for tx in created_txs:
+            tx_type = tx.get("transaction_type") or "expense"
+            amt = float(tx.get("amount") or 0.0)
+            cat_name = tx.get("category_name")
+            cat_str = f" ({cat_name})" if cat_name else ""
+            desc_str = f" - {tx.get('description')}" if tx.get("description") else ""
+            
+            if tx_type == "income":
+                lines.append(f"- Thu {amt:,.0f} VND{cat_str}{desc_str}")
+                total_income += amt
+            else:
+                lines.append(f"- Chi {amt:,.0f} VND{cat_str}{desc_str}")
+                total_expense += amt
+        
+        response = {
+            "answer": "\n".join(lines),
+            "intent": "create_transaction",
+            "start_date": _coerce_date(created_txs[0].get("date")) if created_txs else DateType.today(),
+            "end_date": _coerce_date(created_txs[-1].get("date")) if created_txs else DateType.today(),
+            "category_name": None,
+            "total": total_income - total_expense,
+        }
+        _persist_chat_messages(db, current_user, text, response)
+        return response
+
     # Lớp bảo vệ: Ép intent nếu có từ khóa Ngân sách/Nợ/Định kỳ
     if any(kw in normalized for kw in BUDGET_KEYWORDS):
         parsed["intent"] = "create_budget"
@@ -978,11 +1216,11 @@ def answer_chat(
             
         payload = {
             "name": parsed.get("description") or f"Ngân sách {resolved_cat_name or 'tổng hợp'}",
-            "category_ids": str(cat_id) if cat_id else None,
+            "category_id": int(cat_id) if cat_id else None,
             "amount": float(parsed["amount"]),
             "cycle": parsed.get("period") or "monthly"
         }
-        _request_json("POST", "/budgets", authorization, payload=payload, service="planning")
+        _request_json("POST", "/budgets", authorization, payload=payload, service="finance")
         response = {"answer": f"Đã thiết lập ngân sách {payload['amount']:,.0f} VND cho mục {resolved_cat_name or 'chung'}.", "intent": "create_budget"}
         _persist_chat_messages(db, current_user, text, response)
         return response

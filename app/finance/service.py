@@ -503,17 +503,33 @@ def _base_query(db: Session, current_user: RequestUser, start_date: date | None,
 
 
 def get_total_balance(db: Session, user_id: int) -> float:
-    income = (
-        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-        .filter(Transaction.user_id == user_id, Transaction.transaction_type == "income")
+    account_total = (
+        db.query(func.coalesce(func.sum(Account.opening_balance), 0.0))
+        .filter(Account.user_id == user_id)
         .scalar()
     )
-    expense = (
+    # Transactions without account_id do not mutate any account balance.
+    # Include them here so summary balance always matches all recorded transactions.
+    unassigned_income = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
-        .filter(Transaction.user_id == user_id, Transaction.transaction_type == "expense")
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.account_id.is_(None),
+            Transaction.transaction_type == "income",
+        )
         .scalar()
     )
-    return float((income or 0.0) - (expense or 0.0))
+    unassigned_expense = (
+        db.query(func.coalesce(func.sum(Transaction.amount), 0.0))
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.account_id.is_(None),
+            Transaction.transaction_type == "expense",
+        )
+        .scalar()
+    )
+
+    return float((account_total or 0.0) + (unassigned_income or 0.0) - (unassigned_expense or 0.0))
 
 
 def get_summary(
