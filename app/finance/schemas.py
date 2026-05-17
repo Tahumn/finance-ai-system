@@ -142,8 +142,8 @@ class BudgetRead(BaseModel):
     category_id: int
     category: str
     amount: float
-    period_start: DateType
-    period_end: DateType
+    period_start: DateType | None = None
+    period_end: DateType | None = None
     spent: float = 0.0
     remaining: float = 0.0
     progress: float = 0.0

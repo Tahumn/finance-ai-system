@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 from datetime import date as DateType, datetime, timedelta
+from zoneinfo import ZoneInfo
 import base64
 import io
 import json
@@ -76,6 +77,28 @@ def _json_serializable(obj):
     return str(obj)
 
 
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
+
+
+def _today_local() -> DateType:
+    try:
+        return datetime.now(ZoneInfo(APP_TIMEZONE)).date()
+    except Exception:
+        return datetime.now().date()
+
+
+AMOUNT_UNIT_PATTERN = r"million|trieu|nghin|ngan|chai|canh|lit|ty|ti|tr|cu|xi|ca|k|m"
+AMOUNT_HALF_PATTERN = r"ruoi|nua"
+DECIMAL_AMOUNT_WITH_UNIT_REGEX = re.compile(
+    rf"\b\d+\.\d+\s*(?=(?:{AMOUNT_UNIT_PATTERN})\b)",
+    re.IGNORECASE,
+)
+AMOUNT_UNIT_REGEX = re.compile(
+    rf"\d+(?:[.,]\d+)?\s*(?:{AMOUNT_UNIT_PATTERN})\b",
+    re.IGNORECASE,
+)
+
+
 
 AMOUNT_REGEX = re.compile(
     r"(?P<num>\d+(?:[.,]\d+)*)\s*(?P<unit>k|nghin|ngan|tr|trieu|m|million|ty|ti)?\s*(?:đ|d|vnd|\$|eur)?(?=\s|\W|$)", 
@@ -104,7 +127,10 @@ UNIT_MULTIPLIER = {
 COLLOQUIAL_UNIT_MULTIPLIER = {
     "cu": 1_000_000,
     "lit": 100_000,
-    "xi": 10_000,
+    "xi": 100_000,
+    "chai": 1_000_000,
+    "canh": 1_000,
+    "ca": 1_000,
 }
 
 VN_NUMBER_WORDS = {
@@ -123,43 +149,27 @@ VN_NUMBER_WORDS = {
 }
 
 INCOME_KEYWORDS = [
-    "thu",
-    "luong",
-    "lanh",  # "lanh luong"
-    "bonus",
-    "lai",
-    "nhan",
-    "refund",
-    "hoan tien",
-    "thuong",
-    "duoc cho",
-    "duoc tang",
-    "duoc bieu",
-    "duoc li xi",
-    "li xi",
-    "lixi",
-    "duoc ho tro",
-    "duoc chuyen",
+    "thu", "nhan", "lanh luong", "luong", "bonus", "thuong", "refund", "hoan tien",
+    "ting ting", "ve tien", "vao tien", "bank vao", "ck toi", "paypal ve", "khach ck",
+    "khach tra", "job ve", "an keo", "co keo", "deal xong", "co project",
+    "me cho", "ba cho", "duoc cho", "duoc tang", "li xi", "duoc li xi",
+    "chot loi", "co lai", "trade loi", "ban coin", "ban co phieu",
 ]
 EXPENSE_KEYWORDS = [
-    "chi",
-    "mua",
-    "tra",
-    "thanh toan",
-    "phi",
-    "hoa don",
-    "an",
-    "uong",
-    "di lai",
-    "xang",
-    "taxi",
+    "chi", "chi tieu", "mua", "tra", "thanh toan", "dong", "ton", "mat", "het", "xai", "tieu", "ung",
+    "an", "uong", "an vat", "an sang", "an trua", "an toi", "buffet", "lau", "nuong", "tra sua", "ca phe", "cafe",
+    "bay", "bay mau", "bay mat", "dot", "dot tien", "nem", "nem tien", "dap vi", "rach vi", "rut vi",
+    "thung vi", "viem mang tui", "khom lung", "xa vi", "rut mau", "toang", "dau vi",
+    "order", "len don", "chot don", "san sale", "flash sale", "cop", "hot", "tau", "quat", "gom",
+    "grab", "be", "taxi", "book xe", "do xang", "bom xang", "gui xe",
+    "nop", "hoc phi", "tra no", "tra gop", "bill", "tru", "phat", "tien phat",
 ]
 
 def _has_income_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in INCOME_KEYWORDS:
-        kw_norm = kw.strip().lower()
+        kw_norm = _normalize_text(kw)
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -175,7 +185,7 @@ def _has_expense_keyword(text: str) -> bool:
     normalized = _normalize_text(text)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     for kw in EXPENSE_KEYWORDS:
-        kw_norm = kw.strip().lower()
+        kw_norm = _normalize_text(kw)
         if not kw_norm:
             continue
         if " " in kw_norm:
@@ -503,23 +513,44 @@ _ACCOUNTS_BY_USER: dict[int, set[str]] = {}
 
 
 def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    text = text.lower().strip()
     normalized = unicodedata.normalize("NFD", text)
     normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
-    return normalized.lower().strip()
+    teencode_map = {
+        "ko": "khong",
+        "k": "khong",
+        "dc": "duoc",
+        "nham": "nham",
+    }
+    for key, value in teencode_map.items():
+        normalized = re.sub(rf"\b{key}\b", value, normalized)
+    return normalized.strip()
 
 
 def _strip_date_fragments(text: str) -> str:
+    protected: dict[str, str] = {}
+
+    def _protect_decimal_amount(match: re.Match) -> str:
+        key = f"__amt_decimal_{len(protected)}__"
+        protected[key] = match.group(0)
+        return key
+
+    text = DECIMAL_AMOUNT_WITH_UNIT_REGEX.sub(_protect_decimal_amount, text)
     text = DATE_ISO_REGEX.sub(" ", text)
     text = DATE_DDMM_REGEX.sub(" ", text)
     text = DATE_TEXT_REGEX.sub(" ", text)
     text = re.sub(r"thang\s*\d{1,2}", " ", text)
     text = re.sub(r"nam\s*\d{4}", " ", text)
+    for key, value in protected.items():
+        text = text.replace(key, value)
     return text
 
 
 def _parse_date(text: str) -> DateType | None:
     normalized = _normalize_text(text)
-    today = DateType.today()
+    today = _today_local()
     if "hom nay" in normalized or "today" in normalized:
         return today
     if "hom qua" in normalized or "yesterday" in normalized:
@@ -628,7 +659,12 @@ MULTI_CONNECTOR_REGEX = re.compile(
 def _split_transaction_segments(text: str) -> list[str]:
     if not text or not text.strip():
         return []
-    parts = [part.strip(" ,.;") for part in MULTI_CONNECTOR_REGEX.split(text)]
+    parts = re.split(
+        r",|;|&|\b(?:va|và|nhung|nhưng|roi|rồi|sau do|sau đó|cung voi|cùng với|dong thoi|đồng thời|kem theo|kèm theo|kem|kèm)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    parts = [part.strip(" ,.;") for part in parts]
     parts = [part for part in parts if part]
     if len(parts) <= 1:
         return [text.strip()]
@@ -887,8 +923,7 @@ def _amount_has_unit(text: str) -> bool:
     normalized = _normalize_text(text)
     if any(hint in normalized for hint in CURRENCY_HINTS):
         return True
-    unit_match = re.search(r"\d+(?:[.,]\d+)?\s*(k|nghin|ngan|tr|trieu|m|million|ty|ti|cu|lit|xi)\b", normalized)
-    return unit_match is not None
+    return AMOUNT_UNIT_REGEX.search(normalized) is not None
 
 
 _OCR_DIGIT_FIX = str.maketrans({"O": "0", "o": "0", "I": "1", "l": "1", "|": "1"})
@@ -908,20 +943,6 @@ def _needs_amount_clarification(text: str, amount: float | None) -> bool:
     if amount is None:
         return True
     return not _amount_has_unit(text)
-
-
-def _extract_json(text: str) -> dict | None:
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
 
 
 def _coerce_amount(value: object) -> float | None:
@@ -967,7 +988,7 @@ def _parse_transfer(text: str) -> tuple[float | None, str | None, str | None, Da
         month_range = _parse_month_range(text) or _parse_relative_range(text)
         if month_range:
             date_value = month_range[0]
-    date_value = date_value or DateType.today()
+    date_value = date_value or _today_local()
     normalized = _normalize_text(text)
     match = re.search(r"tu\s+(?P<src>.+?)\s+(sang|qua|toi)\s+(?P<dst>.+)", normalized)
     if match:
@@ -1084,13 +1105,13 @@ def _parse_month_range(text: str) -> tuple[DateType, DateType] | None:
     short_match = re.fullmatch(r"(?P<month>\d{1,2})(?:[/-](?P<year>\d{4}))?", compact)
     if short_match:
         month = int(short_match.group("month"))
-        year = int(short_match.group("year")) if short_match.group("year") else DateType.today().year
+        year = int(short_match.group("year")) if short_match.group("year") else _today_local().year
     else:
         match = MONTH_REGEX.search(normalized)
         if not match:
             return None
         month = int(match.group("month"))
-        year = DateType.today().year
+        year = _today_local().year
 
         # Support "thang 12/2025" and "thang 12-2025" in addition to "nam 2025".
         after_month = normalized[match.end() :]
@@ -1113,7 +1134,7 @@ def _parse_month_range(text: str) -> tuple[DateType, DateType] | None:
 
 
 def _default_month_range() -> tuple[DateType, DateType]:
-    today = DateType.today()
+    today = _today_local()
     start = DateType(today.year, today.month, 1)
     if today.month == 12:
         end = DateType(today.year, 12, 31)
@@ -1154,7 +1175,7 @@ def _parse_year_range(text: str) -> tuple[DateType, DateType] | None:
 
 def _parse_relative_range(text: str) -> tuple[DateType, DateType] | None:
     normalized = _normalize_text(text)
-    today = DateType.today()
+    today = _today_local()
     if "hom nay" in normalized:
         return today, today
     if "hom qua" in normalized:
@@ -1450,7 +1471,7 @@ def _analyze_anomalies_with_ai(db: Session, current_user: RequestUser, candidate
 
 def get_spending_anomalies(db: Session, current_user: RequestUser) -> list[finance_schemas.AnomalyAlert]:
     # Lấy giao dịch 30 ngày qua để tính trung bình
-    today = DateType.today()
+    today = _today_local()
     start = today - timedelta(days=30)
     txs = finance_service.list_transactions(db, current_user, start_date=start, end_date=today, transaction_type="expense", limit=500)[0]
     
@@ -1493,7 +1514,7 @@ def _get_user_financial_context(
     months: int = 6,
 ) -> dict:
     """Build a financial context dict for AI prompts."""
-    today = DateType.today()
+    today = _today_local()
     start = DateType(today.year, 1, 1) if months >= 12 else (
         today.replace(day=1) if months == 1 else
         DateType(
@@ -1525,7 +1546,7 @@ def get_spending_forecast(
     from calendar import month_abbr
     ctx = _get_user_financial_context(db, current_user, months=6)
 
-    today = DateType.today()
+    today = _today_local()
     next_months = []
     for i in range(1, 4):
         m = (today.month - 1 + i) % 12 + 1
@@ -1906,7 +1927,7 @@ def parse_transaction_text(
         if amount is None:
             warnings.append("amount_not_found")
     if parsed_date is None:
-        parsed_date = explicit_text_date or default_date or DateType.today()
+        parsed_date = explicit_text_date or default_date or _today_local()
     if not transaction_type:
         transaction_type = _parse_transaction_type(text)
     if not category_name:
@@ -2233,9 +2254,10 @@ def _fallback_chat_intent_payload(
 def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
     multi = _extract_multi_transactions(db, current_user, text)
     if multi:
+        default_account = _ensure_account(db, current_user, "Tiền mặt")
         created = []
         for item in multi:
-            dt = _coerce_date_value(item.get("date")) or DateType.today()
+            dt = _coerce_date_value(item.get("date")) or _today_local()
             tx = finance_service.create_transaction(
                 db,
                 current_user,
@@ -2244,7 +2266,9 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
                     amount=item.get("amount"),
                     transaction_type=item.get("transaction_type"),
                     category_id=item.get("category_id"),
+                    account_id=default_account.id,
                     date=dt,
+                    tag_ids=[],
                 ),
             )
             created.append({**item, "date": tx.date})
@@ -2360,16 +2384,13 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
             }
 
         cat_name = data.get("category")
-        print(f"DEBUG: Attempting to resolve category '{cat_name}'")
         cat_id, res_name = _resolve_category(db, current_user, cat_name, True)
-        print(f"DEBUG: Resolved to CatID: {cat_id}, Name: {res_name}")
-        dt = _coerce_date_value(data.get("date")) or DateType.today()
+        dt = _coerce_date_value(data.get("date")) or _today_local()
 
         tag_ids = _resolve_tags(db, current_user, data.get("tags"))
         account_name = data.get("account") or "Tiền mặt"
         account = _ensure_account(db, current_user, account_name)
 
-        print(f"DEBUG: Creating transaction: desc='{data.get('note') or text}', amount={amount}, type={tx_type}, cat_id={cat_id}")
         tx = finance_service.create_transaction(
             db,
             current_user,
@@ -2463,7 +2484,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
 
     if intent == "QUERY_HISTORY":
         range_v = data.get("range", "current_month")
-        today = DateType.today()
+        today = _today_local()
         if range_v == "today":
             s, e = today, today
         elif range_v == "current_week":
@@ -2509,7 +2530,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
             
             summary_lines = []
             for b in budgets:
-                today = DateType.today()
+                today = _today_local()
                 s, e = _month_range_for_date(today)
                 # Calculate spent for all categories in this budget
                 cat_ids = (b.category_ids or "").split(",")
@@ -2544,7 +2565,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
                 "total": None,
             }
 
-        today = DateType.today()
+        today = _today_local()
         s, e = _month_range_for_date(today)
         spent = _sum_by_category(db, current_user, s, e, cat.id, "expense")
 
@@ -2601,7 +2622,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
                 amount=amount,
                 category_ids=str(cat_id),
                 cycle="monthly",
-                start_date=DateType.today().replace(day=1)
+                start_date=_today_local().replace(day=1)
             )
         )
         response = {
@@ -2650,7 +2671,7 @@ def answer_chat(db: Session, current_user: RequestUser, text: str) -> dict:
                 "start_date": None, "end_date": None, "category_name": None, "total": None
             }
         
-        start_date = _coerce_date_value(data.get("date")) or DateType.today()
+        start_date = _coerce_date_value(data.get("date")) or _today_local()
         sub = recurring_service.create_subscription(
             db, current_user,
             recurring_schemas.SubscriptionCreate(
@@ -3253,5 +3274,7 @@ def extract_ocr(image_bytes: bytes) -> dict:
         "warnings": warnings,
         "text": text,
     }
+
+
 
 
