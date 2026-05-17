@@ -1,27 +1,47 @@
 {
   "data": {
-    "merchant": "TINHOCNGOISAO",
-    "transaction_date": "2025-08-30",
-    "final_total": 2888000,
-    "subtotal_before_tax": 3490000,
+    "merchant": "XƯỞNG TRÀ THỦ CÔNG",
+    "transaction_date": "2026-04-16",
+    "final_total": 140000,
+    "subtotal_before_tax": 140000,
     "vat_amount": 0,
-    "discount_amount": 602000,
-    "category": "Công nghệ",
+    "discount_amount": 0,
+    "category": "Ăn uống",
     "payment_source": null,
-    "suggested_note": "Mua ghế Gaming Warrior Immortal Series - WGC225 màu Đen tại Tin Học Ngôi Sao",
+    "suggested_note": "Mua trà sữa Ô Long Nhài, trà sữa gạo, trà xoài chanh dây, Budding và trà sữa siêu phô mai tại XƯỞNG TRÀ THỦ CÔNG",
     "line_items": [
       {
-        "name": "Ghế Gaming Warrior Immortal Series - WGC225; Màu Đen",
+        "name": "Trà Sữa Ô Long Nhài L",
         "quantity": 1,
-        "total": 3490000
+        "total": 33000
+      },
+      {
+        "name": "Trà Sữa Gạo M 70 DG 1 Sương Sáo",
+        "quantity": 1,
+        "total": 35000
+      },
+      {
+        "name": "Trà Xoài Chanh Dây 70DG",
+        "quantity": 1,
+        "total": 35000
+      },
+      {
+        "name": "Budding",
+        "quantity": 1,
+        "total": 5000
+      },
+      {
+        "name": "Trà sữa siêu phomai 70 DG",
+        "quantity": 1,
+        "total": 32000
       }
     ]
   },
   "confidence": {
-    "merchant": 0.95,
+    "merchant": 0.99,
     "final_total": 0.99,
-    "transaction_date": 0.95,
-    "category": 0.9,
+    "transaction_date": 0.99,
+    "category": 0.95,
     "payment_source": 0.0
   }
 }

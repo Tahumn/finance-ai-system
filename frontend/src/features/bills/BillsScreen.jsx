@@ -93,7 +93,8 @@ export default function BillsScreen({
       account_id: selected.account_id || "",
       total_amount: selected.total_amount || 0,
       vat_amount: selected.vat_amount || 0,
-      bill_number: selected.bill_number || ""
+      bill_number: selected.bill_number || "",
+      notes: selected.notes || ""
     });
     setFormError("");
     setIsEditing(true);
@@ -239,8 +240,17 @@ export default function BillsScreen({
                         >
                           <td className="bill-merchant">
                             <div style={{ display: "flex", flexDirection: "column" }}>
-                              {b.merchant || "Hóa đơn OCR"}
-                              <span style={{ fontSize: "11px", color: "#9ca3af", fontWeight: "normal" }}>{b.bill_number}</span>
+                              <span style={{ fontWeight: "600", color: "#1e293b" }}>{b.merchant || "Hóa đơn OCR"}</span>
+                              {b.notes && (
+                                <span style={{ fontSize: "11px", color: "#64748b", fontWeight: "normal", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "250px" }}>
+                                  {b.notes}
+                                </span>
+                              )}
+                              {b.bill_number && (
+                                <span style={{ fontSize: "10px", color: "#9ca3af", fontWeight: "normal" }}>
+                                  Ref: {b.bill_number}
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td>{b.date}</td>
@@ -373,6 +383,18 @@ export default function BillsScreen({
                           </div>
                         </div>
 
+                        <div className="bill-edit-group">
+                          <label className="bill-edit-label">Ghi chú / Nội dung</label>
+                          <textarea
+                            className="bill-edit-input"
+                            rows="2"
+                            style={{ resize: "vertical" }}
+                            placeholder="Nhập nội dung ghi chú..."
+                            value={editData.notes || ""}
+                            onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
+                          />
+                        </div>
+
                         <div className="bill-edit-amount-card">
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -407,7 +429,7 @@ export default function BillsScreen({
                       <>
                         <div className="bill-info-row">
                           <span className="bill-info-label">Merchant</span>
-                          <span className="bill-info-value">{selected.merchant || "—"}</span>
+                          <span className="bill-info-value" style={{ fontWeight: "600", color: "#0f172a" }}>{selected.merchant || "—"}</span>
                         </div>
                         <div className="bill-info-row">
                           <span className="bill-info-label">Ngày giao dịch</span>
@@ -424,6 +446,10 @@ export default function BillsScreen({
                         <div className="bill-info-row">
                           <span className="bill-info-label">Mã hóa đơn</span>
                           <span className="bill-info-value" style={{ color: "#6b7280" }}>{selected.bill_number || "—"}</span>
+                        </div>
+                        <div className="bill-info-row">
+                          <span className="bill-info-label">Ghi chú</span>
+                          <span className="bill-info-value" style={{ fontStyle: selected.notes ? "normal" : "italic", color: selected.notes ? "#1e293b" : "#94a3b8" }}>{selected.notes || "Không có ghi chú"}</span>
                         </div>
                         <div className="bill-info-row">
                           <span className="bill-info-label">Độ tin cậy OCR</span>

@@ -150,56 +150,56 @@ export default function OcrScreen({
     setNotice("");
     setOcrState("running");
 
-      try {
-        const result = await extractOcr(file);
-        const { data, confidence: conf } = result;
-        
-        setParsed((current) => ({
-          ...current,
-          merchant: (data.merchant || "").trim() || current.merchant || sanitizeName(file.name),
-          total: toFormattedNumber(data.final_total, current.total),
-          subtotal: toFormattedNumber(data.subtotal_before_tax, current.subtotal),
-          vat: toFormattedNumber(data.vat_amount, current.vat),
-          discount: toFormattedNumber(data.discount_amount, current.discount),
-          note: data.suggested_note || current.note,
-          date: data.transaction_date || current.date,
-          categoryId: data.category ? (categories.find(c => c.name && data.category && c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
-          paymentSource: data.payment_source || current.paymentSource,
-          imagePath: data.image_path || ""
-        }));
+    try {
+      const result = await extractOcr(file);
+      const { data, confidence: conf } = result;
 
-        setConfidence({
-          date: conf.transaction_date || 0,
-          merchant: conf.merchant || 0,
-          total: conf.final_total || 0,
-          subtotal: conf.subtotal_before_tax || 0,
-          vat: conf.vat_amount || 0,
-          discount: conf.discount_amount || 0,
-          paymentSource: conf.payment_source || 0,
-          category: conf.category || 0,
-          tags: conf.tags || 0
+      setParsed((current) => ({
+        ...current,
+        merchant: (data.merchant || "").trim() || current.merchant || sanitizeName(file.name),
+        total: toFormattedNumber(data.final_total, current.total),
+        subtotal: toFormattedNumber(data.subtotal_before_tax, current.subtotal),
+        vat: toFormattedNumber(data.vat_amount, current.vat),
+        discount: toFormattedNumber(data.discount_amount, current.discount),
+        note: data.suggested_note || current.note,
+        date: data.transaction_date || current.date,
+        categoryId: data.category ? (categories.find(c => c.name && data.category && c.name.toLowerCase() === data.category.toLowerCase())?.id || current.categoryId) : current.categoryId,
+        paymentSource: data.payment_source || current.paymentSource,
+        imagePath: data.image_path || ""
+      }));
+
+      setConfidence({
+        date: conf.transaction_date || 0,
+        merchant: conf.merchant || 0,
+        total: conf.final_total || 0,
+        subtotal: conf.subtotal_before_tax || 0,
+        vat: conf.vat_amount || 0,
+        discount: conf.discount_amount || 0,
+        paymentSource: conf.payment_source || 0,
+        category: conf.category || 0,
+        tags: conf.tags || 0
+      });
+
+      if (data.tags && data.tags.length) {
+        const foundIds = data.tags
+          .map(tName => tagNameMap[tName.toLowerCase()]?.id)
+          .filter(Boolean);
+        setSelectedTagIds(prev => [...new Set([...prev, ...foundIds])]);
+      }
+
+      if (data.payment_source) {
+        const sourceLower = String(data.payment_source).toLowerCase();
+        const matchedAccount = accounts.find(acc => {
+          const accName = String(acc.name || "").toLowerCase();
+          return accName.includes(sourceLower) || sourceLower.includes(accName);
         });
+        if (matchedAccount) setFundingSourceId(matchedAccount.id);
+      }
 
-        if (data.tags && data.tags.length) {
-          const foundIds = data.tags
-            .map(tName => tagNameMap[tName.toLowerCase()]?.id)
-            .filter(Boolean);
-          setSelectedTagIds(prev => [...new Set([...prev, ...foundIds])]);
-        }
-
-        if (data.payment_source) {
-          const sourceLower = String(data.payment_source).toLowerCase();
-          const matchedAccount = accounts.find(acc => {
-            const accName = String(acc.name || "").toLowerCase();
-            return accName.includes(sourceLower) || sourceLower.includes(accName);
-          });
-          if (matchedAccount) setFundingSourceId(matchedAccount.id);
-        }
-
-        setWarnings(result.warnings || []);
-        setNotice(t("ocr.notice.extracted", null, "OCR hoàn tất! Hệ thống đã trích xuất được thông tin. Vui lòng kiểm tra và bấm Lưu."));
-        setOcrState("done");
-      } catch (err) {
+      setWarnings(result.warnings || []);
+      setNotice(t("ocr.notice.extracted", null, "OCR hoàn tất! Hệ thống đã trích xuất được thông tin. Vui lòng kiểm tra và bấm Lưu."));
+      setOcrState("done");
+    } catch (err) {
       setError(err.message || t("ocr.error.extract_failed", null, "OCR failed."));
       setOcrState("idle");
     }
@@ -245,7 +245,7 @@ export default function OcrScreen({
         setOcrState("idle");
         return;
       }
-      
+
       await onCreateBill(billPayload);
 
       // 2. If checked, also create the transaction
@@ -269,7 +269,7 @@ export default function OcrScreen({
           notes: parsed.note,
           image_path: parsed.imagePath
         });
-        
+
         setNotice(t("ocr.notice.created_both", null, "Đã tạo cả hóa đơn và giao dịch thành công!"));
       } else {
         setNotice(t("ocr.notice.bill_created", null, "Đã lưu hóa đơn thành công!"));
@@ -353,7 +353,7 @@ export default function OcrScreen({
               onClick={handleCreate}
               disabled={!canCreate || loading}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
               {t("ocr.header_save", null, "Tạo giao dịch từ hóa đơn")}
             </button>
             {onClose && (
@@ -371,11 +371,11 @@ export default function OcrScreen({
           <div className="ocr-card-pro">
             <div className="ocr-upload-nav">
               <button type="button" className="active">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
                 Tải ảnh lên
               </button>
               <button type="button">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
                 Camera
               </button>
             </div>
@@ -388,7 +388,7 @@ export default function OcrScreen({
                 style={{ display: 'none' }}
               />
               <div className="ocr-drop-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
               </div>
               <div className="ocr-drop-text">
                 <p>Kéo & thả ảnh hóa đơn vào đây</p>
@@ -422,12 +422,12 @@ export default function OcrScreen({
             <div className="ocr-res-item">
               <label>Độ tin cậy</label>
               <div className="ocr-conf-badge">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
                 {Math.round(confidence.total * 100)}%
               </div>
             </div>
             <button className="ocr-btn-retry" type="button" onClick={handleExtract} disabled={ocrState === "running"}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15" /></svg>
               {ocrState === "running" ? "Đang trích xuất..." : "Trích xuất lại OCR"}
             </button>
           </div>
@@ -441,7 +441,7 @@ export default function OcrScreen({
               <div className="ocr-input-field">
                 <span>Ngày giao dịch *</span>
                 <div className="ocr-input-wrap">
-                  <input type="date" value={parsed.date} onChange={e => setParsed(p => ({...p, date: e.target.value}))} />
+                  <input type="date" value={parsed.date} onChange={e => setParsed(p => ({ ...p, date: e.target.value }))} />
                   <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.date)})` }}>
                     OCR {Math.round(confidence.date * 100)}%
                   </div>
@@ -450,7 +450,7 @@ export default function OcrScreen({
               <div className="ocr-input-field">
                 <span>Merchant *</span>
                 <div className="ocr-input-wrap">
-                  <input type="text" value={parsed.merchant} onChange={e => setParsed(p => ({...p, merchant: e.target.value}))} />
+                  <input type="text" value={parsed.merchant} onChange={e => setParsed(p => ({ ...p, merchant: e.target.value }))} />
                   <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.merchant)})` }}>
                     OCR {Math.round(confidence.merchant * 100)}%
                   </div>
@@ -484,7 +484,7 @@ export default function OcrScreen({
               <div className="ocr-input-field">
                 <span>Tổng tiền *</span>
                 <div className="ocr-input-wrap">
-                  <input type="text" value={parsed.total} onChange={e => setParsed(p => ({...p, total: formatNumberInput(e.target.value)}))} />
+                  <input type="text" value={parsed.total} onChange={e => setParsed(p => ({ ...p, total: formatNumberInput(e.target.value) }))} />
                   <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.total)})` }}>
                     OCR {Math.round(confidence.total * 100)}%
                   </div>
@@ -493,7 +493,7 @@ export default function OcrScreen({
               <div className="ocr-input-field">
                 <span>VAT</span>
                 <div className="ocr-input-wrap">
-                  <input type="text" value={parsed.vat} onChange={e => setParsed(p => ({...p, vat: formatNumberInput(e.target.value)}))} />
+                  <input type="text" value={parsed.vat} onChange={e => setParsed(p => ({ ...p, vat: formatNumberInput(e.target.value) }))} />
                   <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.vat)})` }}>
                     OCR {Math.round(confidence.vat * 100)}%
                   </div>
@@ -502,7 +502,7 @@ export default function OcrScreen({
               <div className="ocr-input-field">
                 <span>Giảm giá</span>
                 <div className="ocr-input-wrap">
-                  <input type="text" value={parsed.discount} onChange={e => setParsed(p => ({...p, discount: formatNumberInput(e.target.value)}))} />
+                  <input type="text" value={parsed.discount} onChange={e => setParsed(p => ({ ...p, discount: formatNumberInput(e.target.value) }))} />
                   <div className="ocr-input-badge" style={{ color: `var(--conf-${getConfClass(confidence.discount)})` }}>
                     OCR {Math.round(confidence.discount * 100)}%
                   </div>
@@ -521,11 +521,11 @@ export default function OcrScreen({
           <div className="ocr-section-pro">
             <h4 className="ocr-sec-title">2. Danh mục</h4>
             <div className="ocr-ai-suggest">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
               <span>Gợi ý từ OCR: phù hợp nhất với danh mục <strong>{categories.find(c => String(c.id) === String(parsed.categoryId))?.name || "Ăn uống"}</strong></span>
             </div>
             <div className="ocr-search-bar">
-              <svg className="ocr-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <svg className="ocr-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
               <input type="text" placeholder="Tìm danh mục..." value={categoryQuery} onChange={e => setCategoryQuery(e.target.value)} />
             </div>
             <div className="ocr-category-grid">
@@ -536,7 +536,7 @@ export default function OcrScreen({
                   <div
                     key={cat.id}
                     className={`ocr-cat-card ${active ? "active" : ""}`}
-                    onClick={() => setParsed(p => ({...p, categoryId: String(cat.id)}))}
+                    onClick={() => setParsed(p => ({ ...p, categoryId: String(cat.id) }))}
                     style={active ? { background: meta.light, borderColor: meta.bg } : {}}
                   >
                     <div className="ocr-cat-icon" style={{ background: active ? meta.bg : meta.light, color: active ? "white" : meta.bg }}>
@@ -555,7 +555,7 @@ export default function OcrScreen({
               <div className="ocr-input-field" style={{ gridColumn: 'span 2' }}>
                 <span>Ghi chú</span>
                 <div className="ocr-input-wrap">
-                  <textarea rows="2" value={parsed.note} onChange={e => setParsed(p => ({...p, note: e.target.value}))} placeholder="Ghi chú thêm..." />
+                  <textarea rows="2" value={parsed.note} onChange={e => setParsed(p => ({ ...p, note: e.target.value }))} placeholder="Ghi chú thêm..." />
                 </div>
               </div>
             </div>
@@ -570,7 +570,7 @@ export default function OcrScreen({
                 <span>Đính kèm khác</span>
                 <div className="ocr-input-wrap">
                   <button type="button" className="ocr-btn-retry" style={{ margin: 0, padding: '8px 12px' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
                     Thêm tệp
                   </button>
                 </div>
@@ -589,8 +589,8 @@ export default function OcrScreen({
                   );
                 })}
                 <div style={{ position: 'relative' }}>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={tagInput}
                     onChange={e => setTagInput(e.target.value)}
                     onKeyDown={e => {
@@ -599,8 +599,8 @@ export default function OcrScreen({
                         addTagByName(tagInput);
                       }
                     }}
-                    placeholder="Thêm thẻ..." 
-                    style={{ fontSize: 13, padding: '4px 12px', borderRadius: 8, border: '1px dashed #cbd5e1', width: 120, background: 'transparent' }} 
+                    placeholder="Thêm thẻ..."
+                    style={{ fontSize: 13, padding: '4px 12px', borderRadius: 8, border: '1px dashed #cbd5e1', width: 120, background: 'transparent' }}
                   />
                 </div>
               </div>
@@ -620,25 +620,25 @@ export default function OcrScreen({
             </div>
             <div className="ocr-footer-btns">
               <button type="button" className="ocr-btn-secondary" onClick={() => {
-                 setParsed(baseParsedState());
-                 setConfidence(baseConfidence);
-                 setFile(null);
-                 setOcrState("idle");
-                 setWarnings([]);
-                 setSelectedTagIds([]);
-                 setFundingSourceId("");
-                 setReferenceCode("");
-                 setPreviewUrl("");
+                setParsed(baseParsedState());
+                setConfidence(baseConfidence);
+                setFile(null);
+                setOcrState("idle");
+                setWarnings([]);
+                setSelectedTagIds([]);
+                setFundingSourceId("");
+                setReferenceCode("");
+                setPreviewUrl("");
               }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L21 10M3 14l2.64 4.36A9 9 0 0 0 20.49 15" /></svg>
                 Làm mới
               </button>
               <button type="button" className="ocr-btn-secondary" onClick={handleCreate}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" /></svg>
                 Lưu nháp
               </button>
               <button type="button" className="ocr-btn-primary" onClick={handleCreate} disabled={!canCreate || loading}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M12 5v14M5 12h14"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ verticalAlign: 'middle', marginRight: 6 }}><path d="M12 5v14M5 12h14" /></svg>
                 {autoCreate ? "Tạo giao dịch từ hóa đơn" : "Lưu hóa đơn"}
               </button>
             </div>
