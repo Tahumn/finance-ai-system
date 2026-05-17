@@ -61,3 +61,28 @@ jobs:
         
       - name: Build Frontend Image
         run: cd frontend && docker build -t finance-frontend:test .
+
+  push-to-dockerhub:
+    name: CD - Push to Docker Hub
+    needs: [backend-tests, frontend-tests, docker-build-check]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/tnhu'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Build and push Backend Image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/finance-backend:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/finance-backend:latest
+          
+      - name: Build and push Frontend Image
+        run: |
+          cd frontend
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/finance-frontend:latest .
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/finance-frontend:latest
