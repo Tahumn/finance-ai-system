@@ -13,69 +13,69 @@
 
 ---
 
-## 📖 Mục lục (Table of Contents)
-1. [Giới thiệu & Tầm nhìn](#-giới-thiệu--tầm-nhìn)
-2. [Kiến trúc hệ thống (Deep Dive)](#-kiến-trúc-hệ-thống-deep-dive)
-3. [Các phân hệ tính năng](#-các-phân-hệ-tính-năng)
-4. [Công nghệ AI & NLP Pipeline](#-công-nghệ-ai--nlp-pipeline)
-5. [Quy trình trích xuất OCR](#-quy-trình-trích-xuất-ocr)
-6. [Nền tảng kỹ thuật (Tech Stack)](#-nền-tảng-kỹ-thuật-tech-stack)
-7. [Bảo mật & Hiệu năng](#-bảo-mật--hiệu-năng)
-8. [Hướng dẫn cài đặt](#-hướng-dẫn-cài-đặt)
-9. [Minh họa sản phẩm (Screenshots & Video)](#-minh-họa-sản-phẩm)
-10. [Đội ngũ thực hiện](#-đội-ngũ-thực-hiện)
+## 📖 Table of Contents
+1. [Introduction & Vision](#-introduction--vision)
+2. [System Architecture (Deep Dive)](#-system-architecture-deep-dive)
+3. [Core Features & Modules](#-core-features--modules)
+4. [AI Technology & NLP Pipeline](#-ai-technology--nlp-pipeline)
+5. [OCR Invoice Extraction Pipeline](#-ocr-invoice-extraction-pipeline)
+6. [Tech Stack](#-tech-stack)
+7. [Security & Performance](#-security--performance)
+8. [Installation Guide](#-installation-guide)
+9. [Product Showcase (Screenshots & Video)](#-product-showcase-screenshots--video)
+10. [Development Team](#-development-team)
 
 ---
 
-## 🌟 Giới thiệu & Tầm nhìn
+## 🌟 Introduction & Vision
 
-Trong kỷ nguyên chuyển đổi số, việc quản lý tài chính cá nhân không chỉ dừng lại ở việc "ghi chép", mà là nghệ thuật tối ưu hóa dòng tiền để đạt được tự do tài chính. Tuy nhiên, rào cản lớn nhất khiến đa số người dùng bỏ cuộc là **"Ma sát nhập liệu" (Input Friction)** – quy trình thủ công rườm rà và tốn thời gian.
+In the digital transformation era, personal finance management is no longer just about "record-keeping" but the art of optimizing cash flow to achieve financial freedom. However, the biggest hurdle that causes most users to give up is **"Input Friction"**—the tedious and time-consuming manual process of logging data.
 
-**Finance AI Ecosystem** ra đời để tái định nghĩa trải nghiệm này thông qua triết lý **"Zero-Friction Management"**. Chúng tôi xóa bỏ rào cản giữa con người và số liệu bằng cách ứng dụng Trí tuệ nhân tạo (AI) và Xử lý ngôn ngữ tự nhiên (NLP) làm trung tâm của mọi tương tác.
+The **Finance AI Ecosystem** was born to redefine this experience through a **"Zero-Friction Management"** philosophy. We break down the barriers between users and their data by placing Artificial Intelligence (AI) and Natural Language Processing (NLP) at the core of every interaction.
 
-### Giá trị cốt lõi của dự án:
-*   **Trí tuệ hóa dữ liệu:** Biến những câu lệnh ngôn ngữ tự nhiên hoặc ảnh chụp hóa đơn vô hồn thành dữ liệu tài chính có cấu trúc và có ý nghĩa.
-*   **Tự động hóa toàn diện:** Sử dụng kiến trúc hướng dịch vụ (SOA) và hàng đợi thông minh để xử lý mọi tác vụ nặng dưới nền, mang lại trải nghiệm người dùng liền mạch.
-*   **Cá nhân hóa trải nghiệm:** Không chỉ là một công cụ lưu trữ, hệ thống đóng vai trò như một trợ lý tài chính ảo, thấu hiểu hành vi chi tiêu để đưa ra các gợi ý tối ưu.
+### Core Values:
+*   **Intelligent Data Processing:** Transform raw natural language queries or static receipt photos into structured, meaningful financial insights.
+*   **End-to-End Automation:** Leverage a Service-Oriented Architecture (SOA) and intelligent task queuing to handle heavy background computations, delivering a seamless user experience.
+*   **Personalized Experience:** Far beyond a simple storage tool, the system acts as a virtual financial assistant, analyzing spending behavior to offer optimized, tailored suggestions.
 
-**Tầm nhìn của chúng tôi:** Trở thành nền tảng quản trị tài chính cá nhân hàng đầu, giúp mỗi cá nhân làm chủ tương lai tài chính của mình thông qua sức mạnh của công nghệ hiện đại.
+**Our Vision:** To become the leading personal finance management platform, empowering individuals to take control of their financial future through the power of advanced technology.
 
 ---
 
-## 🏗️ Kiến trúc hệ thống (Deep Dive)
+## 🏗️ System Architecture (Deep Dive)
 
-Hệ thống được thiết kế theo kiến trúc **Cloud-Native Microservices**, tách biệt hoàn toàn các domain nghiệp vụ để tối ưu hóa khả năng mở rộng (Scalability) và sự ổn định (Availability).
+The system is designed following a **Cloud-Native Microservices** architecture, isolating business domains to optimize scalability and high availability.
 
-### 1. Mô hình phân rã dịch vụ (Service Decomposition)
-Hệ thống bao gồm các dịch vụ cốt lõi hoạt động độc lập:
-*   **API Gateway (Gateway Main):** Đóng vai trò là entry-point duy nhất, chịu trách nhiệm điều phối request (Request Routing) và bảo vệ hệ thống.
-*   **Auth Service:** Quản lý định danh, xác thực JWT và phân quyền người dùng.
-*   **Finance Service:** Quản lý sổ cái (Ledger Engine), xử lý logic giao dịch, ngân sách và mục tiêu tài chính.
-*   **AI Agent Service:** Cầu nối giữa hệ thống và các mô hình LLM, xử lý NLP Intent và trích xuất thực thể.
-*   **Notification Service:** Quản lý luồng thông báo và cập nhật trạng thái thời gian thực.
+### 1. Service Decomposition
+The system consists of independent core microservices:
+*   **API Gateway (Gateway Main):** Acts as the single entry-point, responsible for request routing, load balancing, and securing the system.
+*   **Auth Service:** Manages user identity, JWT authentication, and access control/authorization.
+*   **Finance Service:** Manages the ledger (Ledger Engine), handles transactions, budgeting logic, and financial goals.
+*   **AI Agent Service:** Bridges the platform and Large Language Models (LLMs), handling NLP intent recognition and entity extraction.
+*   **Notification Service:** Manages notification dispatch and real-time status updates.
 
-### 2. Giao tiếp giữa các dịch vụ (Inter-service Communication)
-Hệ thống sử dụng mô hình giao tiếp hỗn hợp để tối ưu hóa hiệu năng:
-*   **Synchronous (REST API):** Sử dụng cho các luồng dữ liệu cần phản hồi ngay lập tức như Xác thực và Truy vấn số dư.
-*   **Asynchronous (Event-driven):** Sử dụng **Redis Queue (RQ)** làm Message Broker cho các tác vụ tốn thời gian như Xử lý OCR và Gửi Email thông báo. Điều này giúp Main Thread không bị block, duy trì Response Time < 200ms.
+### 2. Inter-service Communication
+The system utilizes a hybrid communication model to optimize performance:
+*   **Synchronous (REST API):** Used for immediate response flows such as user authentication and balance queries.
+*   **Asynchronous (Event-driven):** Uses **Redis Queue (RQ)** as the Message Broker for time-consuming tasks like OCR processing and email notifications. This keeps the main thread unblocked, maintaining response times under 200ms.
 
-### 3. Tầng lưu trữ & Tính nhất quán dữ liệu (Storage & Consistency)
-*   **Database-per-service:** Mỗi microservice sở hữu một database PostgreSQL riêng biệt, tuân thủ nguyên tắc cô lập dữ liệu.
-*   **Real-time Sync:** Sử dụng **WebSockets (Socket.io)** để đẩy các cập nhật số dư từ Worker về Client ngay khi giao dịch được xác nhận dưới nền, đảm bảo tính nhất quán dữ liệu phía người dùng (UI Consistency).
+### 3. Storage & Data Consistency
+*   **Database-per-service:** Each microservice owns its isolated PostgreSQL database, adhering to strict data isolation principles.
+*   **Real-time Synchronization:** Uses **WebSockets (Socket.io)** to push balance updates from background workers to the client interface immediately after a transaction is processed, ensuring user interface consistency.
 
-### 4. Sơ đồ luồng dữ liệu (Data Flow Diagram)
+### 4. Data Flow Diagram
 ```mermaid
 graph TD
     User((User)) -- "REST/WS" --> Gateway[API Gateway - Reverse Proxy]
     
-    subgraph "Dịch vụ nghiệp vụ (Port 8001-8004)"
+    subgraph "Business Services (Ports 8001-8004)"
         Gateway --> Auth[Auth Service]
         Gateway --> Finance[Finance Service]
         Gateway --> AI[AI Agent Service]
         Gateway --> Noti[Notification Service]
     end
     
-    subgraph "Hạ tầng kỹ thuật"
+    subgraph "Technical Infrastructure"
         Finance -- "Enqueue" --> Redis[(Redis Queue / Broker)]
         Redis -- "Consume" --> Worker[Background Workers]
         Auth --> AuthDB[(PostgreSQL Auth)]
@@ -88,192 +88,192 @@ graph TD
 
 ---
 
-## 🚀 Các phân hệ tính năng cốt lõi
+## 🚀 Core Features & Modules
 
-Hệ thống được tổ chức thành các phân hệ nghiệp vụ chuyên sâu, phối hợp nhịp nhàng để mang lại trải nghiệm quản trị tài chính 360 độ.
+The system is organized into specialized functional modules, working in harmony to provide a comprehensive 360-degree financial management experience.
 
-### 1. Phân hệ Quản trị Giao dịch & Dòng tiền (Ledger Engine)
-Đây là "trái tim" của hệ thống, được thiết kế để đảm bảo tính toàn vẹn dữ liệu tài chính tuyệt đối:
-*   **Quản lý ví đa năng:** Hỗ trợ tách biệt tài khoản tiền mặt, thẻ ngân hàng, ví điện tử với cơ chế ghi sổ (Ledger) chính xác.
-*   **Giao dịch thông minh:** Ghi nhận thu nhập, chi phí và chuyển khoản nội bộ với khả năng phân loại đa tầng qua Category và Tag.
-*   **Real-time Balance:** Số dư được cập nhật tức thời qua WebSockets ngay khi có biến động, loại bỏ hoàn toàn độ trễ dữ liệu.
+### 1. Ledger & Cashflow Management Module (Ledger Engine)
+The core system engine designed to guarantee absolute financial data integrity:
+*   **Multi-Wallet Management:** Supports separate cash accounts, bank cards, and digital wallets backed by a precise double-entry/ledger accounting system.
+*   **Smart Transactions:** Records income, expenses, and internal transfers with multi-tier classification using categories and tags.
+*   **Real-time Balance:** Instant balance updates via WebSockets as changes occur, eliminating data latency.
 
-### 2. Phân hệ Tự động hóa thông minh (AI & OCR Automation Hub)
-Phân hệ đột phá giúp xóa bỏ rào cản nhập liệu thủ công:
-*   **AI Chat-to-Action:** Tích hợp LLM để hiểu ngữ cảnh ngôn ngữ tự nhiên, cho phép tạo giao dịch chỉ bằng một câu chat (Vd: "Ăn phở 50k từ ví tiền mặt").
-*   **Pipeline OCR hiệu năng cao:** Tự động quét hóa đơn, bóc tách dữ liệu cửa hàng, ngày tháng và tổng tiền. Quá trình xử lý diễn ra bất đồng bộ, đảm bảo ứng dụng luôn mượt mà.
-*   **Intelligent Suggestions:** AI tự động gợi ý hạng mục chi tiêu dựa trên thói quen lịch sử, giúp tăng độ chính xác khi phân loại dữ liệu.
+### 2. Intelligent Automation Module (AI & OCR Automation Hub)
+A pioneering module dedicated to removing manual data entry barriers:
+*   **AI Chat-to-Action:** Built-in LLM parses natural language input, allowing users to create transactions via simple chat prompts (e.g., "Spent 50k on pho from cash wallet").
+*   **High-Performance OCR Pipeline:** Automatically scans receipts, extracting merchant names, transaction dates, and total amounts. Processing runs asynchronously to keep the UI smooth and responsive.
+*   **Intelligent Suggestions:** The AI suggests spending categories based on historical user habits, improving categorization accuracy over time.
 
-### 3. Phân hệ Hoạch định Chiến lược tài chính (Strategic Planning)
-Giúp người dùng chuyển từ trạng thái "theo dõi" sang "kiểm soát" tài chính:
-*   **Smart Budgeting:** Thiết lập hạn mức chi tiêu cho từng hạng mục và nhận cảnh báo tức thời khi tiến sát ngưỡng nguy hiểm.
-*   **Savings Goals:** Theo dõi tiến độ tích lũy cho các mục tiêu dài hạn (mua nhà, mua xe) với lộ trình trực quan.
-*   **Subscription Manager:** Tự động quản lý và nhắc nhở các khoản phí định kỳ (Netflix, Spotify, iCloud...), giúp loại bỏ các chi phí lãng phí không đáng có.
+### 3. Strategic Financial Planning Module
+Empowering users to transition from simple tracking to proactive financial control:
+*   **Smart Budgeting:** Set spending limits for specific categories and receive instant alerts as spending nears threshold limits.
+*   **Savings Goals:** Track accumulation progress for long-term targets (e.g., buying a house or car) with interactive, visual roadmaps.
+*   **Subscription Manager:** Automatically tracks and alerts recurring subscriptions (Netflix, Spotify, iCloud, etc.) to eliminate unnecessary or forgotten expenses.
 
-### 4. Phân hệ Quản lý Công nợ & Nghĩa vụ (Debt & Obligation)
-Giải quyết bài toán quản lý các khoản vay và cho vay:
-*   **Debt Tracking:** Theo dõi dư nợ, lãi suất và tiến độ hoàn trả một cách chi tiết.
-*   **Reminder Engine:** Tự động gửi thông báo nhắc nợ khi đến hạn, giúp duy trì uy tín tài chính và tránh các khoản phạt chậm trả.
+### 4. Debt & Obligation Management Module
+Streamlines the process of managing loans and borrowings:
+*   **Debt Tracking:** Keeps detailed logs of outstanding debts, interest rates, and repayment progress.
+*   **Reminder Engine:** Sends automated payment notifications as deadlines approach, preserving creditworthiness and avoiding late fees.
 
-### 5. Phân hệ Phân tích & Báo cáo chuyên sâu (Advanced Analytics)
-Chuyển hóa dữ liệu thô thành các biểu đồ có giá trị (Insights):
-*   **Cashflow Analytics:** Biểu đồ trực quan về dòng tiền vào/ra theo thời gian.
-*   **Spending Allocation:** Phân tích tỷ trọng chi tiêu để nhận diện các "lỗ hổng" tài chính.
-*   **Financial Health Report:** Đưa ra đánh giá tổng thể về sức khỏe tài chính dựa trên các chỉ số thu nhập/chi phí/tích lũy.
-
----
-
-## 🤖 Công nghệ AI & NLP Pipeline
-
-Hệ thống sở hữu một "bộ não" phân tích ngôn ngữ tự nhiên được tinh chỉnh để tối ưu hóa việc hiểu các ý định tài chính từ người dùng.
-
-### 1. Phân tích ý định (Intent Classification)
-Sử dụng các mô hình LLM tiên tiến (Gemini 1.5 Flash) kết hợp với kỹ thuật **Few-shot Prompting** để nhận diện chính xác các hành động của người dùng:
-*   `CREATE_TRANSACTION`: Tạo giao dịch thu/chi.
-*   `QUERY_REPORT`: Truy vấn tình hình tài chính.
-*   `SET_BUDGET`: Thiết lập ngân sách.
-*   `FINANCIAL_ADVICE`: Yêu cầu lời khuyên tiết kiệm.
-
-### 2. Trích xuất thực thể (Named Entity Recognition - NER)
-Hệ thống thực hiện bóc tách các thông tin cốt lõi từ câu lệnh tự nhiên (Vd: "Tôi vừa chi 100k mua sách bằng thẻ"):
-*   **Amount (Số tiền):** Tự động chuẩn hóa các đơn vị tiền tệ (k, triệu, đồng).
-*   **Subject (Nội dung):** Nhận diện mục đích chi tiêu (Mua sách).
-*   **Account (Tài khoản):** Xác định nguồn tiền (Thẻ).
-*   **Category (Hạng mục):** Tự động phân loại dựa trên ngữ cảnh (Giáo dục/Sách).
-
-### 3. Cơ chế tự sửa lỗi & Slot Filling
-Nếu câu lệnh thiếu thông tin quan trọng (Vd: thiếu số tiền hoặc tài khoản), AI Agent sẽ kích hoạt cơ chế **Slot Filling** – tự động đặt câu hỏi gợi ý để hoàn thiện dữ liệu giao dịch trước khi ghi vào cơ sở dữ liệu.
+### 5. Advanced Analytics & Reporting Module
+Transforms raw financial logs into high-value insights:
+*   **Cashflow Analytics:** Interactive charts tracking cash inflows and outflows over time.
+*   **Spending Allocation:** Analyzes expenditure proportions to identify potential financial leaks.
+*   **Financial Health Report:** Delivers a comprehensive overview of financial stability based on income, expense, and savings ratios.
 
 ---
 
-## 🖼️ Quy trình trích xuất hóa đơn (OCR Pipeline)
+## 🤖 AI Technology & NLP Pipeline
 
-Hệ thống ứng dụng quy trình xử lý ảnh 4 bước để đảm bảo trích xuất dữ liệu hóa đơn với độ chính xác cao nhất ngay cả trong điều kiện thực tế.
+The platform features a specialized natural language understanding engine tuned to interpret financial intents with high precision.
 
-### Bước 1: Tiền xử lý hình ảnh (Image Pre-processing)
-Sử dụng thư viện **OpenCV** để thực hiện:
-*   **Grayscale & Thresholding:** Chuyển đổi ảnh sang đen trắng và khử nhiễu để làm nổi bật văn bản.
-*   **Perspective Correction:** Tự động căn chỉnh các hóa đơn bị chụp nghiêng hoặc méo.
+### 1. Intent Classification
+Utilizes advanced LLMs (Gemini 1.5 Flash) coupled with **Few-shot Prompting** techniques to accurately identify user intent:
+*   `CREATE_TRANSACTION`: Creates income/expense records.
+*   `QUERY_REPORT`: Retrieves financial status reports.
+*   `SET_BUDGET`: Establishes spending budgets.
+*   `FINANCIAL_ADVICE`: Requests savings tips and advice.
 
-### Bước 2: Nhận diện văn bản (Text Detection & Extraction)
-Sử dụng engine **Tesseract OCR** kết hợp với các bộ lọc ngôn ngữ tiếng Việt để chuyển đổi các vùng ảnh chứa văn bản thành chuỗi ký tự (String data).
+### 2. Named Entity Recognition (NER)
+Parses core information directly from natural sentences (e.g., "I spent 100k on books using card"):
+*   **Amount:** Automatically normalizes diverse currency formats (e.g., "k", "triệu" -> million, "đồng").
+*   **Subject:** Extracts the purpose of the transaction ("books").
+*   **Account:** Pinpoints the source of funds ("card").
+*   **Category:** Contextually categorizes the transaction (e.g., "Education/Books").
 
-### Bước 3: Hậu xử lý bằng AI (AI Post-processing)
-Đây là bước quan trọng nhất – dữ liệu thô từ Tesseract được đưa qua LLM để:
-*   **Semantic Parsing:** Loại bỏ các thông tin rác (mã vạch, số hóa đơn) và chỉ giữ lại: Tên cửa hàng, Ngày giao dịch, Tổng tiền, VAT.
-*   **Data Validation:** Kiểm tra tính logic của dữ liệu (Vd: Tổng tiền = Tiền hàng + Thuế).
-
-### Bước 4: Xử lý bất đồng bộ (Asynchronous Offloading)
-Toàn bộ quá trình xử lý ảnh được đẩy vào hàng đợi **Redis Queue (RQ)**. Điều này giúp:
-*   Người dùng có thể tiếp tục sử dụng ứng dụng ngay lập tức mà không cần chờ đợi.
-*   Hệ thống sẽ đẩy thông báo "Xử lý thành công" qua WebSockets ngay khi dữ liệu sẵn sàng.
+### 3. Auto-correction & Slot Filling Mechanism
+When a natural command lacks crucial details (such as the amount or account), the AI Agent triggers a **Slot Filling** conversational loop, prompting the user for the missing details before registering the transaction in the ledger.
 
 ---
 
-## 🛠️ Nền tảng kỹ thuật (Tech Stack)
+## 🖼️ OCR Invoice Extraction Pipeline
+
+The system implements a 4-step image-processing pipeline to ensure optimal receipt data extraction under real-world conditions.
+
+### Step 1: Image Pre-processing
+Leverages the **OpenCV** library to perform:
+*   **Grayscale & Thresholding:** Converts images to grayscale and applies noise-reduction filters to highlight text.
+*   **Perspective Correction:** Automatically skews and aligns receipts captured at angles.
+
+### Step 2: Text Detection & Extraction
+Uses the **Tesseract OCR** engine with specialized Vietnamese language packs to convert text regions of the receipt image into raw strings.
+
+### Step 3: AI Post-processing
+The critical phase where raw OCR text is passed through the LLM for:
+*   **Semantic Parsing:** Filters out clutter (e.g., barcodes, serial numbers) and isolates essential elements: Merchant Name, Transaction Date, Total Amount, VAT.
+*   **Data Validation:** Logic checks on extracted figures (e.g., verifying if Total = Subtotal + Tax).
+
+### Step 4: Asynchronous Offloading
+The intensive image-processing pipeline is offloaded to the **Redis Queue (RQ)**. This ensures:
+*   Users do not have to wait on the processing screen and can continue using the application.
+*   The system broadcasts a "Process Successful" event via WebSockets to alert the user once parsing is complete.
+
+---
+
+## 🛠️ Tech Stack
 
 | Layer | Technology | Rationale |
 | :--- | :--- | :--- |
-| **Frontend** | React 18 + Vite | Tốc độ render cực nhanh, UX mượt mà. |
-| **Backend** | FastAPI (Python) | Hiệu năng tiệm cận Go/NodeJS, hỗ trợ Type Hinting tốt. |
-| **Real-time** | Socket.io | Đảm bảo tính nhất quán dữ liệu tức thời. |
-| **Queue** | Redis + RQ | Xử lý các tác vụ nặng (OCR, Email) mà không chặn API. |
-| **AI** | Gemini 1.5 + Dify | Khả năng hiểu ngữ cảnh tiếng Việt xuất sắc. |
+| **Frontend** | React 18 + Vite | Ultra-fast rendering and interactive UX. |
+| **Backend** | FastAPI (Python) | High performance comparable to Go/Node.js, with robust type hinting support. |
+| **Real-time** | Socket.io | Ensures immediate real-time state synchronization. |
+| **Queue** | Redis + RQ | Handles heavy operations (OCR, Emails) asynchronously without blocking core API threads. |
+| **AI** | Gemini 1.5 + Dify | Outstanding Vietnamese context comprehension and structuring. |
 
 ---
 
-## 🛡️ Bảo mật & Hiệu năng
+## 🛡️ Security & Performance
 
-*   **Xác thực:** JWT (JSON Web Token) với cơ chế Stateless, bảo mật qua Bcrypt hashing.
-*   **Tối ưu hóa:** Caching dữ liệu thường xuyên truy cập vào Redis để giảm tải cho PostgreSQL.
-*   **CI/CD:** Pipeline tự động kiểm tra code quality (Ruff) và unit tests (Pytest) trước khi deploy.
+*   **Authentication:** Stateless JWT (JSON Web Tokens) secured with Bcrypt password hashing.
+*   **Optimization:** Aggressive caching of frequently accessed queries using Redis to reduce load on the PostgreSQL database.
+*   **CI/CD:** Automated pipelines validating code style/quality (Ruff) and running unit tests (Pytest) before deployment.
 
 ---
 
-## ⚙️ Hướng dẫn cài đặt
+## ⚙️ Installation Guide
 
-### Triển khai với Docker (Recommended)
+### Deployment via Docker (Recommended)
 ```bash
-# Clone project
+# Clone the project repository
 git clone https://github.com/your-repo/finance-ai-system.git
 cd finance-ai-system
 
-# Thiết lập môi trường
+# Set up the environment configuration
 cp .env.example .env
 
-# Chạy toàn bộ hệ thống
+# Spin up the full system in microservices mode
 docker compose --profile micro up -d --build
 ```
 
 ---
 
-## 📸 Minh họa sản phẩm (Showcase)
+## 📸 Product Showcase (Screenshots & Video)
 
-Dưới đây là diện mạo thực tế của hệ sinh thái **Finance AI** với ngôn ngữ thiết kế **Midnight Glassmorphism** hiện đại.
+Below is the visual representation of the **Finance AI** ecosystem, utilizing a modern **Midnight Glassmorphism** design system.
 
-### 🎥 Video Demo Sản phẩm
+### 🎥 Product Demo Video
 [![Finance AI Technical Demo](https://img.youtube.com/vi/EojIcG7BPcE/0.jpg)](https://www.youtube.com/watch?v=EojIcG7BPcE)
 
-*Xem video demo chi tiết về hệ thống và các tính năng AI tại đây.*
+*Watch a detailed technical demonstration of the system and its AI features here.*
 
-### 0. Trải nghiệm Đăng nhập & Bảo mật
-Hệ thống sử dụng cơ chế xác thực đa nhân tố và giao diện đăng nhập tối giản, tinh tế.
-![Giao diện Đăng nhập](assets/screenshots/DangNhap/login.jpg)
+### 0. Secure Authentication Experience
+The system employs multi-factor authentication mechanisms alongside a sleek, minimalist login interface.
+![Login Interface](assets/screenshots/DangNhap/login.jpg)
 
-### 1. Hệ thống Dashboard (Tổng quan)
-Giao diện trung tâm cung cấp cái nhìn 360 độ về sức khỏe tài chính với các biểu đồ động và thông số thời gian thực.
-![Tổng quan hệ thống](assets/screenshots/TongQuan/z7833359348131_a099ed31903aead0649e80b829db80eb.jpg)
+### 1. Central Dashboard (Overview)
+The core interface providing a 360-degree overview of financial health with dynamic charts and real-time statistics.
+![System Overview Dashboard](assets/screenshots/TongQuan/z7833359348131_a099ed31903aead0649e80b829db80eb.jpg)
 
-### 2. Quản lý Giao dịch
-Danh sách giao dịch được phân loại thông minh, hỗ trợ lọc đa tầng.
-![Danh sách giao dịch](assets/screenshots/GiaoDich/z7833421295700_ea70996a9b223f0efac685f4fa280755.jpg)
+### 2. Transaction Management
+A smart, searchable ledger categorized efficiently with multi-level filtering support.
+![Transaction List](assets/screenshots/GiaoDich/z7833421295700_ea70996a9b223f0efac685f4fa280755.jpg)
 
-### 3. Thẻ & Tài khoản thanh toán
-Quản lý linh hoạt các nguồn tiền từ thẻ ngân hàng đến ví điện tử.
-![Quản lý tài khoản](assets/screenshots/The&TaiKhoan/z7833431403981_52c465a69a7713b2aee3deb561799910.jpg)
+### 3. Cards & Payment Accounts
+Flexible asset management supporting diverse cash flow sources from debit/credit cards to digital wallets.
+![Account Management](assets/screenshots/The&TaiKhoan/z7833431403981_52c465a69a7713b2aee3deb561799910.jpg)
 
-### 4. Công nghệ trích xuất OCR
-Tự động bóc tách dữ liệu từ ảnh chụp hóa đơn bằng AI.
-![Xử lý OCR](assets/screenshots/OCR/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg)
+### 4. AI-Driven OCR Extraction
+Automated invoice and receipt scanning utilizing advanced AI.
+![OCR Processing](assets/screenshots/OCR/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg)
 
-### 5. Chi tiết hóa đơn trích xuất
-Kết quả bóc tách dữ liệu cửa hàng, ngày tháng và tổng tiền từ OCR.
-![Kết quả trích xuất](assets/screenshots/HoaDon/z7833456418925_a80e9242f898d06a11d99d4df93ebebd.jpg)
+### 5. Extracted Receipt Details
+Output details showing merchant names, dates, sub-totals, and final balances extracted via OCR.
+![Extraction Results](assets/screenshots/HoaDon/z7833456418925_a80e9242f898d06a11d99d4df93ebebd.jpg)
 
-### 6. Trợ lý ảo AI Chatbot
-Tương tác và tạo giao dịch bằng ngôn ngữ tự nhiên.
+### 6. AI Conversational Assistant
+Seamlessly interact and create ledger entries using natural language.
 ![AI Chatbot](assets/screenshots/ChatAI/z7833426318618_dcab1d430153b34e357b35a2495c0529.jpg)
 
-### 7. Báo cáo phân tích chuyên sâu
-Phân tích tỷ trọng chi tiêu và sức khỏe tài chính qua biểu đồ.
-![Báo cáo phân tích](assets/screenshots/BaoCao/z7833422554827_1ef0fe3a8fe8758311b5cabafdc36841.jpg)
+### 7. Advanced Analytical Reports
+Deconstruct spending patterns and overall financial health using beautiful charts.
+![Analytical Reports](assets/screenshots/BaoCao/z7833422554827_1ef0fe3a8fe8758311b5cabafdc36841.jpg)
 
-### 8. Trung tâm thông báo
-Cập nhật biến động số dư và cảnh báo ngân sách thời gian thực.
-![Trung tâm thông báo](assets/screenshots/ThongBao/z7833423864418_fbb03cd4419d4143322da53340c2157d.jpg)
+### 8. Notification Center
+Stay updated on real-time balance changes and budget threshold alerts.
+![Notification Center](assets/screenshots/ThongBao/z7833423864418_fbb03cd4419d4143322da53340c2157d.jpg)
 
-### 9. Thiết lập mục tiêu tài chính
-Theo dõi tiến độ tích lũy cho các mục tiêu dài hạn.
-![Mục tiêu tài chính](assets/screenshots/MucTieu/z7833423078638_1985fab13bb1723aa805863882c55d08.jpg)
+### 9. Financial Goal Planner
+Visually set, manage, and track progress toward long-term savings goals.
+![Financial Goals](assets/screenshots/MucTieu/z7833423078638_1985fab13bb1723aa805863882c55d08.jpg)
 
-### 10. Tùy chỉnh & Cài đặt hệ thống
-Cấu hình giao diện và thông tin cá nhân.
-![Cài đặt hệ thống](assets/screenshots/Settings/z7833432078356_78070578395067e6a2bdb17eafa09129.jpg)
+### 10. System Configurations & Settings
+Personalize user profiles, notifications, and visual styling.
+![System Settings](assets/screenshots/Settings/z7833432078356_78070578395067e6a2bdb17eafa09129.jpg)
 
 ---
 
-## 🤝 Đội ngũ thực hiện
+## 🤝 Development Team
 
-**Nhóm sinh viên Lớp DCT122C5 - Trường Đại học Sài Gòn**
+**Student Group - Class DCT122C5 - Saigon University**
 
-| Thành viên | GitHub |
+| Member | GitHub |
 | :--- | :--- |
 | **Võ Kiều Anh** | [github.com/KieuAnh2204](https://github.com/KieuAnh2204) |
 | **Nguyễn Thành Hưng** | [github.com/thungnguyen](https://github.com/thungnguyen) |
 | **Đặng Nguyễn Tâm Như** | [github.com/Tahumn](https://github.com/Tahumn) |
 | **Phạm Nguyễn Minh Châu** | [github.com/mmchouuu](https://github.com/mmchouuu) |
 
-**Giảng viên hướng dẫn:** TS. Đỗ Như Tài
+**Advisor:** Dr. Do Nhu Tai
 
 ---
 <div align="center">

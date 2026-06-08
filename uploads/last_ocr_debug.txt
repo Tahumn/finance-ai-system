@@ -1,27 +1,27 @@
 {
   "data": {
-    "merchant": "DOOKKI",
-    "transaction_date": "2026-04-13",
-    "final_total": 600480,
-    "subtotal_before_tax": 556000,
-    "vat_amount": 44480,
+    "merchant": "Hej",
+    "transaction_date": "2026-04-04",
+    "final_total": 90000,
+    "subtotal_before_tax": 90000,
+    "vat_amount": 0,
     "discount_amount": 0,
     "category": "Ăn uống",
-    "payment_source": "Grab",
-    "suggested_note": "Thưởng thức Buffet lẩu topokki cho 4 người lớn tại DOOKKI Vincom Đồng Khởi",
+    "payment_source": "Ví MoMo",
+    "suggested_note": "Mua 2 ly Matcha Cold Whisk size L mang đi tại Hej",
     "line_items": [
       {
-        "name": "Buffet Người Lớn",
-        "quantity": 4,
-        "total": 556000
+        "name": "Matcha Cold Whisk size L",
+        "quantity": 2,
+        "total": 90000
       }
     ]
   },
   "confidence": {
-    "merchant": 1.0,
+    "merchant": 0.98,
     "final_total": 1.0,
-    "transaction_date": 1.0,
+    "transaction_date": 0.99,
     "category": 0.95,
-    "payment_source": 0.9
+    "payment_source": 0.99
   }
 }
